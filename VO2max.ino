@@ -468,16 +468,15 @@ void loop() {
         if (settings.cheet_on) VO2Notify();  // Send to GoldenCheetah as VO2 Master
 
         // send BLE data ----------------
-
-        bpm = int(vo2Max + 0.5);
-        heart[1] = (byte)bpm;
-
-        int energyUsed = calTotal * 4.184; // conversion kcal into kJ
-        heart[3] = energyUsed / 256;
-        heart[2] = (byte)(int(volumeExp));
-        heart[7] = (byte)(int(vo2MaxMax));
-        heart[6] = (byte)(int(vco2Max));
-        heart[5] = (byte)(int(respq));
+        // @TODO: Check if this code is useless or not ?
+        //bpm = int(vo2Max + 0.5);
+        //heart[1] = (byte)bpm;
+        //int energyUsed = calTotal * 4.184; // conversion kcal into kJ
+        //heart[3] = energyUsed / 256;
+        //heart[2] = (byte)(int(volumeExp));
+        //heart[7] = (byte)(int(vo2MaxMax));
+        //heart[6] = (byte)(int(vco2Max));
+        //heart[5] = (byte)(int(respq));
   
         // Serial.println(bpm);
         // Serial.println(energyUsed);
@@ -489,7 +488,7 @@ void loop() {
             sensorPositionCharacteristic.setValue(hrmPos, 1);
 
             vo2RateMeasurementCharacteristics.setValue(vo2Max); // set the new value for vo2rate
-            vo2RateMeasurementCharacteristics.notify();           // send a notification that value has changed
+            vo2RateMeasurementCharacteristics.notify();         // send a notification that value has changed
             
             vco2RateMeasurementCharacteristics.setValue(vco2Max);
             vco2RateMeasurementCharacteristics.notify();           // send a notification that value has changed
@@ -498,7 +497,6 @@ void loop() {
             RQRateMeasurementCharacteristics.notify();           // send a notification that value has changed
            
         }
-        // bpm++; // TEST only
     }
 
     /*if (TotalTime >= 10000)*/ { // after 10 sec. activate the buttons for switching the screens

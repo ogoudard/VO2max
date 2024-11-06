@@ -22,13 +22,12 @@ PSRAM: Disabled*/
 
 //#define VERBOSE // additional debug logging
 
-const String Version = "V2.2 2024/10/10";
+const String Version = "V2.2 2024/11/06";
 
 #include "esp_adc_cal.h" // ADC calibration data
 #include <EEPROM.h>      // include library to read and write settings from flash
 #define ADC_EN  14       // ADC_EN is the ADC detection enable port
 #define ADC_PIN 34
-int vref = 1100;
 
 #include "DFRobot_OxygenSensor.h" //Library for Oxygen sensor
 #include "SCD30.h"                //Library for CO2 sensor
@@ -53,7 +52,6 @@ BluetoothSerial SerialBT;
 #include <BLEUtils.h>
 
 byte bpm;
-
 byte heart[8] = {0b00001110, 60, 0, 0, 0, 0, 0, 0}; // defines the BT heartrate characteristic
 
 // Byte[0]: flags: 0b00001110:
@@ -71,63 +69,56 @@ byte hrmPos[1] = {2};
 
 bool _BLEClientConnected = false;
 
-// heart rate service
+// heart rate service -> Send VO2MAX
+// @TODO : change to randomly generate UUID and see if it s still working
 #define heartRateService BLEUUID((uint16_t)0x180D)
 BLECharacteristic heartRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
 BLECharacteristic sensorPositionCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
 BLEDescriptor     heartRateDescriptor(BLEUUID((uint16_t)0x2901));
 BLEDescriptor     sensorPositionDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
-
 // Vo2 service
-#define vo2RateService BLEUUID("231c616b-32a6-4b93-9f0c-fe728deca0a5") // Remplacez par un UUID unique
+#define vo2RateService BLEUUID("231c616b-32a6-4b93-9f0c-fe728deca0a5") 
 BLECharacteristic vo2RateMeasurementCharacteristics(BLEUUID("4225d51b-f1c2-419a-9acc-bd8e70d960ae"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor vo2RateDescriptor(BLEUUID((uint16_t)0x2901));
 // Vco2 service
-#define vco2RateService BLEUUID("196c1c76-fe53-47e7-baab-a32b404d63df") // Remplacez par un UUID unique
+#define vco2RateService BLEUUID("196c1c76-fe53-47e7-baab-a32b404d63df") 
 BLECharacteristic vco2RateMeasurementCharacteristics(BLEUUID("a4534c9e-0ede-48ec-bee5-7b728ecb25df"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor vco2RateDescriptor(BLEUUID((uint16_t)0x2901));
 // RQ service
-#define RQRateService BLEUUID("8868ba7f-cada-4035-85d2-e0002aeb2be6") // Remplacez par un UUID unique
+#define RQRateService BLEUUID("8868ba7f-cada-4035-85d2-e0002aeb2be6") 
 BLECharacteristic RQRateMeasurementCharacteristics(BLEUUID("b192eef4-a298-43fe-b85c-b04d934448f7"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor RQRateDescriptor(BLEUUID((uint16_t)0x2901));
 // O2perc service
-#define o2percRateService BLEUUID("f362445d-0824-40e1-a53a-8e90106f0ba3") // Remplacez par un UUID unique
+#define o2percRateService BLEUUID("f362445d-0824-40e1-a53a-8e90106f0ba3") 
 BLECharacteristic o2percRateMeasurementCharacteristics(BLEUUID("f1329c52-97b8-4945-a8a2-2127426d71ba"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor o2percRateDescriptor(BLEUUID((uint16_t)0x2901));
 // C02perc service
-#define co2percRateService BLEUUID("4b1ad6ec-d8d3-426c-8d1e-0dea4d6b4ebc") // Remplacez par un UUID unique
+#define co2percRateService BLEUUID("4b1ad6ec-d8d3-426c-8d1e-0dea4d6b4ebc") 
 BLECharacteristic co2percRateMeasurementCharacteristics(BLEUUID("86c8ca0e-885f-4987-82ba-a794574cc6cf"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor co2percRateDescriptor(BLEUUID((uint16_t)0x2901));
 // kcal service
-#define kcalRateService BLEUUID("3483923e-e94a-4a21-96c4-c12a442ee4cf") // Remplacez par un UUID unique
+#define kcalRateService BLEUUID("3483923e-e94a-4a21-96c4-c12a442ee4cf") 
 BLECharacteristic kcalRateMeasurementCharacteristics(BLEUUID("fb6fc35b-2896-4474-8647-bd206b3d0c50"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor kcalRateDescriptor(BLEUUID((uint16_t)0x2901));
-
 // GoldenCheetah service
 #define cheetahService BLEUUID("00001523-1212-EFDE-1523-785FEABCD123")
 BLECharacteristic cheetahCharacteristics(BLEUUID("00001524-1212-EFDE-1523-785FEABCD123"), BLECharacteristic::PROPERTY_NOTIFY | 0);
 BLEDescriptor     cheetahDescriptor(BLEUUID((uint16_t)0x2901));
 
-/*class MyServerCallbacks : public BLEServerCallbacks {
-    void onConnect(BLEServer *pServer) { _BLEClientConnected = true; };
-
-    void onDisconnect(BLEServer *pServer) { _BLEClientConnected = false; }
-};
-*/
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
-        Serial.println("Client connected");
+        //Serial.println("Client connected");
         _BLEClientConnected = true;
         pServer->startAdvertising();  // Relancer l'advertising
-        Serial.println("Start advertising");
+        //Serial.println("Start advertising");
     }
 
     void onDisconnect(BLEServer* pServer) {
         _BLEClientConnected = false;
-        Serial.println("Client disconnected");
+        //Serial.println("Client disconnected");
         delay(100);  // Pause avant de recommencer à diffuser
         pServer->startAdvertising();  // Relancer l'advertising
-        Serial.println("Start advertising");
+        //Serial.println("Start advertising");
     }
 };
 
@@ -156,8 +147,6 @@ DFRobot_OxygenSensor Oxygen;
 #define COLLECT_NUMBER    10        // collect number, the collection range is 1-100.
 #define Oxygen_IICAddress ADDRESS_3 // I2C  label for o2 address
 
-uint8_t data[12], counter; // ??? not used ??? ########################################
-
 // Defines button state for adding wt
 const int buttonPin1 = 0;
 const int buttonPin2 = 35;
@@ -171,6 +160,7 @@ int       screenNr = 1;
 int       HeaderStreamed = 0;
 int       HeaderStreamedBT = 0;
 int       DEMO = 0; // 1 = DEMO-mode
+int       vref = 1100; // used for battery voltage reading
 
 //############################################
 // Select correct diameter depending on printed
@@ -182,7 +172,7 @@ float area_1 = 0.000531; // = 26mm diameter
 #if (DIAMETER == 20)
 float area_2 = 0.000314; // = 20mm diameter
 #elif (DIAMETER == 19)
-float area_2 = 0.000284; // = 19mm diameter
+float area_2 = 0.000254; // = 19mm diameter
 #else // default
 float area_2 = 0.000201; // = 16mm diameter
 #endif
@@ -354,14 +344,13 @@ void setup() {
         tft.drawString("BT ready", 0, 25, 4);
     }
 
-   // init barometric sensor BMP388 ---------
-  if (!bmp.begin_I2C()) {
-
-    tft.drawString("Temp/Pres. Error!", 0, 50, 4);
-  }
-  else {
-    tft.drawString("Temp/Pres. ok", 0, 50, 4);
-  }
+    // init barometric sensor BMP388 ---------
+    if (!bmp.begin_I2C()) {
+      tft.drawString("Temp/Pres. Error!", 0, 50, 4);
+    }
+    else {
+      tft.drawString("Temp/Pres. ok", 0, 50, 4);
+    }
 
     // init O2 sensor DF-Robot -----------
     if (!Oxygen.begin(Oxygen_IICAddress)) {
@@ -435,7 +424,6 @@ void setup() {
 
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
-
     tft.drawCentreString("Ready...", 120, 55, 4);
 
     TimerVolCalc = millis(); // timer for the volume (VE) integral function
@@ -445,15 +433,11 @@ void setup() {
     TimerStart = millis();   // holds the millis at start
     TotalTime = 0;
     // BatteryBT(); // TEST for battery discharge log
-    // ++++++++++++++++++++++++++++++++++++++++++++
-    // activate Sensirion App ----------
- 
 }
 
 //----------------------------------------------------------------------------------------------------------
 //                  MAIN PROGRAM
 //----------------------------------------------------------------------------------------------------------
-
 void loop() {
     TotalTime = millis() - TimerStart; // calculates actual total time
     VolumeCalc();                      // Starts integral function
@@ -506,14 +490,15 @@ void loop() {
 
             vo2RateMeasurementCharacteristics.setValue(vo2Max); // set the new value for vo2rate
             vo2RateMeasurementCharacteristics.notify();           // send a notification that value has changed
+            
             vco2RateMeasurementCharacteristics.setValue(vco2Max);
             vco2RateMeasurementCharacteristics.notify();           // send a notification that value has changed
+            
             RQRateMeasurementCharacteristics.setValue(respq);
             RQRateMeasurementCharacteristics.notify();           // send a notification that value has changed
            
         }
         // bpm++; // TEST only
-        // ------------
     }
 
     /*if (TotalTime >= 10000)*/ { // after 10 sec. activate the buttons for switching the screens
@@ -536,8 +521,8 @@ void loop() {
     }
 
     if (millis() - Timer1min > 30000) {
-        Timer1min = millis(); // reset timer
-                              // BatteryBT(); //TEST für battery discharge log ++++++++++++++++++++++++++++++++++++++++++
+      Timer1min = millis(); // reset timer
+      // BatteryBT(); //TEST für battery discharge log ++++++++++++++++++++++++++++++++++++++++++
     }
 
     TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
@@ -547,7 +532,6 @@ void loop() {
       //Serial.print(TotalTime);
       //Serial.println( " seconds");
       gadgetBle.handleEvents();
-
     }
 
 }
@@ -555,7 +539,6 @@ void loop() {
 //----------------------------------------------------------------------------------------------------------
 //                  FUNCTIONS
 //----------------------------------------------------------------------------------------------------------
-
 void CheckInitialO2() {
     // check initial O2 value -----------
     initialO2 = Oxygen.ReadOxygenData(COLLECT_NUMBER); // read and check initial VO2%
@@ -703,18 +686,18 @@ void VolumeCalc() {
         freqVEmean = (freqVEmean * 3 / 4) + (freqVE / 4);
         if (freqVEmean < 1) freqVEmean = 0;
 
-#ifdef VERBOSE
-        Serial.print("volumeExp: ");
-        Serial.print(volumeExp);
-        Serial.print("   VE: ");
-        Serial.print(volumeVE);
-        Serial.print("   VEmean: ");
-        Serial.print(volumeVEmean);
-        Serial.print("   freqVE: ");
-        Serial.print(freqVE, 1);
-        Serial.print("   freqVEmean: ");
-        Serial.println(freqVEmean, 1);
-#endif
+      #ifdef VERBOSE
+              Serial.print("volumeExp: ");
+              Serial.print(volumeExp);
+              Serial.print("   VE: ");
+              Serial.print(volumeVE);
+              Serial.print("   VEmean: ");
+              Serial.print(volumeVEmean);
+              Serial.print("   freqVE: ");
+              Serial.print(freqVE, 1);
+              Serial.print("   freqVEmean: ");
+              Serial.println(freqVEmean, 1);
+      #endif
     }
     if (millis() - TimerVE > 5000) readVE = 1; // readVE at least every 5s
 
@@ -932,17 +915,17 @@ void readCO2() {
         if (isnan(respq)) respq = 0; // correction for errors/div by 0
         if (respq > 1.5) respq = 0;
 
-#ifdef VERBOSE
-        Serial.print("Carbon Dioxide Concentration is: ");
-        Serial.print(result[0]);
-        Serial.println(" ppm");
-        Serial.print("Temperature = ");
-        Serial.print(result[1]);
-        Serial.println(" ℃");
-        Serial.print("Humidity = ");
-        Serial.print(result[2]);
-        Serial.println(" %");
-#endif
+        #ifdef VERBOSE
+                Serial.print("Carbon Dioxide Concentration is: ");
+                Serial.print(result[0]);
+                Serial.println(" ppm");
+                Serial.print("Temperature = ");
+                Serial.print(result[1]);
+                Serial.println(" ℃");
+                Serial.print("Humidity = ");
+                Serial.print(result[2]);
+                Serial.println(" %");
+        #endif
     }
 }
 
@@ -1573,5 +1556,3 @@ void InitBLE() {
     // (6) start the server and the advertising
     BLEDevice::startAdvertising();
 }
-
-//---------------------------------------------------------

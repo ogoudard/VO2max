@@ -159,12 +159,26 @@ struct ContentView: View {
     
     
     func exportCSV() {
-    // Créer le contenu du fichier CSV
-     var csvText = "Time, VO2Max\n"
-        for data in bluetoothManager.vo2Maxvalues {
-         csvText += "\(data.time), \(data.value)\n"
-     }
-
+        // Créer le contenu du fichier CSV avec les en-têtes de colonne
+          var csvText = "Time, VO2Max, VO2, VCO2, RQ\n"
+        // Obtenir la longueur minimale des listes pour éviter les erreurs d'index
+        let dataCount = min(bluetoothManager.vo2Maxvalues.count,
+                            bluetoothManager.vo2values.count,
+                            bluetoothManager.vco2values.count,
+                            bluetoothManager.RQvalues.count)
+        
+        // Boucle sur chaque ensemble de données pour écrire les valeurs sur une même ligne
+        for index in 0..<dataCount {
+            let time = bluetoothManager.vo2Maxvalues[index].time
+            let vo2MaxValue = bluetoothManager.vo2Maxvalues[index].value
+            let vo2Value = bluetoothManager.vo2values[index].value
+            let vco2Value = bluetoothManager.vco2values[index].value
+            let rqValue = bluetoothManager.RQvalues[index].value
+            
+            // Ajouter les données sur une ligne CSV
+            csvText += "\(time), \(vo2MaxValue), \(vo2Value), \(vco2Value), \(rqValue)\n"
+        }
+    
      // Convertir en Data
      guard let csvData = csvText.data(using: .utf8) else { return }
      
@@ -191,26 +205,71 @@ struct ContentView: View {
     class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         @Published var vo2Maxvalue: Float = 0 // Valeur affichée mise à jour
         @Published var vo2Maxvalues: [(time: String, value: Float)] = [
-//            (time: "08:00", value: 32.0),
-//            (time: "08:05", value: 34.5),
-//            (time: "08:10", value: 35.2),
-//            (time: "08:15", value: 37.8),
-//            (time: "08:20", value: 38.1),
-//            (time: "08:25", value: 40.4),
-//            (time: "08:30", value: 42.7),
-//            (time: "08:35", value: 45.2),
-//            (time: "08:40", value: 46.5),
-//            (time: "08:45", value: 47.9),
-//            (time: "08:50", value: 49.3),
-//            (time: "08:55", value: 50.6),
-//            (time: "09:00", value: 51.8) // Valeurs VO2max pour le graphique
+            (time: "08:00", value: 32.0),
+            (time: "08:05", value: 34.5),
+            (time: "08:10", value: 35.2),
+            (time: "08:15", value: 37.8),
+            (time: "08:20", value: 38.1),
+            (time: "08:25", value: 40.4),
+            (time: "08:30", value: 42.7),
+            (time: "08:35", value: 45.2),
+            (time: "08:40", value: 46.5),
+            (time: "08:45", value: 47.9),
+            (time: "08:50", value: 49.3),
+            (time: "08:55", value: 50.6),
+            (time: "09:00", value: 51.8) // Valeurs VO2max pour le graphique
             ]
         @Published var vo2value: Float = 0 // Valeur affichée mise à jour
-        @Published var vo2values: [(time: String, value: Float)] = [] // Valeurs VO2max pour le graphique
+        @Published var vo2values: [(time: String, value: Float)] = [
+            (time: "08:00", value: 32.0),
+            (time: "08:05", value: 34.5),
+            (time: "08:10", value: 35.2),
+            (time: "08:15", value: 37.8),
+            (time: "08:20", value: 38.1),
+            (time: "08:25", value: 40.4),
+            (time: "08:30", value: 42.7),
+            (time: "08:35", value: 45.2),
+            (time: "08:40", value: 46.5),
+            (time: "08:45", value: 47.9),
+            (time: "08:50", value: 49.3),
+            (time: "08:55", value: 50.6),
+            (time: "09:00", value: 51.8) // Valeurs VO2max pour le graphique
+
+        ] // Valeurs VO2max pour le graphique
         @Published var vco2value: Float = 0 // Valeur affichée mise à jour
-        @Published var vco2values: [(time: String, value: Float)] = [] // Valeurs VO2max pour le graphique
+        @Published var vco2values: [(time: String, value: Float)] = [
+            (time: "08:00", value: 32.0),
+            (time: "08:05", value: 34.5),
+            (time: "08:10", value: 35.2),
+            (time: "08:15", value: 37.8),
+            (time: "08:20", value: 38.1),
+            (time: "08:25", value: 40.4),
+            (time: "08:30", value: 42.7),
+            (time: "08:35", value: 45.2),
+            (time: "08:40", value: 46.5),
+            (time: "08:45", value: 47.9),
+            (time: "08:50", value: 49.3),
+            (time: "08:55", value: 50.6),
+            (time: "09:00", value: 51.8) // Valeurs VO2max pour le graphique
+
+        ] // Valeurs VO2max pour le graphique
         @Published var RQvalue: Float = 0 // Valeur affichée mise à jour
-        @Published var RQvalues: [(time: String, value: Float)] = [] // Valeurs VO2max pour le graphique
+        @Published var RQvalues: [(time: String, value: Float)] = [
+            (time: "08:00", value: 32.0),
+            (time: "08:05", value: 34.5),
+            (time: "08:10", value: 35.2),
+            (time: "08:15", value: 37.8),
+            (time: "08:20", value: 38.1),
+            (time: "08:25", value: 40.4),
+            (time: "08:30", value: 42.7),
+            (time: "08:35", value: 45.2),
+            (time: "08:40", value: 46.5),
+            (time: "08:45", value: 47.9),
+            (time: "08:50", value: 49.3),
+            (time: "08:55", value: 50.6),
+            (time: "09:00", value: 51.8) // Valeurs VO2max pour le graphique
+
+        ] // Valeurs VO2max pour le graphique
         @Published var o2percvalue: Float = 0 // Valeur affichée mise à jour
         @Published var o2percvalues: [(time: String, value: Float)] = [] // Valeurs VO2max pour le graphique
         @Published var co2percvalue: Float = 0 // Valeur affichée mise à jour

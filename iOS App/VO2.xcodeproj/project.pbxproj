@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		09BF4EC02CDD00B000B0762E /* BluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09BF4EBF2CDD00B000B0762E /* BluetoothManager.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		09F149532CD3E4AE0083B63C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		09BF4EBF2CDD00B000B0762E /* BluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
 		09F149402CD3E4AB0083B63C /* VO2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VO2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		09F149522CD3E4AE0083B63C /* VO2Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VO2Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		09F1495C2CD3E4AE0083B63C /* VO2UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VO2UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -88,6 +93,7 @@
 		09F149372CD3E4AB0083B63C = {
 			isa = PBXGroup;
 			children = (
+				09BF4EBF2CDD00B000B0762E /* BluetoothManager.swift */,
 				09F149422CD3E4AB0083B63C /* VO2 */,
 				09F149552CD3E4AE0083B63C /* VO2Tests */,
 				09F1495F2CD3E4AE0083B63C /* VO2UITests */,
@@ -249,6 +255,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				09BF4EC02CDD00B000B0762E /* BluetoothManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -331,7 +331,7 @@ void setup() {
   Serial.println("yMin,yMax,Time,VO2 ,VO2MAX,VCO2,RQ,Bvol,VEmin,Brate,outO2perc,CO2perc");
 
   if (!Serial) {
-      tft.drawString("Serial ERROR!", 0, 0, 4);
+      tft.drawString("Serial Error!", 0, 0, 4);
   } else {
       tft.drawString("Serial ok", 0, 0, 4);
   }
@@ -353,19 +353,21 @@ void setup() {
 
   // init O2 sensor DF-Robot -----------
   if (!Oxygen.begin(Oxygen_IICAddress)) {
-      tft.drawString("O2 ERROR!", 0, 75, 4);
+      tft.drawString("O2 Error!", 0, 75, 4);
   } else {
       tft.drawString("O2 ok", 0, 75, 4);
   }
 
-  // init CO2 sensor Sensirion SCD30 -------------
-  // check if sensor is connected?
-  scd30.initialize();
-  scd30.setAutoSelfCalibration(0);
-  while (!scd30.isAvailable()) {
-      tft.drawString("CO2init..", 120, 75, 4);
-  }
-  tft.drawString("CO2 ok", 120, 75, 4);
+   // init CO2 sensor Sensirion SCD30 -------------
+    // check if sensor is connected?
+    scd30.initialize();
+    scd30.setAutoSelfCalibration(0);
+    if(!scd30.isAvailable()) {
+      tft.drawString("CO2 Error!", 120, 100, 4);
+    }
+    else{
+      tft.drawString("CO2 ok", 120, 100, 4);
+    }
 
 // init flow/pressure sensor Sensirion SDP810-500Pa -------------
 uint16_t error;
@@ -391,6 +393,8 @@ if (error) {
   tft.drawString("Flow-Sensor ok", 0, 100, 4);  
   }
   
+  InitBLE(); // init BLE for transmitting VO2 as heartrate
+
   error = mySensor.startContinuousMeasurementWithDiffPressureTCompAndAveraging();
 
   if (error) {
@@ -405,7 +409,6 @@ if (error) {
 
   showParameters();
 
-  InitBLE(); // init BLE for transmitting VO2 as heartrate
   bpm = 30;  // initial test value
   
 

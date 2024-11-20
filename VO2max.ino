@@ -36,7 +36,6 @@ const String Version = "V2.2 2024/11/06";
 #include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
 #include <Wire.h>
 
-#include "Sensirion_GadgetBle_Lib.h" //library to connect to Sensirion App
 
 // declarations for bluetooth serial --------------
 #include "BluetoothSerial.h"
@@ -234,9 +233,6 @@ float PresPa = 101325;    // uncorrected (absolute) barometric pressure
 
 float Battery_Voltage = 0.0;
 
-// settings for Sensirion App
-GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_CO2);
-
 //----------------------------------------------------------------------------------------------------------
 //                  SETUP
 //----------------------------------------------------------------------------------------------------------
@@ -395,18 +391,6 @@ if (error) {
   showParameters();
   
 
-  if (settings.sens_on) {
-        gadgetBle.begin();
-        delay(1000);
-        //Serial.print("Sensirion GadgetBle Lib initialized with deviceId = ");
-        //Serial.println(gadgetBle.getDeviceIdString()); //uncomment for Sensirion App
-        gadgetBle.writeCO2(1);
-        gadgetBle.writeTemperature(1);
-        gadgetBle.writeHumidity(1);
-        gadgetBle.commit();
-        delay(3);
-    }
-
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
   tft.drawCentreString("Ready...", 120, 55, 4);
@@ -449,7 +433,6 @@ void loop() {
       ExcelStream();   // send csv data via wired com port
       ExcelStreamBT(); // send csv data via Bluetooth com port
 
-      //if (settings.sens_on) GadgetWrite(); // Send to sensirion
       if (settings.cheet_on) VO2Notify();  // Send to GoldenCheetah as VO2 Master
 
       delay(100);
@@ -497,12 +480,7 @@ void loop() {
 
   TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
   // Resets amount of time between calcs
-  if (settings.sens_on ) {
-    //Serial.print("Time of the loop: ");
-    //Serial.print(TotalTime);
-    //Serial.println( " seconds");
-    gadgetBle.handleEvents();
-  }
+
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -683,16 +661,6 @@ void VolumeCalc() {
   }
 }
 
-//--------------------------------------------------
-void GadgetWrite() {
-  // Send to sensirion app
-  //Serial.println("In gadgetWrite");
-  gadgetBle.writeCO2(vo2Total);
-  gadgetBle.writeTemperature(vo2Max);
-  gadgetBle.writeHumidity(lastO2);
-  gadgetBle.commit();
-  delay(3);
-}
 
 //--------------------------------------------------
 // Output as basic VO2 Master data for GoldenCheetah

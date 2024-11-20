@@ -18,24 +18,17 @@ Partition Scheme: Default 4MB with spiffs (1.2MB APP/1.5 SPIFFS)
 Core Debug Level: None
 PSRAM: Disabled
 */
-
-// Set this to the correct printed case venturi diameter
-#define DIAMETER 16
-
-//#define VERBOSE // additional debug logging
-
 const String Version = "V2.3 2024/11/20";
+
 
 #include "esp_adc_cal.h" // ADC calibration data
 #include <EEPROM.h>      // include library to read and write settings from flash
-
 #include "DFRobot_OxygenSensor.h" //Library for Oxygen sensor
 #include "SCD30.h"                //Library for CO2 sensor
 #include "SensirionI2CSdp.h"          //Library for pressure sensor
 #include <SPI.h>
 #include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
 #include <Wire.h>
-
 
 // declarations for bluetooth serial --------------
 #include "BluetoothSerial.h"
@@ -52,6 +45,12 @@ BluetoothSerial SerialBT;
 
 //Library for barometric sensor  ---------------------
 #include <Adafruit_BMP3XX.h> 
+
+
+// Set this to the correct printed case venturi diameter
+#define DIAMETER 16
+
+//#define VERBOSE // additional debug logging
 
 #define ADC_EN  14       // ADC_EN is the ADC detection enable port
 #define ADC_PIN 34
@@ -151,7 +150,7 @@ int       screenChanged = 0;
 int       screenNr = 1;
 int       HeaderStreamed = 0;
 int       HeaderStreamedBT = 0;
-int       DEMO = 0;               // 1 = DEMO-mode
+int       DEMO = 0;               // 0 = Normal mode / 1 = DEMO-mode
 int       vref = 1100;            // used for battery voltage reading
 
 //############################################
@@ -246,6 +245,14 @@ float Battery_Voltage = 0.0;
 //----------------------------------------------------------------------------------------------------------
 
 void setup() {
+
+// Flow sensor variables
+uint32_t productNumber;
+uint8_t serialNumber[8];
+uint8_t serialNumberSize = 8;
+uint16_t error;
+char errorMessage[256];
+
   EEPROM.begin(sizeof(settings));
 
   pinMode(buttonPin1, INPUT_PULLUP);
@@ -325,27 +332,21 @@ void setup() {
       tft.drawString("O2 ok", 0, 75, 4);
   }
 
-   // init CO2 sensor Sensirion SCD30 -------------
-    // check if sensor is connected?
-    scd30.initialize();
-    scd30.setAutoSelfCalibration(0);
-    if(!scd30.isAvailable()) {
-      tft.drawString("CO2 Error!", 120, 100, 4);
-    }
-    else{
-      tft.drawString("CO2 ok", 120, 100, 4);
-    }
+  // init CO2 sensor Sensirion SCD30 -------------
+  // check if sensor is connected?
+  scd30.initialize();
+  scd30.setAutoSelfCalibration(0);
+  
+  if(!scd30.isAvailable()) {
+    tft.drawString("CO2 Error!", 120, 75, 4);
+  }
+  else{
+    tft.drawString("CO2 ok", 120, 75, 4);
+  }
 
 // init flow/pressure sensor Sensirion SDP810-500Pa -------------
-uint16_t error;
-char errorMessage[256];
 
 mySensor.begin(Wire, SDP8XX_I2C_ADDRESS_0);
-
-
-uint32_t productNumber;
-uint8_t serialNumber[8];
-uint8_t serialNumberSize = 8;
 
 mySensor.stopContinuousMeasurement();
 error = mySensor.readProductIdentifier(productNumber, serialNumber, serialNumberSize);
@@ -353,7 +354,7 @@ if (error) {
     //Serial.print("Error trying to execute readProductIdentifier(): ");
     errorToString(error, errorMessage, 256);
     //Serial.println(errorMessage);
-    tft.drawString("Flow-Sensor ERROR!", 0, 100, 4);
+    tft.drawString("Flow-Sensor Error!", 0, 100, 4);
 } else {
     for (size_t i = 0; i < serialNumberSize; i++) {
     }
@@ -364,8 +365,9 @@ if (error) {
 
   error = mySensor.startContinuousMeasurementWithDiffPressureTCompAndAveraging();
 
-  if (error) {
-  }
+// if (error) {
+//do somethiong ?
+//  }
 
   delay (2000);
 
@@ -376,7 +378,6 @@ if (error) {
 
   showParameters();
   
-
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
   tft.drawCentreString("Ready...", 120, 55, 4);
@@ -395,6 +396,7 @@ if (error) {
 //----------------------------------------------------------------------------------------------------------
 void loop() {
   TotalTime = millis() - TimerStart; // calculates actual total time
+ 
   VolumeCalc();                      // Starts integral function
 
   // VO2max calculation, tft display and excel csv every 1s --------------
@@ -612,7 +614,6 @@ void VolumeCalc() {
   
   pressure = pressure/2 + differentialPressure/2;
 
-
   if (DEMO == 1) {
       pressure = 10;                                      // TEST+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       if ((millis() - TimerVO2calc) > 2500) pressure = 0; // TEST++++++++++++++++++++++++++++
@@ -621,12 +622,12 @@ void VolumeCalc() {
   if (isnan(pressure)) { // isnan = is not a number,  unvalid sensor data
       tft.fillScreen(TFT_RED);
       tft.setTextColor(TFT_WHITE, TFT_RED);
-      tft.drawCentreString("VENTURI ERROR!", 120, 55, 4);
+      tft.drawCentreString("Venturi Error!", 120, 55, 4);
   }
   if (pressure > 266) { // upper limit of flow sensor warning
       // tft.fillScreen(TFT_RED);
       tft.setTextColor(TFT_WHITE, TFT_RED);
-      tft.drawCentreString("SENSOR LIMIT!", 120, 55, 4);
+      tft.drawCentreString("Sensor Limit!", 120, 55, 4);
   }
   if (pressure < 0) pressure = 0;
 

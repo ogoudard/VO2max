@@ -7,7 +7,8 @@
 // TTGO T-Display: SDA-Pin21, SCL-Pin22
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-/*Board: ESP32 Dev Module
+/*
+Board: ESP32 Dev Module
 Upload Speed: 921600
 CPU Frequency: 240Mhz (WiFi/BT)
 Flash Frequency: 80Mhz
@@ -15,19 +16,18 @@ Flash Mode: QIO
 Flash Size: 4MB (32Mb)
 Partition Scheme: Default 4MB with spiffs (1.2MB APP/1.5 SPIFFS)
 Core Debug Level: None
-PSRAM: Disabled*/
+PSRAM: Disabled
+*/
 
 // Set this to the correct printed case venturi diameter
 #define DIAMETER 16
 
 //#define VERBOSE // additional debug logging
 
-const String Version = "V2.2 2024/11/06";
+const String Version = "V2.3 2024/11/20";
 
 #include "esp_adc_cal.h" // ADC calibration data
 #include <EEPROM.h>      // include library to read and write settings from flash
-#define ADC_EN  14       // ADC_EN is the ADC detection enable port
-#define ADC_PIN 34
 
 #include "DFRobot_OxygenSensor.h" //Library for Oxygen sensor
 #include "SCD30.h"                //Library for CO2 sensor
@@ -49,6 +49,16 @@ BluetoothSerial SerialBT;
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+
+//Library for barometric sensor  ---------------------
+#include <Adafruit_BMP3XX.h> 
+
+#define ADC_EN  14       // ADC_EN is the ADC detection enable port
+#define ADC_PIN 34
+
+// Oxygene sensor defines
+#define COLLECT_NUMBER    10        // collect number, the collection range is 1-100.
+#define Oxygen_IICAddress ADDRESS_3 // I2C  label for o2 address
 
 byte hrmPos[1] = {2};
 bool _BLEClientConnected = false;
@@ -117,7 +127,7 @@ struct { // variables for GoldenCheetah
     short vo2;
 } cheetah;
 
-#include <Adafruit_BMP3XX.h> //Library for barometric sensor
+// Barometer variable
 Adafruit_BMP3XX bmp;
 
 // Starts Screen for TTGO device
@@ -128,8 +138,6 @@ SensirionI2CSdp mySensor;
 
 // Label of oxygen sensor
 DFRobot_OxygenSensor Oxygen;
-#define COLLECT_NUMBER    10        // collect number, the collection range is 1-100.
-#define Oxygen_IICAddress ADDRESS_3 // I2C  label for o2 address
 
 // Defines button state for adding wt
 const int buttonPin1 = 0;
@@ -143,8 +151,8 @@ int       screenChanged = 0;
 int       screenNr = 1;
 int       HeaderStreamed = 0;
 int       HeaderStreamedBT = 0;
-int       DEMO = 0; // 1 = DEMO-mode
-int       vref = 1100; // used for battery voltage reading
+int       DEMO = 0;               // 1 = DEMO-mode
+int       vref = 1100;            // used for battery voltage reading
 
 //############################################
 // Select correct diameter depending on printed
@@ -152,20 +160,20 @@ int       vref = 1100; // used for battery voltage reading
 //############################################
 
 // Defines the size of the Venturi openings for the  calculations of AirFlow
-float area_1 = 0.000531; // = 26mm diameter
+float area_1 = 0.000531;    // = 26mm diameter
 #if (DIAMETER == 20)
-float area_2 = 0.000314; // = 20mm diameter
+float area_2 = 0.000314;    // = 20mm diameter
 #elif (DIAMETER == 19)
-float area_2 = 0.000254; // = 19mm diameter
+float area_2 = 0.000254;    // = 19mm diameter
 #elif (DIAMETER == 16)
-float area_2 = 0.000201; // = 16mm diameter
+float area_2 = 0.000201;    // = 16mm diameter
 #else // default
-float area_2 = 0.000201; // = 16mm diameter
+float area_2 = 0.000201;    // = 16mm diameter by default
 #endif
 
-float rho = 1.225;     // ATP conditions: density based on ambient conditions, dry air
-float rhoSTPD = 1.292; // STPD conditions: density at 0°C, MSL, 1013.25 hPa, dry air
-float rhoBTPS = 1.123; // BTPS conditions: density at ambient pressure, 35°C, 95% humidity
+float rho = 1.225;          // ATP conditions: density based on ambient conditions, dry air
+float rhoSTPD = 1.292;      // STPD conditions: density at 0°C, MSL, 1013.25 hPa, dry air
+float rhoBTPS = 1.123;      // BTPS conditions: density at ambient pressure, 35°C, 95% humidity
 float massFlow = 0;
 float volFlow = 0;
 float volumeTotal = 0;      // variable for holding total volume of breath
@@ -237,28 +245,6 @@ float Battery_Voltage = 0.0;
 //                  SETUP
 //----------------------------------------------------------------------------------------------------------
 
-void loadSettings() {
-  // Check version first.
-  int version = EEPROM.read(0);
-  if (version == settings.version) {
-      for (int i = 0; i < sizeof(settings); ++i)
-          ((byte *)&settings)[i] = EEPROM.read(i);
-  }
-}
-
-void saveSettings() {
-  bool changed = false;
-  for (int i = 0; i < sizeof(settings); ++i) {
-      byte b = EEPROM.read(i);
-      if (b != ((byte *)&settings)[i]) {
-          EEPROM.write(i, ((byte *)&settings)[i]);
-          changed = true;
-      }
-  }
-  if (changed) EEPROM.commit();
-}
-
-//----------------------------
 void setup() {
   EEPROM.begin(sizeof(settings));
 
@@ -486,6 +472,32 @@ void loop() {
 //----------------------------------------------------------------------------------------------------------
 //                  FUNCTIONS
 //----------------------------------------------------------------------------------------------------------
+
+void loadSettings() {
+  // Check version first.
+  int version = EEPROM.read(0);
+  if (version == settings.version) {
+      for (int i = 0; i < sizeof(settings); ++i)
+          ((byte *)&settings)[i] = EEPROM.read(i);
+  }
+}
+
+//--------------------------------------------------
+
+void saveSettings() {
+  bool changed = false;
+  for (int i = 0; i < sizeof(settings); ++i) {
+      byte b = EEPROM.read(i);
+      if (b != ((byte *)&settings)[i]) {
+          EEPROM.write(i, ((byte *)&settings)[i]);
+          changed = true;
+      }
+  }
+  if (changed) EEPROM.commit();
+}
+
+//--------------------------------------------------
+
 void CheckInitialO2() {
   // check initial O2 value -----------
   initialO2 = Oxygen.ReadOxygenData(COLLECT_NUMBER); // read and check initial VO2%
@@ -1005,7 +1017,7 @@ void fnCalAir() {
       // tft.println(pressure, 1);
 
       TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
-                                // Resets amount of time between calcs
+                               // Resets amount of time between calcs
 
   } while (TotalTime < 10000);
 
@@ -1336,6 +1348,7 @@ void ReadButtons() {
       buttonPushCounter2 = 0;
   }
 }
+
 //---------------------------------------------------------
 
 void GetWeightkg() {
@@ -1459,9 +1472,6 @@ void InitBLE() {
       // kcalRateMeasurementCharacteristics.addDescriptor(&vo2RateDescriptor);
       // kcalRateMeasurementCharacteristics.addDescriptor(new BLE2902()); // necessary for notifications
       // pkcal->start();
-
-
-
   }
 
   // (5) Create the BLE Service

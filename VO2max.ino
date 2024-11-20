@@ -51,25 +51,10 @@ BluetoothSerial SerialBT;
 #include <BLEServer.h>
 #include <BLEUtils.h>
 
-byte bpm;
-byte heart[8] = {0b00001110, 60, 0, 0, 0, 0, 0, 0}; // defines the BT heartrate characteristic
-
-// Byte[0]: flags: 0b00001110:
-// not used/n.u./n.u./RR value available/Energy val.av./
-// Sensor contact status/Sens.cont.supported/HR Format: (0: uint_8)
-// Byte[1]: HR (uint_8)
-// Byte[2]: Energy in J MSB
-// Byte[3]: Energy in J LSB
-// Byte[4]: RR
-// Byte[5]: RR
-// Byte[6]: ?
-// Byte[7]: ?
-
 byte hrmPos[1] = {2};
-
 bool _BLEClientConnected = false;
 
-// heart rate service -> Send VO2MAX
+// heart rate service -> Send VO2MAX value
 // @TODO : change to randomly generate UUID and see if it s still working
 #define heartRateService BLEUUID((uint16_t)0x180D)
 BLECharacteristic heartRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
@@ -408,8 +393,6 @@ if (error) {
   doMenu();
 
   showParameters();
-
-  bpm = 30;  // initial test value
   
 
   if (settings.sens_on) {
@@ -466,22 +449,9 @@ void loop() {
       ExcelStream();   // send csv data via wired com port
       ExcelStreamBT(); // send csv data via Bluetooth com port
 
-      if (settings.sens_on) GadgetWrite(); // Send to sensirion
+      //if (settings.sens_on) GadgetWrite(); // Send to sensirion
       if (settings.cheet_on) VO2Notify();  // Send to GoldenCheetah as VO2 Master
 
-      // send BLE data ----------------
-      // @TODO: Check if this code is useless or not ?
-      //bpm = int(vo2Max + 0.5);
-      //heart[1] = (byte)bpm;
-      //int energyUsed = calTotal * 4.184; // conversion kcal into kJ
-      //heart[3] = energyUsed / 256;
-      //heart[2] = (byte)(int(volumeExp));
-      //heart[7] = (byte)(int(vo2MaxMax));
-      //heart[6] = (byte)(int(vco2Max));
-      //heart[5] = (byte)(int(respq));
-
-      // Serial.println(bpm);
-      // Serial.println(energyUsed);
       delay(100);
 
       if (settings.heart_on) {

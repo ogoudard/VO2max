@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @ObservedObject var bluetoothManager = BluetoothManager()
     private let chartHeight: CGFloat = 200
+    @StateObject private var locationManager = LocationManager()
     
     var body: some View {
         NavigationView {
@@ -76,10 +77,11 @@ struct ContentView: View {
                 Text("CO2 = \(bluetoothManager.co2percvalue) %")
                     .font(.caption)
                     .padding(.bottom, 2)
-                Text("Energy = \(bluetoothManager.energyvalue) kcal")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                Text("VO2MAX evolution")
+                Text("Vitesse actuelle: \(locationManager.speed*3.6, specifier: "%.2f") km/h")
+                    .padding()
+                    .font(.title)
+                
+                     Text("VO2MAX evolution")
                     .font(.caption)
                     .padding(.bottom, 2)
                 Chart {
@@ -133,9 +135,10 @@ struct ContentView: View {
                 //.background(Color.white) // Ajoutez une couleur de fond pour mieux visualiser le graphique
                 //.border(Color.gray) // Optionnel : ajoutez une bordure pour la visibilité
             }
+
             .navigationTitle("VO2 MAX") // Titre en haut de la fenêtre
             .navigationBarTitleDisplayMode(.inline) // Centre le titre
-            
+
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("VO2 MAX")
@@ -153,6 +156,10 @@ struct ContentView: View {
                 }
                 
             }
+            .onAppear {
+                locationManager.startUpdatingLocation()
+            }
+
             
         }
     }

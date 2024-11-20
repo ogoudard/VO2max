@@ -418,6 +418,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "need bluetooth";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -454,6 +456,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "need bluetooth";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

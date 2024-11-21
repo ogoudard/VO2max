@@ -93,10 +93,6 @@ BLEDescriptor co2percRateDescriptor(BLEUUID((uint16_t)0x2901));
 #define kcalRateService BLEUUID("3483923e-e94a-4a21-96c4-c12a442ee4cf") 
 BLECharacteristic kcalRateMeasurementCharacteristics(BLEUUID("fb6fc35b-2896-4474-8647-bd206b3d0c50"), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor kcalRateDescriptor(BLEUUID((uint16_t)0x2901));
-// GoldenCheetah service
-#define cheetahService BLEUUID("00001523-1212-EFDE-1523-785FEABCD123")
-BLECharacteristic cheetahCharacteristics(BLEUUID("00001524-1212-EFDE-1523-785FEABCD123"), BLECharacteristic::PROPERTY_NOTIFY | 0);
-BLEDescriptor     cheetahDescriptor(BLEUUID((uint16_t)0x2901));
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -116,15 +112,6 @@ class MyServerCallbacks: public BLEServerCallbacks {
 };
 
 // ------------------------------------------
-
-struct { // variables for GoldenCheetah
-    short freq;
-    byte  temp;
-    byte  hum;
-    short rmv;
-    short feo2;
-    short vo2;
-} cheetah;
 
 // Barometer variable
 Adafruit_BMP3XX bmp;
@@ -365,8 +352,8 @@ if (error) {
 
   error = mySensor.startContinuousMeasurementWithDiffPressureTCompAndAveraging();
 
-// if (error) {
-//do somethiong ?
+ // if (error) {
+  //do somethiong ?
 //  }
 
   delay (2000);
@@ -420,8 +407,6 @@ void loop() {
       }
       ExcelStream();   // send csv data via wired com port
       ExcelStreamBT(); // send csv data via Bluetooth com port
-
-      if (settings.cheet_on) VO2Notify();  // Send to GoldenCheetah as VO2 Master
 
       delay(100);
 
@@ -675,23 +660,6 @@ void VolumeCalc() {
 }
 
 
-//--------------------------------------------------
-// Output as basic VO2 Master data for GoldenCheetah
-void VO2Notify() {
-  if (settings.co2_on) {
-      cheetah.temp = co2temp;
-      cheetah.hum = co2hum; // humid
-  } else {
-      cheetah.temp = TempC;
-      cheetah.hum = 0; // humid
-  }
-  cheetah.rmv = volumeVEmean;
-  cheetah.vo2 = vo2Max;
-  cheetah.feo2 = lastO2 * 100;
-
-  cheetahCharacteristics.setValue((uint8_t *)&cheetah, 10);
-  cheetahCharacteristics.notify();
-}
 
 //--------------------------------------------------
 void ExcelStream() {
@@ -1475,20 +1443,8 @@ void InitBLE() {
       // pkcal->start();
   }
 
-  // (5) Create the BLE Service
-  if (settings.cheet_on) {
-      BLEService *pCheetah = pServer->createService(cheetahService);
-      pCheetah->addCharacteristic(&cheetahCharacteristics);
-      cheetahDescriptor.setValue("VO2 Data");
-      cheetahCharacteristics.addDescriptor(&cheetahDescriptor);
-      cheetahCharacteristics.addDescriptor(new BLE2902());
-      pCheetah->start();
-  }
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
 
-  if (settings.cheet_on) {
-      pAdvertising->addServiceUUID(cheetahService);
-  }
   if (settings.heart_on) {
       pAdvertising->addServiceUUID(heartRateService);
       pAdvertising->addServiceUUID(vo2RateService);

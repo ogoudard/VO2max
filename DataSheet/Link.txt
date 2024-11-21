@@ -1,0 +1,9 @@
+Pression barometric BMP388 Gravity DFrobot
+https://www.dfrobot.com/product-1792.html
+CO2 Sensor Sensirion SCD30:
+https://sensirion.com/products/catalog/SCD30
+O2 Sensor SEN0322
+Electrochemical Oxygen/O2 Sensor, Cable, Post, Screws, DFRduino UNO R3, ESP32, Raspberry Pi Boards: 
+https://fr.farnell.com/en-FR/dfrobot/sen0322/i2c-oxygen-sensor-module-arduino/dp/3879708
+MassFlow sensor: Sensirion SDP810-500Pa 
+https://sensirion.com/products/catalog/SDP810-500Pa

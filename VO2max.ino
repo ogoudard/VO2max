@@ -64,11 +64,12 @@ bool _BLEClientConnected = false;
 
 // heart rate service -> Send VO2MAX value
 // @TODO : change to randomly generate UUID and see if it s still working
-#define heartRateService BLEUUID((uint16_t)0x180D)
-BLECharacteristic heartRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
-BLECharacteristic sensorPositionCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
-BLEDescriptor     heartRateDescriptor(BLEUUID((uint16_t)0x2901));
-BLEDescriptor     sensorPositionDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
+#define vo2maxRateService BLEUUID((uint16_t)0x180D)
+BLECharacteristic vo2maxRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
+BLEDescriptor     vo2maxRateDescriptor(BLEUUID((uint16_t)0x2901));
+
+BLECharacteristic startTestCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
+BLEDescriptor     startTestDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
 // Vo2 service
 #define vo2RateService BLEUUID("231c616b-32a6-4b93-9f0c-fe728deca0a5") 
 BLECharacteristic vo2RateMeasurementCharacteristics(BLEUUID("4225d51b-f1c2-419a-9acc-bd8e70d960ae"), BLECharacteristic::PROPERTY_NOTIFY);
@@ -177,8 +178,8 @@ struct {
     int   version = 1;            // Make sure saved data is right version
     float correctionSensor = 0.92;// calculated from 3L calibration syringe
     float weightkg = 62.0;        // Standard-body-weight
-    bool  heart_on = false;       // Output vo2 as a HRM
-    bool  sens_on = true;         // Output as sensiron data
+    bool  BLE_on = true;       // Output vo2 as a HRM
+    bool  sens_on = false;         // Output as sensiron data
     bool  cheet_on = false;       // Output as vo2master for GoldenCheetah
     bool  co2_on = true;          // CO2 sensor active
 } settings;
@@ -352,10 +353,6 @@ if (error) {
 
   error = mySensor.startContinuousMeasurementWithDiffPressureTCompAndAveraging();
 
- // if (error) {
-  //do somethiong ?
-//  }
-
   delay (2000);
 
   CheckInitialO2();
@@ -406,14 +403,14 @@ void loop() {
           readVoltage();
       }
       ExcelStream();   // send csv data via wired com port
-      ExcelStreamBT(); // send csv data via Bluetooth com port
+      //ExcelStreamBT(); // send csv data via Bluetooth com port
 
       delay(100);
 
-      if (settings.heart_on) {
-          heartRateMeasurementCharacteristics.setValue(vo2MaxMax); // set the new value for heartrate
-          heartRateMeasurementCharacteristics.notify();           // send a notification that value has changed
-          sensorPositionCharacteristic.setValue(hrmPos, 1);
+      if (settings.BLE_on) {
+          vo2maxRateMeasurementCharacteristics.setValue(vo2MaxMax); // set the new value for heartrate
+          vo2maxRateMeasurementCharacteristics.notify();           // send a notification that value has changed
+          startTestCharacteristic.setValue(hrmPos, 1);
 
           vo2RateMeasurementCharacteristics.setValue(vo2Max); // set the new value for vo2rate
           vo2RateMeasurementCharacteristics.notify();         // send a notification that value has changed
@@ -451,8 +448,8 @@ void loop() {
     // BatteryBT(); //TEST für battery discharge log ++++++++++++++++++++++++++++++++++++++++++
   }
 
-  TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
-  // Resets amount of time between calcs
+  TimerVolCalc = millis();  // part of the integral function to keep calculation volume over time
+                            // Resets amount of time between calcs
 
 }
 
@@ -1011,11 +1008,11 @@ int      icount = 0;
 MenuItem menuitems[] = {{icount++, "Recalibrate O2", false, &fnCalO2, 0},
                         {icount++, "Calibrate Flow", false, &fnCalAir, 0},
                         {icount++, "Set Weight", false, &GetWeightkg, 0},
-                        {icount++, "Heart", true, 0, &settings.heart_on},
-                        {icount++, "Sensirion", true, 0, &settings.sens_on},
-                        {icount++, "Cheetah", true, 0, &settings.cheet_on},
+                        {icount++, "Bluetooth", true, 0, &settings.BLE_on},
                         {icount++, "CO2 sensor", true, 0, &settings.co2_on},
-                        {icount++, "Done.", false, 0, 0}};
+                        {icount++, "", false, 0, &settings.sens_on},
+                        {icount++, "", false, 0, &settings.cheet_on},
+                        {icount++, "Done...", false, 0, 0}};
 
 //--------------------------------------------------
 void doMenu() {
@@ -1063,7 +1060,7 @@ void doMenu() {
           if (menuitems[item].toggle) {
               tft.print(*menuitems[item].val ? " [Yes]" : " [No]");
           } else {
-              tft.print("...");
+              tft.print(" ");
           }
       }
 
@@ -1381,22 +1378,22 @@ void InitBLE() {
   BLEServer *pServer = BLEDevice::createServer(); // creates the BLE server
   pServer->setCallbacks(new MyServerCallbacks()); // creates the server callback function
 
-  // (2) Create the BLE Service "heartRateService"
-  if (settings.heart_on) {
-      BLEService *pHeart = pServer->createService(heartRateService); // creates heatrate service with 0x180D
+  // (2) Create the BLE Service "vo2maxRateService"
+  if (settings.BLE_on) {
+      BLEService *pHeart = pServer->createService(vo2maxRateService); // creates heatrate service with 0x180D
 
       // (3) Create the characteristics, descriptor, notification
-      pHeart->addCharacteristic(&heartRateMeasurementCharacteristics); // creates heartrate
+      pHeart->addCharacteristic(&vo2maxRateMeasurementCharacteristics); // creates heartrate
       // characteristics 0x2837
-      heartRateDescriptor.setValue("Rate from 0 to 200"); // describtion of the characteristic
-      heartRateMeasurementCharacteristics.addDescriptor(&heartRateDescriptor);
-      heartRateMeasurementCharacteristics.addDescriptor(new BLE2902()); // necessary for notifications
+      vo2maxRateDescriptor.setValue("Rate from 0 to 200"); // describtion of the characteristic
+      vo2maxRateMeasurementCharacteristics.addDescriptor(&vo2maxRateDescriptor);
+      vo2maxRateMeasurementCharacteristics.addDescriptor(new BLE2902()); // necessary for notifications
       // client switches server notifications on/off via BLE2902 protocol
 
       // (4) Create additional characteristics
-      pHeart->addCharacteristic(&sensorPositionCharacteristic);
-      sensorPositionDescriptor.setValue("Position 0 - 6");
-      sensorPositionCharacteristic.addDescriptor(&sensorPositionDescriptor);
+      pHeart->addCharacteristic(&startTestCharacteristic);
+      startTestDescriptor.setValue("Start Test bit");
+      startTestCharacteristic.addDescriptor(&startTestDescriptor);
       pHeart->start();
       
         // Vo2 service
@@ -1445,8 +1442,8 @@ void InitBLE() {
 
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
 
-  if (settings.heart_on) {
-      pAdvertising->addServiceUUID(heartRateService);
+  if (settings.BLE_on) {
+      pAdvertising->addServiceUUID(vo2maxRateService);
       pAdvertising->addServiceUUID(vo2RateService);
       pAdvertising->addServiceUUID(vco2RateService);
       pAdvertising->addServiceUUID(RQRateService);

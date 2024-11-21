@@ -13,13 +13,13 @@ struct ContentView: View {
     
     var body: some View {
         NavigationView {
-            VStack {
+            VStack (spacing: 4){
                 //Text("VO2Max Tracker")
                 //    .font(.largeTitle) // Vous pouvez changer la taille de la police ici
                 //    .fontWeight(.bold) // Mettre le texte en gras
                 //    .padding(.top, 40) // Ajoute un espacement en haut
                 // Bouton "Settings" sous le titre
-                HStack {
+                HStack (spacing: 4){
                     Button(action: {
                         // Action à déclencher quand le bouton est appuyé
                         print("Bouton Settings appuyé")
@@ -28,32 +28,32 @@ struct ContentView: View {
                         Text("Settings")
                             .font(.headline)
                     }
-                    .padding()
-                    Spacer()
+
                     Button(action: {
                         // Action à déclencher quand le bouton est appuyé
                         print("Bouton Golden Lungs appuyé")
                     }) {
-                        Image(systemName: "figure.run") // Icône de paramètres
+                        Image(systemName: "lungs.fill") // Icône de paramètres
                         Text("Poumons d'or")
                             .font(.headline)
                     }
                 }
-                .padding()
-                
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
+                .padding(.bottom, 4)
                 
                 
-                
-                HStack {
+                HStack (spacing: 4){
                     Button(action:exportCSV) {
                         Image(systemName: "doc.text.fill") // Icône de paramètres
-                        Text("Export CSV data file")
+                        Text("Export Data")
                             .font(.headline)
                     }
-                }
-                .padding()
+
+                    Button(action:startTest) {
+                        Image(systemName: "figure.run") // Icône de paramètres
+                        Text("Start Test")
+                            .font(.headline)
+                    }
+ }
                 
                 
                 Text("VO2 Max. = \(bluetoothManager.vo2Maxvalue) mL/min/kg")
@@ -163,8 +163,14 @@ struct ContentView: View {
             
         }
     }
+   
+    // start test button function
     
-    
+    func startTest() {
+        
+        print("Start Test appuyé")
+
+    }
     
     func exportCSV() {
         // Créer le contenu du fichier CSV avec les en-têtes de colonne
@@ -201,6 +207,8 @@ struct ContentView: View {
             print("Erreur lors de la création du fichier temporaire : \(error.localizedDescription)")
         }
     }
+
+
     // Fonction pour ouvrir le dialogue de sauvegarde de fichier
     func showSaveFileDialog(fileURL: URL) {
         let picker = UIDocumentPickerViewController(forExporting: [fileURL], asCopy: true)

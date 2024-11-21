@@ -41,6 +41,9 @@ class LocationManager:NSObject, ObservableObject, CLLocationManagerDelegate{
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let newLocation = locations.last {
             speed = newLocation.speed // Récupère la vitesse en m/s
+            if speed < 0 {
+                speed=0
+            }
         }
     }
 }

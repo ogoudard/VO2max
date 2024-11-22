@@ -79,7 +79,7 @@ struct ContentView: View {
                     }) {
                         HStack {
                             Image(systemName: "figure.run")
-                            Text("Start Test")
+                            Text("Test Setup")
                                 .font(.headline)
                         }
                     }

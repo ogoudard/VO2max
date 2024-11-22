@@ -21,13 +21,13 @@ PSRAM: Disabled
 const String Version = "V2.3 2024/11/20";
 
 
-#include "esp_adc_cal.h" // ADC calibration data
-#include <EEPROM.h>      // include library to read and write settings from flash
+#include "esp_adc_cal.h"          // ADC calibration data
+#include <EEPROM.h>               // include library to read and write settings from flash
 #include "DFRobot_OxygenSensor.h" //Library for Oxygen sensor
 #include "SCD30.h"                //Library for CO2 sensor
-#include "SensirionI2CSdp.h"          //Library for pressure sensor
+#include "SensirionI2CSdp.h"      //Library for pressure sensor
 #include <SPI.h>
-#include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
+#include <TFT_eSPI.h>             // Graphics and font library for ST7735 driver chip
 #include <Wire.h>
 
 // declarations for bluetooth serial --------------
@@ -45,7 +45,6 @@ BluetoothSerial SerialBT;
 
 //Library for barometric sensor  ---------------------
 #include <Adafruit_BMP3XX.h> 
-
 
 // Set this to the correct printed case venturi diameter
 #define DIAMETER 16
@@ -68,8 +67,11 @@ bool _BLEClientConnected = false;
 BLECharacteristic vo2maxRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor     vo2maxRateDescriptor(BLEUUID((uint16_t)0x2901));
 
+// Start Test bit to trig the begining of a new VO2max test protocol 
+// @TODO  :change this when the heart data will be read from the POLAR heart sensor
 BLECharacteristic startTestCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
 BLEDescriptor     startTestDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
+
 // Vo2 service
 #define vo2RateService BLEUUID("231c616b-32a6-4b93-9f0c-fe728deca0a5") 
 BLECharacteristic vo2RateMeasurementCharacteristics(BLEUUID("4225d51b-f1c2-419a-9acc-bd8e70d960ae"), BLECharacteristic::PROPERTY_NOTIFY);
@@ -113,8 +115,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
 };
 
 // ------------------------------------------
-
-// Barometer variable
+// Barometer device
 Adafruit_BMP3XX bmp;
 
 // Starts Screen for TTGO device
@@ -139,6 +140,7 @@ int       screenNr = 1;
 int       HeaderStreamed = 0;
 int       HeaderStreamedBT = 0;
 int       DEMO = 0;               // 0 = Normal mode / 1 = DEMO-mode
+int       SCREEN_ONLY = 1;        // 0 = Normal mode / 1 = Screen only mode
 int       vref = 1100;            // used for battery voltage reading
 
 //############################################
@@ -225,7 +227,6 @@ float volumeTotalOld = 0.0;
 float volumeTotal2 = 0.0;
 float TempC = 15.0;       // Air temperature in Celsius barometric sensor BMP180
 float PresPa = 101325;    // uncorrected (absolute) barometric pressure
-
 float Battery_Voltage = 0.0;
 
 //----------------------------------------------------------------------------------------------------------
@@ -349,15 +350,19 @@ if (error) {
   tft.drawString("Flow-Sensor ok", 0, 100, 4);  
   }
   
-  InitBLE(); // init BLE for transmitting VO2 as heartrate
+  InitBLE(); // init BLE for transmitting data VO2 live, VO2 max,co2,rq
 
   error = mySensor.startContinuousMeasurementWithDiffPressureTCompAndAveraging();
 
   delay (2000);
-
-  CheckInitialO2();
-  CheckInitialCO2();
-
+  if(SCREEN_ONLY == 1){
+    initialO2 = 20.90; 
+    initialCO2 = 1000;                              
+  } 
+  else {
+    CheckInitialO2();
+    CheckInitialCO2();
+  }
   doMenu();
 
   showParameters();
@@ -403,12 +408,11 @@ void loop() {
           readVoltage();
       }
       ExcelStream();   // send csv data via wired com port
-      //ExcelStreamBT(); // send csv data via Bluetooth com port
 
       delay(100);
 
       if (settings.BLE_on) {
-          vo2maxRateMeasurementCharacteristics.setValue(vo2MaxMax); // set the new value for heartrate
+          vo2maxRateMeasurementCharacteristics.setValue(vo2MaxMax); // set the new value for vo2max
           vo2maxRateMeasurementCharacteristics.notify();           // send a notification that value has changed
           startTestCharacteristic.setValue(hrmPos, 1);
 
@@ -581,6 +585,11 @@ void VolumeCalc() {
   float temperature;
 
   float error = mySensor.readMeasurement(differentialPressure, temperature);
+  if(SCREEN_ONLY == 1){
+      differentialPressure = random(1,3)/10.0;                                     
+      temperature = random(100,200)/10.0; 
+      error = 0;                                    
+  } 
   if (error) {
       //Serial.print("Error trying to execute readMeasurement(): ");
       errorToString(error, errorMessage, 256);
@@ -593,7 +602,8 @@ void VolumeCalc() {
       //Serial.print(temperature);
       //Serial.println();
   }
-  
+ 
+ 
   pressure = pressure/2 + differentialPressure/2;
 
   if (DEMO == 1) {
@@ -602,12 +612,10 @@ void VolumeCalc() {
   }
 
   if (isnan(pressure)) { // isnan = is not a number,  unvalid sensor data
-      tft.fillScreen(TFT_RED);
       tft.setTextColor(TFT_WHITE, TFT_RED);
       tft.drawCentreString("Venturi Error!", 120, 55, 4);
   }
   if (pressure > 266) { // upper limit of flow sensor warning
-      // tft.fillScreen(TFT_RED);
       tft.setTextColor(TFT_WHITE, TFT_RED);
       tft.drawCentreString("Sensor Limit!", 120, 55, 4);
   }
@@ -726,51 +734,6 @@ if (HeaderStreamed == 0) {
     Serial.print("CO2perc:");    
     Serial.println(co2perc, 3);
 }
-//--------------------------------------------------
-void ExcelStreamBT() {
-  // HeaderStreamedBT = 1;// TEST: Deactivation of header
-  if (HeaderStreamedBT == 0) {
-      SerialBT.print("Time");
-      SerialBT.print(",");
-      SerialBT.print("VO2");
-      SerialBT.print(",");
-      SerialBT.print("VO2MAX");
-      SerialBT.print(",");
-      SerialBT.print("VCO2");
-      SerialBT.print(",");
-      SerialBT.print("RQ");
-      SerialBT.print(",");
-      SerialBT.print("Bvol");
-      SerialBT.print(",");
-      SerialBT.print("VEmin");
-      SerialBT.print(",");
-      SerialBT.print("Brate");
-      SerialBT.print(",");
-      SerialBT.print("outO2%");
-      SerialBT.print(",");
-      SerialBT.println("CO2%");
-      HeaderStreamedBT = 1;
-  }
-  SerialBT.print(float(TotalTime / 1000), 0);
-  SerialBT.print(",");
-  SerialBT.print(vo2Max);
-  SerialBT.print(",");
-  SerialBT.print(vo2MaxMax);
-  SerialBT.print(",");
-  SerialBT.print(vco2Max);
-  SerialBT.print(",");
-  SerialBT.print(respq);
-  SerialBT.print(",");
-  SerialBT.print(volumeExp);
-  SerialBT.print(",");
-  SerialBT.print(volumeVEmean);
-  SerialBT.print(",");
-  SerialBT.print(freqVEmean);
-  SerialBT.print(",");
-  SerialBT.print(lastO2);
-  SerialBT.print(",");
-  SerialBT.println(co2perc, 3);
-}
 
 //--------------------------------------------------
 
@@ -791,10 +754,18 @@ void BatteryBT() {
 
 void ReadO2() {
   float oxygenData = Oxygen.ReadOxygenData(COLLECT_NUMBER);
+ 
+  // Generate random value if screen only connected
+  if(SCREEN_ONLY == 1) {
+    oxygenData = random(1950, 2150) / 100.0;
+  }
+
   lastO2 = oxygenData;
   if (lastO2 > initialO2) initialO2 = lastO2; // correction for drift of O2 sensor
 
-  if (DEMO == 1) lastO2 = initialO2 - 4; // TEST+++++++++++++++++++++++++++++++++++++++++++++
+  // DEMO Mode
+  if (DEMO == 1) lastO2 = initialO2 - 4; 
+  
   co2 = initialO2 - lastO2;
 }
 
@@ -802,22 +773,32 @@ void ReadO2() {
 
 void readCO2() {
   float result[3] = {0};
+  // Generate random value if screen only connected
+  if(SCREEN_ONLY == 1) {
+    co2ppm = random(100000, 200000) / 10.0;
+    co2temp = random(190, 210) / 10.0;
+    co2hum = random(100, 900) / 10.0;
+  }
 
   if (scd30.isAvailable()) {
       scd30.getCarbonDioxideConcentration(result);
 
       co2ppm = result[0];
+ 
       if (co2ppm >= 40000) { // upper limit of CO2 sensor warning
           // tft.fillScreen(TFT_RED);
           tft.setTextColor(TFT_WHITE, TFT_RED);
           tft.drawCentreString("CO2 LIMIT!", 120, 55, 4);
       }
 
-      if (DEMO == 1) co2ppm = 30000; // TEST+++++++++++++++++++++++++++++++++++++++++++++
+      if (DEMO == 1) co2ppm = 30000; // TEST
       if (initialCO2 == 0) initialCO2 = co2ppm;
+ 
+  
       co2perc = co2ppm / 10000;
       co2temp = result[1];
       co2hum = result[2];
+
 
       float co2percdiff = (co2ppm - initialCO2) / 10000; // calculates difference to initial CO2
       if (co2percdiff < 0) co2percdiff = 0;
@@ -850,6 +831,13 @@ void AirDensity() {
   TempC = bmp.readTemperature(); // Temp from baro sensor BMP180
   // co2temp is temperature from CO2 sensor
   PresPa = bmp.readPressure();
+  
+  // Generate random values if screen only connected
+  if(SCREEN_ONLY == 1) {
+    PresPa = random(100000, 103325)/10.0;
+    TempC = random(80, 250)/10.0;
+  }
+  
   rho = PresPa / (co2temp + 273.15) / 287.058; // calculation of air density
   rhoBTPS = PresPa / (35 + 273.15) / 292.9;    // density at BTPS: 35°C, 95% humidity
 }
@@ -857,8 +845,10 @@ void AirDensity() {
 //--------------------------------------------------
 
 void vo2maxCalc() { // V02max calculation every 5s
+
   ReadO2();
   AirDensity(); // calculates air density
+ 
 
   #ifdef VERBOSE
     // Debug. compare co2
@@ -880,6 +870,14 @@ void vo2maxCalc() { // V02max calculation every 5s
   vo2CalH = vo2Cal * 60.0;                             // actual calories/min. * 60 min. = cal./hour
   vo2CalDay = vo2Cal * 1440.0;                         // actual calories/min. * 1440 min. = cal./day
   if (vo2CalDay > vo2CalDayMax) vo2CalDayMax = vo2CalDay;
+
+  // Generate random values if screen only connected
+  if(SCREEN_ONLY == 1) {
+    vo2MaxMax = random(200, 700)/10.0;
+    vo2Max = random(100, 700)/10.0;
+    vco2Max = random(80, 250)/10.0;
+  }
+ 
 }
 
 //--------------------------------------------------
@@ -1269,7 +1267,7 @@ void tftParameters() {
   tft.setTextColor(TFT_WHITE, TFT_BLUE);
 
   tft.setCursor(5, 5, 4);
-  tft.print("*C");
+  tft.print("deg. C");
   tft.setCursor(120, 5, 4);
   tft.println(co2temp, 1);
 

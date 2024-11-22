@@ -10,6 +10,7 @@ struct ContentView: View {
     @ObservedObject var bluetoothManager = BluetoothManager()
     private let chartHeight: CGFloat = 200
     @StateObject private var locationManager = LocationManager()
+    @State private var navigateToSpeedAndWeight = false // Variable d'état pour gérer la navigation
     
     var body: some View {
         NavigationView {
@@ -63,6 +64,7 @@ struct ContentView: View {
                     Button(action: {
                         bluetoothManager.writeValue(1) // Envoie un "1" pour démarrer le test
                         print("Test started")
+                        navigateToSpeedAndWeight = true // Déclenche la navigation vers la nouvelle page
                     }) {
                         HStack {
                             Image(systemName: "figure.run")
@@ -172,6 +174,13 @@ struct ContentView: View {
                 //.background(Color.white) // Ajoutez une couleur de fond pour mieux visualiser le graphique
                 //.border(Color.gray) // Optionnel : ajoutez une bordure pour la visibilité
             }
+            // Navigation vers la page de saisie de vitesse et poids
+             .background(
+                 NavigationLink(destination: SpeedAndWeightView(), isActive: $navigateToSpeedAndWeight) {
+                     EmptyView()
+                 }
+             )
+
 
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -201,7 +210,6 @@ struct ContentView: View {
             .onAppear {
                 locationManager.startUpdatingLocation()
             }
-
             
         }
     }

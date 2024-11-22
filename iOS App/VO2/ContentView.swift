@@ -9,78 +9,117 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @ObservedObject var bluetoothManager = BluetoothManager()
     private let chartHeight: CGFloat = 200
+    @StateObject private var locationManager = LocationManager()
     
     var body: some View {
         NavigationView {
-            VStack {
-                //Text("VO2Max Tracker")
-                //    .font(.largeTitle) // Vous pouvez changer la taille de la police ici
-                //    .fontWeight(.bold) // Mettre le texte en gras
-                //    .padding(.top, 40) // Ajoute un espacement en haut
-                // Bouton "Settings" sous le titre
-                HStack {
+            VStack(spacing: 1) { // Ajustez le spacing si nécessaire
+                HStack(spacing: 20) {
                     Button(action: {
-                        // Action à déclencher quand le bouton est appuyé
                         print("Bouton Settings appuyé")
                     }) {
-                        Image(systemName: "gearshape.fill") // Icône de paramètres
-                        Text("Settings")
-                            .font(.headline)
+                        HStack {
+                            Image(systemName: "gearshape.fill")
+                            Text("Settings")
+                                .font(.headline)
+                        }
                     }
                     .padding()
-                    Spacer()
+                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .background(Color.blue)
+                    .cornerRadius(8)
+
                     Button(action: {
-                        // Action à déclencher quand le bouton est appuyé
                         print("Bouton Golden Lungs appuyé")
                     }) {
-                        Image(systemName: "figure.run") // Icône de paramètres
-                        Text("Poumons d'or")
+                        HStack {
+                            Image(systemName: "lungs.fill")
+                            Text("Gold Lung")
+                                .font(.headline)
+                        }
+                    }
+                    .padding()
+                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+
+                HStack(spacing: 20) {
+                    Button(action: exportCSV) {
+                        HStack {
+                            Image(systemName: "doc.text.fill")
+                            Text("Export Data")
+                                .font(.headline)
+                        }
+                    }
+                    .padding()
+                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+
+                    Button(action: {
+                        bluetoothManager.writeValue(1) // Envoie un "1" pour démarrer le test
+                        print("Test started")
+                    }) {
+                        HStack {
+                            Image(systemName: "figure.run")
+                            Text("Start Test")
+                                .font(.headline)
+                        }
+                    }
+                    .padding()
+                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+            
+            .padding()
+
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("VO2 Max. = \(String(format: "%.2f", bluetoothManager.vo2Maxvalue)) mL/min/kg")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+
+                        Text("VO2 Live = \(String(format: "%.2f", bluetoothManager.vo2value)) mL/min/kg")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+
+                        Text("VCO2 Live = \(String(format: "%.2f", bluetoothManager.vco2value)) mL/min")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+
+                        Text("RQ Level = \(String(format: "%.2f", bluetoothManager.RQvalue)) %")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("O2 = \(String(format: "%.2f", bluetoothManager.o2percvalue)) %")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+
+                        Text("CO2 = \(String(format: "%.2f", bluetoothManager.co2percvalue)) %")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+
+                        Text("Speed : \(locationManager.speed*3.6, specifier: "%.2f") km/h")
+                            .padding(.bottom, 2)
+                            .font(.headline)
+
+                        Text("Heart Rate: 0 bpm")
+                            .padding(.bottom, 2)
                             .font(.headline)
                     }
                 }
-                .padding()
-                
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
-                
-                
-                
-                HStack {
-                    Button(action:exportCSV) {
-                        Image(systemName: "doc.text.fill") // Icône de paramètres
-                        Text("Export CSV data file")
-                            .font(.headline)
-                    }
-                }
-                .padding()
-                
-                
-                Text("VO2 Max. = \(bluetoothManager.vo2Maxvalue) mL/min/kg")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                    .onAppear {
-                        bluetoothManager.startBluetooth()
-                    }
-                Text("VO2 Live = \(bluetoothManager.vo2value) mL/min/kg")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                Text("VCO2 Live = \(bluetoothManager.vco2value) mL/min")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                Text("RQ Level = \(bluetoothManager.RQvalue) %")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                Text("O2 = \(bluetoothManager.o2percvalue) %")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                Text("CO2 = \(bluetoothManager.co2percvalue) %")
-                    .font(.caption)
-                    .padding(.bottom, 2)
-                Text("Energy = \(bluetoothManager.energyvalue) kcal")
-                    .font(.caption)
-                    .padding(.bottom, 2)
+                .padding() // Ajoute un peu d'espace autour
+
                 Text("VO2MAX evolution")
-                    .font(.caption)
+                    .font(.title2)
                     .padding(.bottom, 2)
                 Chart {
                     ForEach(bluetoothManager.vo2Maxvalues, id: \.time) { entry in
@@ -96,7 +135,7 @@ struct ContentView: View {
                 // .padding(.top)
                 //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
                 Text("VO2 evolution")
-                    .font(.caption)
+                    .font(.title2)
                     .padding(.bottom, 2)
                 
                 Chart {
@@ -112,7 +151,7 @@ struct ContentView: View {
                 }
                 
                 Text("CO2 evolution")
-                    .font(.caption)
+                    .font(.title2)
                     .padding(.bottom, 2)
                 
                 //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
@@ -133,14 +172,18 @@ struct ContentView: View {
                 //.background(Color.white) // Ajoutez une couleur de fond pour mieux visualiser le graphique
                 //.border(Color.gray) // Optionnel : ajoutez une bordure pour la visibilité
             }
-            .navigationTitle("VO2 MAX") // Titre en haut de la fenêtre
-            .navigationBarTitleDisplayMode(.inline) // Centre le titre
-            
+
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("VO2 MAX")
-                        .font(.largeTitle) // Définissez la taille ici
-                }
+                    Text("VO₂ Max")
+                        //.font(.custom("Johmuria", size: 28)) // Utilisation de la police personnalisée
+                        .font(.system(size: 34, weight: .bold, design: .serif)) // Utilise Georgia
+                        .foregroundColor(Color.white) // Couleur énergique
+                        .fontWeight(.bold) // Gras pour un style élégant
+                        .baselineOffset(4) // Ajustez cette valeur pour déplacer le "₂" vers le bas ou vers le haut
+            }
+            
+         
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Text("Bluetooth")
                         .font(.caption)
@@ -153,11 +196,23 @@ struct ContentView: View {
                 }
                 
             }
+            .padding(.top, 1) // You can adjust this padding to control the space above the title
+
+            .onAppear {
+                locationManager.startUpdatingLocation()
+            }
+
             
         }
     }
+   
+    // start test button function
     
-    
+    func startTest() {
+        
+        print("Start Test appuyé")
+
+    }
     
     func exportCSV() {
         // Créer le contenu du fichier CSV avec les en-têtes de colonne
@@ -194,6 +249,8 @@ struct ContentView: View {
             print("Erreur lors de la création du fichier temporaire : \(error.localizedDescription)")
         }
     }
+
+
     // Fonction pour ouvrir le dialogue de sauvegarde de fichier
     func showSaveFileDialog(fileURL: URL) {
         let picker = UIDocumentPickerViewController(forExporting: [fileURL], asCopy: true)

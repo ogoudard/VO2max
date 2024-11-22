@@ -7,7 +7,8 @@
 // TTGO T-Display: SDA-Pin21, SCL-Pin22
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-/*Board: ESP32 Dev Module
+/*
+Board: ESP32 Dev Module
 Upload Speed: 921600
 CPU Frequency: 240Mhz (WiFi/BT)
 Flash Frequency: 80Mhz
@@ -15,28 +16,19 @@ Flash Mode: QIO
 Flash Size: 4MB (32Mb)
 Partition Scheme: Default 4MB with spiffs (1.2MB APP/1.5 SPIFFS)
 Core Debug Level: None
-PSRAM: Disabled*/
+PSRAM: Disabled
+*/
+const String Version = "V2.3 2024/11/20";
 
-// Set this to the correct printed case venturi diameter
-#define DIAMETER 16
-
-//#define VERBOSE // additional debug logging
-
-const String Version = "V2.2 2024/11/06";
 
 #include "esp_adc_cal.h" // ADC calibration data
 #include <EEPROM.h>      // include library to read and write settings from flash
-#define ADC_EN  14       // ADC_EN is the ADC detection enable port
-#define ADC_PIN 34
-
 #include "DFRobot_OxygenSensor.h" //Library for Oxygen sensor
 #include "SCD30.h"                //Library for CO2 sensor
 #include "SensirionI2CSdp.h"          //Library for pressure sensor
 #include <SPI.h>
 #include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
 #include <Wire.h>
-
-#include "Sensirion_GadgetBle_Lib.h" //library to connect to Sensirion App
 
 // declarations for bluetooth serial --------------
 #include "BluetoothSerial.h"
@@ -51,25 +43,26 @@ BluetoothSerial SerialBT;
 #include <BLEServer.h>
 #include <BLEUtils.h>
 
-byte bpm;
-byte heart[8] = {0b00001110, 60, 0, 0, 0, 0, 0, 0}; // defines the BT heartrate characteristic
+//Library for barometric sensor  ---------------------
+#include <Adafruit_BMP3XX.h> 
 
-// Byte[0]: flags: 0b00001110:
-// not used/n.u./n.u./RR value available/Energy val.av./
-// Sensor contact status/Sens.cont.supported/HR Format: (0: uint_8)
-// Byte[1]: HR (uint_8)
-// Byte[2]: Energy in J MSB
-// Byte[3]: Energy in J LSB
-// Byte[4]: RR
-// Byte[5]: RR
-// Byte[6]: ?
-// Byte[7]: ?
+
+// Set this to the correct printed case venturi diameter
+#define DIAMETER 16
+
+//#define VERBOSE // additional debug logging
+
+#define ADC_EN  14       // ADC_EN is the ADC detection enable port
+#define ADC_PIN 34
+
+// Oxygene sensor defines
+#define COLLECT_NUMBER    10        // collect number, the collection range is 1-100.
+#define Oxygen_IICAddress ADDRESS_3 // I2C  label for o2 address
 
 byte hrmPos[1] = {2};
-
 bool _BLEClientConnected = false;
 
-// heart rate service -> Send VO2MAX
+// heart rate service -> Send VO2MAX value
 // @TODO : change to randomly generate UUID and see if it s still working
 #define heartRateService BLEUUID((uint16_t)0x180D)
 BLECharacteristic heartRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
@@ -133,7 +126,7 @@ struct { // variables for GoldenCheetah
     short vo2;
 } cheetah;
 
-#include <Adafruit_BMP3XX.h> //Library for barometric sensor
+// Barometer variable
 Adafruit_BMP3XX bmp;
 
 // Starts Screen for TTGO device
@@ -144,8 +137,6 @@ SensirionI2CSdp mySensor;
 
 // Label of oxygen sensor
 DFRobot_OxygenSensor Oxygen;
-#define COLLECT_NUMBER    10        // collect number, the collection range is 1-100.
-#define Oxygen_IICAddress ADDRESS_3 // I2C  label for o2 address
 
 // Defines button state for adding wt
 const int buttonPin1 = 0;
@@ -159,8 +150,8 @@ int       screenChanged = 0;
 int       screenNr = 1;
 int       HeaderStreamed = 0;
 int       HeaderStreamedBT = 0;
-int       DEMO = 0; // 1 = DEMO-mode
-int       vref = 1100; // used for battery voltage reading
+int       DEMO = 0;               // 0 = Normal mode / 1 = DEMO-mode
+int       vref = 1100;            // used for battery voltage reading
 
 //############################################
 // Select correct diameter depending on printed
@@ -168,20 +159,20 @@ int       vref = 1100; // used for battery voltage reading
 //############################################
 
 // Defines the size of the Venturi openings for the  calculations of AirFlow
-float area_1 = 0.000531; // = 26mm diameter
+float area_1 = 0.000531;    // = 26mm diameter
 #if (DIAMETER == 20)
-float area_2 = 0.000314; // = 20mm diameter
+float area_2 = 0.000314;    // = 20mm diameter
 #elif (DIAMETER == 19)
-float area_2 = 0.000254; // = 19mm diameter
+float area_2 = 0.000254;    // = 19mm diameter
 #elif (DIAMETER == 16)
-float area_2 = 0.000201; // = 16mm diameter
+float area_2 = 0.000201;    // = 16mm diameter
 #else // default
-float area_2 = 0.000201; // = 16mm diameter
+float area_2 = 0.000201;    // = 16mm diameter by default
 #endif
 
-float rho = 1.225;     // ATP conditions: density based on ambient conditions, dry air
-float rhoSTPD = 1.292; // STPD conditions: density at 0°C, MSL, 1013.25 hPa, dry air
-float rhoBTPS = 1.123; // BTPS conditions: density at ambient pressure, 35°C, 95% humidity
+float rho = 1.225;          // ATP conditions: density based on ambient conditions, dry air
+float rhoSTPD = 1.292;      // STPD conditions: density at 0°C, MSL, 1013.25 hPa, dry air
+float rhoBTPS = 1.123;      // BTPS conditions: density at ambient pressure, 35°C, 95% humidity
 float massFlow = 0;
 float volFlow = 0;
 float volumeTotal = 0;      // variable for holding total volume of breath
@@ -249,36 +240,19 @@ float PresPa = 101325;    // uncorrected (absolute) barometric pressure
 
 float Battery_Voltage = 0.0;
 
-// settings for Sensirion App
-GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_CO2);
-
 //----------------------------------------------------------------------------------------------------------
 //                  SETUP
 //----------------------------------------------------------------------------------------------------------
 
-void loadSettings() {
-  // Check version first.
-  int version = EEPROM.read(0);
-  if (version == settings.version) {
-      for (int i = 0; i < sizeof(settings); ++i)
-          ((byte *)&settings)[i] = EEPROM.read(i);
-  }
-}
-
-void saveSettings() {
-  bool changed = false;
-  for (int i = 0; i < sizeof(settings); ++i) {
-      byte b = EEPROM.read(i);
-      if (b != ((byte *)&settings)[i]) {
-          EEPROM.write(i, ((byte *)&settings)[i]);
-          changed = true;
-      }
-  }
-  if (changed) EEPROM.commit();
-}
-
-//----------------------------
 void setup() {
+
+// Flow sensor variables
+uint32_t productNumber;
+uint8_t serialNumber[8];
+uint8_t serialNumberSize = 8;
+uint16_t error;
+char errorMessage[256];
+
   EEPROM.begin(sizeof(settings));
 
   pinMode(buttonPin1, INPUT_PULLUP);
@@ -331,7 +305,7 @@ void setup() {
   Serial.println("yMin,yMax,Time,VO2 ,VO2MAX,VCO2,RQ,Bvol,VEmin,Brate,outO2perc,CO2perc");
 
   if (!Serial) {
-      tft.drawString("Serial ERROR!", 0, 0, 4);
+      tft.drawString("Serial Error!", 0, 0, 4);
   } else {
       tft.drawString("Serial ok", 0, 0, 4);
   }
@@ -353,7 +327,7 @@ void setup() {
 
   // init O2 sensor DF-Robot -----------
   if (!Oxygen.begin(Oxygen_IICAddress)) {
-      tft.drawString("O2 ERROR!", 0, 75, 4);
+      tft.drawString("O2 Error!", 0, 75, 4);
   } else {
       tft.drawString("O2 ok", 0, 75, 4);
   }
@@ -362,21 +336,17 @@ void setup() {
   // check if sensor is connected?
   scd30.initialize();
   scd30.setAutoSelfCalibration(0);
-  while (!scd30.isAvailable()) {
-      tft.drawString("CO2init..", 120, 75, 4);
+  
+  if(!scd30.isAvailable()) {
+    tft.drawString("CO2 Error!", 120, 75, 4);
   }
-  tft.drawString("CO2 ok", 120, 75, 4);
+  else{
+    tft.drawString("CO2 ok", 120, 75, 4);
+  }
 
 // init flow/pressure sensor Sensirion SDP810-500Pa -------------
-uint16_t error;
-char errorMessage[256];
 
 mySensor.begin(Wire, SDP8XX_I2C_ADDRESS_0);
-
-
-uint32_t productNumber;
-uint8_t serialNumber[8];
-uint8_t serialNumberSize = 8;
 
 mySensor.stopContinuousMeasurement();
 error = mySensor.readProductIdentifier(productNumber, serialNumber, serialNumberSize);
@@ -384,17 +354,20 @@ if (error) {
     //Serial.print("Error trying to execute readProductIdentifier(): ");
     errorToString(error, errorMessage, 256);
     //Serial.println(errorMessage);
-    tft.drawString("Flow-Sensor ERROR!", 0, 100, 4);
+    tft.drawString("Flow-Sensor Error!", 0, 100, 4);
 } else {
     for (size_t i = 0; i < serialNumberSize; i++) {
     }
   tft.drawString("Flow-Sensor ok", 0, 100, 4);  
   }
   
+  InitBLE(); // init BLE for transmitting VO2 as heartrate
+
   error = mySensor.startContinuousMeasurementWithDiffPressureTCompAndAveraging();
 
-  if (error) {
-  }
+// if (error) {
+//do somethiong ?
+//  }
 
   delay (2000);
 
@@ -404,23 +377,7 @@ if (error) {
   doMenu();
 
   showParameters();
-
-  InitBLE(); // init BLE for transmitting VO2 as heartrate
-  bpm = 30;  // initial test value
   
-
-  if (settings.sens_on) {
-        gadgetBle.begin();
-        delay(1000);
-        //Serial.print("Sensirion GadgetBle Lib initialized with deviceId = ");
-        //Serial.println(gadgetBle.getDeviceIdString()); //uncomment for Sensirion App
-        gadgetBle.writeCO2(1);
-        gadgetBle.writeTemperature(1);
-        gadgetBle.writeHumidity(1);
-        gadgetBle.commit();
-        delay(3);
-    }
-
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
   tft.drawCentreString("Ready...", 120, 55, 4);
@@ -439,6 +396,7 @@ if (error) {
 //----------------------------------------------------------------------------------------------------------
 void loop() {
   TotalTime = millis() - TimerStart; // calculates actual total time
+ 
   VolumeCalc();                      // Starts integral function
 
   // VO2max calculation, tft display and excel csv every 1s --------------
@@ -463,22 +421,8 @@ void loop() {
       ExcelStream();   // send csv data via wired com port
       ExcelStreamBT(); // send csv data via Bluetooth com port
 
-      if (settings.sens_on) GadgetWrite(); // Send to sensirion
       if (settings.cheet_on) VO2Notify();  // Send to GoldenCheetah as VO2 Master
 
-      // send BLE data ----------------
-      // @TODO: Check if this code is useless or not ?
-      //bpm = int(vo2Max + 0.5);
-      //heart[1] = (byte)bpm;
-      //int energyUsed = calTotal * 4.184; // conversion kcal into kJ
-      //heart[3] = energyUsed / 256;
-      //heart[2] = (byte)(int(volumeExp));
-      //heart[7] = (byte)(int(vo2MaxMax));
-      //heart[6] = (byte)(int(vco2Max));
-      //heart[5] = (byte)(int(respq));
-
-      // Serial.println(bpm);
-      // Serial.println(energyUsed);
       delay(100);
 
       if (settings.heart_on) {
@@ -524,17 +468,38 @@ void loop() {
 
   TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
   // Resets amount of time between calcs
-  if (settings.sens_on ) {
-    //Serial.print("Time of the loop: ");
-    //Serial.print(TotalTime);
-    //Serial.println( " seconds");
-    gadgetBle.handleEvents();
-  }
+
 }
 
 //----------------------------------------------------------------------------------------------------------
 //                  FUNCTIONS
 //----------------------------------------------------------------------------------------------------------
+
+void loadSettings() {
+  // Check version first.
+  int version = EEPROM.read(0);
+  if (version == settings.version) {
+      for (int i = 0; i < sizeof(settings); ++i)
+          ((byte *)&settings)[i] = EEPROM.read(i);
+  }
+}
+
+//--------------------------------------------------
+
+void saveSettings() {
+  bool changed = false;
+  for (int i = 0; i < sizeof(settings); ++i) {
+      byte b = EEPROM.read(i);
+      if (b != ((byte *)&settings)[i]) {
+          EEPROM.write(i, ((byte *)&settings)[i]);
+          changed = true;
+      }
+  }
+  if (changed) EEPROM.commit();
+}
+
+//--------------------------------------------------
+
 void CheckInitialO2() {
   // check initial O2 value -----------
   initialO2 = Oxygen.ReadOxygenData(COLLECT_NUMBER); // read and check initial VO2%
@@ -649,7 +614,6 @@ void VolumeCalc() {
   
   pressure = pressure/2 + differentialPressure/2;
 
-
   if (DEMO == 1) {
       pressure = 10;                                      // TEST+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       if ((millis() - TimerVO2calc) > 2500) pressure = 0; // TEST++++++++++++++++++++++++++++
@@ -658,12 +622,12 @@ void VolumeCalc() {
   if (isnan(pressure)) { // isnan = is not a number,  unvalid sensor data
       tft.fillScreen(TFT_RED);
       tft.setTextColor(TFT_WHITE, TFT_RED);
-      tft.drawCentreString("VENTURI ERROR!", 120, 55, 4);
+      tft.drawCentreString("Venturi Error!", 120, 55, 4);
   }
   if (pressure > 266) { // upper limit of flow sensor warning
       // tft.fillScreen(TFT_RED);
       tft.setTextColor(TFT_WHITE, TFT_RED);
-      tft.drawCentreString("SENSOR LIMIT!", 120, 55, 4);
+      tft.drawCentreString("Sensor Limit!", 120, 55, 4);
   }
   if (pressure < 0) pressure = 0;
 
@@ -710,16 +674,6 @@ void VolumeCalc() {
   }
 }
 
-//--------------------------------------------------
-void GadgetWrite() {
-  // Send to sensirion app
-  //Serial.println("In gadgetWrite");
-  gadgetBle.writeCO2(vo2Total);
-  gadgetBle.writeTemperature(vo2Max);
-  gadgetBle.writeHumidity(lastO2);
-  gadgetBle.commit();
-  delay(3);
-}
 
 //--------------------------------------------------
 // Output as basic VO2 Master data for GoldenCheetah
@@ -1064,7 +1018,7 @@ void fnCalAir() {
       // tft.println(pressure, 1);
 
       TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
-                                // Resets amount of time between calcs
+                               // Resets amount of time between calcs
 
   } while (TotalTime < 10000);
 
@@ -1395,6 +1349,7 @@ void ReadButtons() {
       buttonPushCounter2 = 0;
   }
 }
+
 //---------------------------------------------------------
 
 void GetWeightkg() {
@@ -1518,9 +1473,6 @@ void InitBLE() {
       // kcalRateMeasurementCharacteristics.addDescriptor(&vo2RateDescriptor);
       // kcalRateMeasurementCharacteristics.addDescriptor(new BLE2902()); // necessary for notifications
       // pkcal->start();
-
-
-
   }
 
   // (5) Create the BLE Service

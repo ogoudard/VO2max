@@ -10,6 +10,7 @@ import CoreBluetooth
 import SwiftUI
 
 class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+    var characteristic: CBCharacteristic?
     @Published var vo2Maxvalue: Float = 0 // Valeur affichée mise à jour
     @Published var vo2Maxvalues: [(time: String, value: Float)] = [
         (time: "08:00", value: 32.0),
@@ -351,7 +352,15 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
     
     
-    
+    func writeValue(_ value: UInt8) {
+        guard let peripheral = peripheral, let characteristic = characteristic else {
+            print("Peripheral or characteristic not found")
+            return
+        }
+        let data = Data([value]) // Convertir la valeur 0 ou 1 en Data
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+    }
+
     
 }
 

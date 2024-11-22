@@ -30,6 +30,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0946DFBE2CF07D5C00C92D91 /* Exceptions for "VO2" folder in "VO2Tests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Jomhuria-Regular.ttf",
+			);
+			target = 09F149512CD3E4AE0083B63C /* VO2Tests */;
+		};
+		0946DFBF2CF07D5C00C92D91 /* Exceptions for "VO2" folder in "VO2UITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Jomhuria-Regular.ttf",
+			);
+			target = 09F1495B2CD3E4AE0083B63C /* VO2UITests */;
+		};
 		09E0A36D2CD3E803005D2E3F /* Exceptions for "VO2" folder in "VO2" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -44,6 +58,8 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				09E0A36D2CD3E803005D2E3F /* Exceptions for "VO2" folder in "VO2" target */,
+				0946DFBE2CF07D5C00C92D91 /* Exceptions for "VO2" folder in "VO2Tests" target */,
+				0946DFBF2CF07D5C00C92D91 /* Exceptions for "VO2" folder in "VO2UITests" target */,
 			);
 			path = VO2;
 			sourceTree = "<group>";
@@ -418,6 +434,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "need bluetooth";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -454,6 +472,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "need bluetooth";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

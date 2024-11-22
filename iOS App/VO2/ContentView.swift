@@ -160,17 +160,26 @@ struct ContentView: View {
                         Text("Heart Rate: 0 bpm")
                             .padding(.bottom, 2)
                             .font(.headline)
-                        if let currentInterval = currentInterval {
-                              // Comparaison de la vitesse
-                              Text("Speed: \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
-                                  .padding(.bottom, 2)
-                                  .font(.headline)
-                                  .foregroundColor(locationManager.speed < currentInterval.speed ? .red : .green) // Change color based on speed comparison
-                          } else {
-                              Text("Interval not set")
-                                  .font(.headline)
-                                  .padding(.bottom, 2)
-                          }
+                        
+                        Text("Speed : \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
+                            .foregroundColor({
+                                if let currentInterval = currentInterval {
+                                    return locationManager.speed * 3.6 < currentInterval.speed ? .red : .green
+                                } else {
+                                    return .gray // Par défaut si currentInterval est nil
+                                }
+                            }())
+                            .font(.headline)
+                            .padding(.bottom, 2)
+                            .onAppear {
+                                if let interval = currentInterval {
+                                    print("LocationManager Speed: \(locationManager.speed)")
+                                    print("Current Interval Speed: \(interval.speed)")
+                                } else {
+                                    print("Current Interval is nil")
+                                }
+                            }
+
                         
                         Button(action: {
                             stopTimer() // Arrêter le timer

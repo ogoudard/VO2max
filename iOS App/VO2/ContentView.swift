@@ -10,7 +10,19 @@ struct ContentView: View {
     @ObservedObject var bluetoothManager = BluetoothManager()
     private let chartHeight: CGFloat = 200
     @StateObject private var locationManager = LocationManager()
-    
+    @State private var navigateToSpeedAndWeight = false // Variable d'état pour gérer la navigation
+    @EnvironmentObject var intervalManager: IntervalManager
+    @State private var isTimerActive = false // Indicateur si le timer est actif
+    @State private var timer: Timer? = nil // Référence au timer
+    @State private var timeElapsed = 0 // Temps écoulé en secondes
+    @State private var intervalNumber = 1 // Numéro d'intervalle
+
+    // Récupérer l'intervalle courant basé sur intervalNumber
+     var currentInterval: Interval? {
+         guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
+         return intervalManager.intervals[intervalNumber - 1]
+     }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
@@ -25,7 +37,7 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .frame(width: 150) // Largeur fixe pour les boutons
                     .foregroundColor(.white)
                     .background(Color.blue)
                     .cornerRadius(8)
@@ -63,10 +75,11 @@ struct ContentView: View {
                     Button(action: {
                         bluetoothManager.writeValue(1) // Envoie un "1" pour démarrer le test
                         print("Test started")
+                        navigateToSpeedAndWeight = true // Déclenche la navigation vers la nouvelle page
                     }) {
                         HStack {
                             Image(systemName: "figure.run")
-                            Text("Start Test")
+                            Text("Test Setup")
                                 .font(.headline)
                         }
                     }
@@ -89,13 +102,50 @@ struct ContentView: View {
                             .font(.headline)
                             .padding(.bottom, 2)
 
-                        Text("VCO2 Live = \(String(format: "%.2f", bluetoothManager.vco2value)) mL/min")
+                        /* Text("VCO2 Live = \(String(format: "%.2f", bluetoothManager.vco2value)) mL/min")
+                             .font(.headline)
+                             .padding(.bottom, 2)
+
+                         Text("RQ Level = \(String(format: "%.2f", bluetoothManager.RQvalue)) %")
+                             .font(.headline)
+                             .padding(.bottom, 2)
+                         */
+                        Text("Timer: \(timeElapsed) seconds")
                             .font(.headline)
                             .padding(.bottom, 2)
 
-                        Text("RQ Level = \(String(format: "%.2f", bluetoothManager.RQvalue)) %")
-                            .font(.headline)
-                            .padding(.bottom, 2)
+                        if let currentInterval = currentInterval {
+                               Text("Speed Set: \(String(format: "%.1f", currentInterval.speed)) km/h")
+                                .font(.headline)
+                                .padding(.bottom, 2)
+                        } else {
+                            Text("Interval not set")
+                                .font(.headline)
+                                .padding(.bottom, 2)
+                        }
+                         List(intervalManager.intervals) { interval in
+                             HStack {
+                                 Text("\(interval.time) min")
+                                 Spacer()
+                                 Text("\(String(format: "%.1f", interval.speed)) km/h")
+                             }
+                         }
+                         
+                         Button(action: {
+                             startTimer() // Démarrer le timer lorsque le bouton est pressé
+                         }) {
+                             Text("Start Test")
+                                 .padding()
+                                 .background(Color.green)
+                                 .foregroundColor(.white)
+                                 .cornerRadius(8)
+                                 .frame(width: 150) // Largeur fixe pour les boutons
+                        }
+                         
+                     
+              
+                        
+  
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -107,13 +157,32 @@ struct ContentView: View {
                             .font(.headline)
                             .padding(.bottom, 2)
 
-                        Text("Speed : \(locationManager.speed*3.6, specifier: "%.2f") km/h")
-                            .padding(.bottom, 2)
-                            .font(.headline)
-
                         Text("Heart Rate: 0 bpm")
                             .padding(.bottom, 2)
                             .font(.headline)
+                        if let currentInterval = currentInterval {
+                              // Comparaison de la vitesse
+                              Text("Speed: \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
+                                  .padding(.bottom, 2)
+                                  .font(.headline)
+                                  .foregroundColor(locationManager.speed < currentInterval.speed ? .red : .green) // Change color based on speed comparison
+                          } else {
+                              Text("Interval not set")
+                                  .font(.headline)
+                                  .padding(.bottom, 2)
+                          }
+                        
+                        Button(action: {
+                            stopTimer() // Arrêter le timer
+                        }) {
+                            Text("Stop Test")
+                                .padding()
+                                .background(Color.red)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                                .frame(width: 150) // Largeur fixe pour les boutons
+                        }
+
                     }
                 }
                 .padding() // Ajoute un peu d'espace autour
@@ -172,6 +241,13 @@ struct ContentView: View {
                 //.background(Color.white) // Ajoutez une couleur de fond pour mieux visualiser le graphique
                 //.border(Color.gray) // Optionnel : ajoutez une bordure pour la visibilité
             }
+            // Navigation vers la page de saisie de vitesse et poids
+             .background(
+                 NavigationLink(destination: SpeedAndWeightView(), isActive: $navigateToSpeedAndWeight) {
+                     EmptyView()
+                 }
+             )
+
 
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -201,19 +277,27 @@ struct ContentView: View {
             .onAppear {
                 locationManager.startUpdatingLocation()
             }
-
             
         }
     }
    
-    // start test button function
-    
-    func startTest() {
-        
-        print("Start Test appuyé")
+    // Fonction pour démarrer le chronomètre
+    func startTimer() {
+        isTimerActive = true
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            timeElapsed += 1
+            if timeElapsed % 120 == 0 { // Si 2 minutes se sont écoulées
+                intervalNumber += 1 // Passer à l'intervalle suivant
+            }
+        }
+    }    // start test button function
+    // Fonction pour arrêter le chronomètre
+     func stopTimer() {
+         timer?.invalidate()
+         isTimerActive = false
+     }
 
-    }
-    
+   
     func exportCSV() {
         // Créer le contenu du fichier CSV avec les en-têtes de colonne
         var csvText = "Time, VO2Max, VO2, VCO2, RQ\n"

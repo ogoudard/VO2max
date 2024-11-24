@@ -61,19 +61,13 @@ BluetoothSerial SerialBT;
 byte hrmPos[1] = {2};
 bool _BLEClientConnected = false;
 
-// heart rate service -> Send VO2MAX value
-// @TODO : change to randomly generate UUID and see if it s still working
-// heart rate service -> Send VO2MAX value
-// @TODO : change to randomly generate UUID and see if it s still working
+// Send VO2MAX value
 #define vo2maxRateService BLEUUID("b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")
 BLECharacteristic vo2maxRateMeasurementCharacteristics("c70c73fd-b5fb-4a5f-87f4-7a187590b0ef", BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor     vo2maxRateDescriptor(BLEUUID((uint16_t)0x2901));
-
 // Start Test bit to trig the begining of a new VO2max test protocol 
-// @TODO  :change this when the heart data will be read from the POLAR heart sensor
-BLECharacteristic startTestCharacteristic(BLEUUID("a155446f-9680-4e13-8660-12afd3bd844d", BLECharacteristic::PROPERTY_READ);
+BLECharacteristic startTestCharacteristic("a155446f-9680-4e13-8660-12afd3bd844d", BLECharacteristic::PROPERTY_READ);
 BLEDescriptor     startTestDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
-
 // Vo2 service
 #define vo2RateService BLEUUID("231c616b-32a6-4b93-9f0c-fe728deca0a5") 
 BLECharacteristic vo2RateMeasurementCharacteristics(BLEUUID("4225d51b-f1c2-419a-9acc-bd8e70d960ae"), BLECharacteristic::PROPERTY_NOTIFY);
@@ -1384,8 +1378,6 @@ void InitBLE() {
 
       // (3) Create the characteristics, descriptor, notification
       pHeart->addCharacteristic(&vo2maxRateMeasurementCharacteristics); // creates heartrate
-      // characteristics 0x2837
-      vo2maxRateDescriptor.setValue("Rate from 0 to 200"); // describtion of the characteristic
       vo2maxRateMeasurementCharacteristics.addDescriptor(&vo2maxRateDescriptor);
       vo2maxRateMeasurementCharacteristics.addDescriptor(new BLE2902()); // necessary for notifications
       // client switches server notifications on/off via BLE2902 protocol

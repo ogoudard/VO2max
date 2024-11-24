@@ -63,8 +63,10 @@ bool _BLEClientConnected = false;
 
 // heart rate service -> Send VO2MAX value
 // @TODO : change to randomly generate UUID and see if it s still working
-#define vo2maxRateService BLEUUID((uint16_t)0x180D)
-BLECharacteristic vo2maxRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
+// heart rate service -> Send VO2MAX value
+// @TODO : change to randomly generate UUID and see if it s still working
+#define vo2maxRateService BLEUUID("b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")
+BLECharacteristic vo2maxRateMeasurementCharacteristics(BLEUUID("c70c73fd-b5fb-4a5f-87f4-7a187590b0ef", BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor     vo2maxRateDescriptor(BLEUUID((uint16_t)0x2901));
 
 // Start Test bit to trig the begining of a new VO2max test protocol 

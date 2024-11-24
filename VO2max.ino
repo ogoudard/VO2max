@@ -66,12 +66,12 @@ bool _BLEClientConnected = false;
 // heart rate service -> Send VO2MAX value
 // @TODO : change to randomly generate UUID and see if it s still working
 #define vo2maxRateService BLEUUID("b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")
-BLECharacteristic vo2maxRateMeasurementCharacteristics(BLEUUID("c70c73fd-b5fb-4a5f-87f4-7a187590b0ef", BLECharacteristic::PROPERTY_NOTIFY);
+BLECharacteristic vo2maxRateMeasurementCharacteristics("c70c73fd-b5fb-4a5f-87f4-7a187590b0ef", BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor     vo2maxRateDescriptor(BLEUUID((uint16_t)0x2901));
 
 // Start Test bit to trig the begining of a new VO2max test protocol 
 // @TODO  :change this when the heart data will be read from the POLAR heart sensor
-BLECharacteristic startTestCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
+BLECharacteristic startTestCharacteristic(BLEUUID("a155446f-9680-4e13-8660-12afd3bd844d", BLECharacteristic::PROPERTY_READ);
 BLEDescriptor     startTestDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
 
 // Vo2 service

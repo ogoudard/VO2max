@@ -133,7 +133,9 @@ struct ContentView: View {
                          
                          Button(action: {
                              startTimer() // Démarrer le timer lorsque le bouton est pressé
-                         }) {
+                             bluetoothManager.updateHistoricalData()
+                             bluetoothManager.startUpdating()
+                             }) {
                              Text("Start Test")
                                  .padding()
                                  .background(Color.green)
@@ -160,17 +162,26 @@ struct ContentView: View {
                         Text("Heart Rate: 0 bpm")
                             .padding(.bottom, 2)
                             .font(.headline)
-                        if let currentInterval = currentInterval {
-                              // Comparaison de la vitesse
-                              Text("Speed: \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
-                                  .padding(.bottom, 2)
-                                  .font(.headline)
-                                  .foregroundColor(locationManager.speed < currentInterval.speed ? .red : .green) // Change color based on speed comparison
-                          } else {
-                              Text("Interval not set")
-                                  .font(.headline)
-                                  .padding(.bottom, 2)
-                          }
+                        
+                        Text("Speed : \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
+                            .foregroundColor({
+                                if let currentInterval = currentInterval {
+                                    return locationManager.speed * 3.6 < currentInterval.speed ? .red : .green
+                                } else {
+                                    return .gray // Par défaut si currentInterval est nil
+                                }
+                            }())
+                            .font(.headline)
+                            .padding(.bottom, 2)
+                            .onAppear {
+                                if let interval = currentInterval {
+                                    print("LocationManager Speed: \(locationManager.speed)")
+                                    print("Current Interval Speed: \(interval.speed)")
+                                } else {
+                                    print("Current Interval is nil")
+                                }
+                            }
+
                         
                         Button(action: {
                             stopTimer() // Arrêter le timer
@@ -187,54 +198,50 @@ struct ContentView: View {
                 }
                 .padding() // Ajoute un peu d'espace autour
 
-                Text("VO2MAX evolution")
+                List(bluetoothManager.historicalData) { entry in
+                    Text("Time: \(entry.time), VO2Max: \(entry.vo2Max), VO2: \(entry.vo2), VCO2: \(entry.vco2)")
+                }
+                Text("VO2 Data Evolution")
                     .font(.title2)
                     .padding(.bottom, 2)
+
                 Chart {
-                    ForEach(bluetoothManager.vo2Maxvalues, id: \.time) { entry in
+                    // Courbe VO2Max
+                    ForEach(bluetoothManager.historicalData, id: \.time) { entry in
                         LineMark(
                             x: .value("Time", entry.time),
-                            y: .value("VO2Max", entry.value)
+                            y: .value("VO2Max", entry.vo2Max)
                         )
-                        .foregroundStyle(Color.blue) // Couleur de la courbe
-                        .lineStyle(StrokeStyle(lineWidth: 2)) // Épaisseur de la ligne
-                        .interpolationMethod(.catmullRom) // Méthode d'interpolation
+                        .foregroundStyle(by: .value("Type", "VO2Max")) // Distinction par type
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
                     }
-                }
-                // .padding(.top)
-                //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
-                Text("VO2 evolution")
-                    .font(.title2)
-                    .padding(.bottom, 2)
-                
-                Chart {
-                    ForEach(bluetoothManager.vo2values, id: \.time) { entry in
+
+                    // Courbe VO2
+                    ForEach(bluetoothManager.historicalData, id: \.time) { entry in
                         LineMark(
                             x: .value("Time", entry.time),
-                            y: .value("VO2Max", entry.value)
+                            y: .value("VO2", entry.vo2)
                         )
-                        .foregroundStyle(Color.red) // Couleur de la courbe
-                        .lineStyle(StrokeStyle(lineWidth: 2)) // Épaisseur de la ligne
-                        .interpolationMethod(.catmullRom) // Méthode d'interpolation
+                        .foregroundStyle(by: .value("Type", "VO2")) // Distinction par type
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
                     }
-                }
-                
-                Text("CO2 evolution")
-                    .font(.title2)
-                    .padding(.bottom, 2)
-                
-                //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
-                Chart {
-                    ForEach(bluetoothManager.vco2values, id: \.time) { entry in
+
+                    // Courbe VCO2
+                    ForEach(bluetoothManager.historicalData, id: \.time) { entry in
                         LineMark(
                             x: .value("Time", entry.time),
-                            y: .value("VO2Max", entry.value)
+                            y: .value("VCO2", entry.vco2)
                         )
-                        .foregroundStyle(Color.green) // Couleur de la courbe
-                        .lineStyle(StrokeStyle(lineWidth: 2)) // Épaisseur de la ligne
-                        .interpolationMethod(.catmullRom) // Méthode d'interpolation
+                        .foregroundStyle(by: .value("Type", "VCO2")) // Distinction par type
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
                     }
                 }
+                .frame(height: 300)
+                .padding()
+
                 
                 //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
                 

@@ -11,6 +11,7 @@ import SwiftUI
 
 class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var characteristic: CBCharacteristic?
+    @Published var historicalData: [DataEntry] = []
     @Published var vo2Maxvalue: Float = 0 // Valeur affichée mise à jour
     @Published var vo2Maxvalues: [(time: String, value: Float)] = [
         (time: "08:00", value: 32.0),
@@ -360,8 +361,37 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         let data = Data([value]) // Convertir la valeur 0 ou 1 en Data
         peripheral.writeValue(data, for: characteristic, type: .withResponse)
     }
+ 
+    struct DataEntry: Identifiable {
+        let id = UUID()
+        let time: Date
+        let vo2Max: Float
+        let vo2: Float
+        let vco2: Float
+    }
 
-    
+    func updateHistoricalData() {
+        let newEntry = DataEntry(time: Date(), vo2Max: vo2Maxvalue, vo2: vo2value, vco2: vco2value)
+        historicalData.append(newEntry)
+
+        // Optionnel : Limiter la taille de l'historique pour éviter trop de données
+        if historicalData.count > 100 {
+            historicalData.removeFirst()
+        }
+    }
+    private var timer: Timer?
+
+    func startUpdating() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateHistoricalData()
+        }
+    }
+
+    func stopUpdating() {
+        timer?.invalidate()
+        timer = nil
+    }
+
 }
 
 

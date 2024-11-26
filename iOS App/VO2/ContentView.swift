@@ -16,7 +16,9 @@ struct ContentView: View {
     @State private var timer: Timer? = nil // Référence au timer
     @State private var timeElapsed = 0 // Temps écoulé en secondes
     @State private var intervalNumber = 1 // Numéro d'intervalle
-
+    @StateObject var hrbtManager = HRBTManager()  // Création du gestionnaire Bluetooth
+    
+    
     // Récupérer l'intervalle courant basé sur intervalNumber
      var currentInterval: Interval? {
          guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
@@ -27,16 +29,14 @@ struct ContentView: View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
                 HStack(spacing: 20) {
-                    Button(action: {
-                        print("Bouton Settings appuyé")
-                    }) {
-                        HStack {
-                            Image(systemName: "gearshape.fill")
-                            Text("Settings")
-                                .font(.headline)
-                        }
-                    }
-                    .padding()
+                    NavigationLink(destination: SettingsView()) {
+                         HStack {
+                             Image(systemName: "gearshape.fill")
+                             Text("Settings")
+                                 .font(.headline)
+                         }
+                     }
+                .padding()
                     .frame(width: 150) // Largeur fixe pour les boutons
                     .foregroundColor(.white)
                     .background(Color.blue)
@@ -133,7 +133,9 @@ struct ContentView: View {
                          
                          Button(action: {
                              startTimer() // Démarrer le timer lorsque le bouton est pressé
-                         }) {
+                             bluetoothManager.updateHistoricalData()
+                             bluetoothManager.startUpdating()
+                             }) {
                              Text("Start Test")
                                  .padding()
                                  .background(Color.green)
@@ -157,20 +159,29 @@ struct ContentView: View {
                             .font(.headline)
                             .padding(.bottom, 2)
 
-                        Text("Heart Rate: 0 bpm")
+                        Text("Heart Rate: \(hrbtManager.heartRate)")
                             .padding(.bottom, 2)
                             .font(.headline)
-                        if let currentInterval = currentInterval {
-                              // Comparaison de la vitesse
-                              Text("Speed: \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
-                                  .padding(.bottom, 2)
-                                  .font(.headline)
-                                  .foregroundColor(locationManager.speed < currentInterval.speed ? .red : .green) // Change color based on speed comparison
-                          } else {
-                              Text("Interval not set")
-                                  .font(.headline)
-                                  .padding(.bottom, 2)
-                          }
+                        
+                        Text("Speed : \(locationManager.speed * 3.6, specifier: "%.2f") km/h")
+                            .foregroundColor({
+                                if let currentInterval = currentInterval {
+                                    return locationManager.speed * 3.6 < currentInterval.speed ? .red : .green
+                                } else {
+                                    return .gray // Par défaut si currentInterval est nil
+                                }
+                            }())
+                            .font(.headline)
+                            .padding(.bottom, 2)
+                            .onAppear {
+                                if let interval = currentInterval {
+                                    print("LocationManager Speed: \(locationManager.speed)")
+                                    print("Current Interval Speed: \(interval.speed)")
+                                } else {
+                                    print("Current Interval is nil")
+                                }
+                            }
+
                         
                         Button(action: {
                             stopTimer() // Arrêter le timer
@@ -187,54 +198,86 @@ struct ContentView: View {
                 }
                 .padding() // Ajoute un peu d'espace autour
 
-                Text("VO2MAX evolution")
+                List(bluetoothManager.historicalData) { entry in
+                    Text("Time: \(entry.time), VO2Max: \(entry.vo2Max), VO2: \(entry.vo2), VCO2: \(entry.vco2)")
+                }
+                Text("VO2 Data Evolution")
                     .font(.title2)
                     .padding(.bottom, 2)
+
                 Chart {
-                    ForEach(bluetoothManager.vo2Maxvalues, id: \.time) { entry in
+                    // Courbe VO2Max
+                    ForEach(bluetoothManager.historicalData, id: \.time) { entry in
                         LineMark(
                             x: .value("Time", entry.time),
-                            y: .value("VO2Max", entry.value)
+                            y: .value("VO2Max", entry.vo2Max)
                         )
-                        .foregroundStyle(Color.blue) // Couleur de la courbe
-                        .lineStyle(StrokeStyle(lineWidth: 2)) // Épaisseur de la ligne
-                        .interpolationMethod(.catmullRom) // Méthode d'interpolation
+                        .foregroundStyle(by: .value("Type", "VO2Max")) // Distinction par type
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
                     }
-                }
-                // .padding(.top)
-                //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
-                Text("VO2 evolution")
-                    .font(.title2)
-                    .padding(.bottom, 2)
-                
-                Chart {
-                    ForEach(bluetoothManager.vo2values, id: \.time) { entry in
+
+                    // Courbe VO2
+                    ForEach(bluetoothManager.historicalData, id: \.time) { entry in
                         LineMark(
                             x: .value("Time", entry.time),
-                            y: .value("VO2Max", entry.value)
+                            y: .value("VO2", entry.vo2)
                         )
-                        .foregroundStyle(Color.red) // Couleur de la courbe
-                        .lineStyle(StrokeStyle(lineWidth: 2)) // Épaisseur de la ligne
-                        .interpolationMethod(.catmullRom) // Méthode d'interpolation
+                        .foregroundStyle(by: .value("Type", "VO2")) // Distinction par type
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
                     }
-                }
-                
-                Text("CO2 evolution")
-                    .font(.title2)
-                    .padding(.bottom, 2)
-                
-                //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
-                Chart {
-                    ForEach(bluetoothManager.vco2values, id: \.time) { entry in
+
+                    // Courbe VCO2
+                    ForEach(bluetoothManager.historicalData, id: \.time) { entry in
                         LineMark(
                             x: .value("Time", entry.time),
-                            y: .value("VO2Max", entry.value)
+                            y: .value("VCO2", entry.vco2)
                         )
-                        .foregroundStyle(Color.green) // Couleur de la courbe
-                        .lineStyle(StrokeStyle(lineWidth: 2)) // Épaisseur de la ligne
-                        .interpolationMethod(.catmullRom) // Méthode d'interpolation
+                        .foregroundStyle(by: .value("Type", "VCO2")) // Distinction par type
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
                     }
+                   
+                    // Courbe Speed (provenant de LocationManager)
+                     ForEach(locationManager.historicalData, id: \.time) { entry in
+                         LineMark(
+                             x: .value("Time", entry.time),
+                             y: .value("Speed", entry.speed) // Récupère la vitesse à partir de LocationManager
+                         )
+                         .foregroundStyle(by: .value("Type", "Speed"))
+                         .lineStyle(StrokeStyle(lineWidth: 2))
+                         .interpolationMethod(.catmullRom) // Lissage
+                     }
+                    // Courbe Heart Rate (provenant de hrbtManager)
+                    ForEach(hrbtManager.historicalData, id: \.time) { entry in
+                        LineMark(
+                            x: .value("Time", entry.time),
+                            y: .value("Heart Rate", entry.heartRate) // Récupère le rythme cardiaque à partir de hrbtManager
+                        )
+                        .foregroundStyle(by: .value("Type", "Heart Rate"))
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
+                    }
+                    
                 }
+                .frame(height: 300)
+                .padding()
+
+                /*.chartYAxis {
+                      AxisMarks(values: .automatic) // Axe Y principal pour VO2Max, VO2, VCO2
+                  }
+                  .chartYAxis(id: "speed") { // Axe Y secondaire pour la vitesse
+                      AxisMarks(values: .stride(by: 5)) // Ajuste l'échelle de la vitesse (par exemple, de 0 à 25 km/h)
+                  }
+                  .chartOverlay { proxy in
+                      GeometryReader { geometry in
+                          // Positionner l'axe secondaire à droite pour la vitesse
+                          proxy.secondaryYAxis
+                              .padding(.horizontal)
+                              .offset(x: geometry.size.width * 0.8) // Décalage de l'axe secondaire à droite
+                      }
+                  }*/
                 
                 //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
                 
@@ -276,6 +319,7 @@ struct ContentView: View {
 
             .onAppear {
                 locationManager.startUpdatingLocation()
+                //hrbtManager.startScanning()
             }
             
         }
@@ -297,31 +341,34 @@ struct ContentView: View {
          isTimerActive = false
      }
 
-   
     func exportCSV() {
-        // Créer le contenu du fichier CSV avec les en-têtes de colonne
-        var csvText = "Time, VO2Max, VO2, VCO2, RQ\n"
-        // Obtenir la longueur minimale des listes pour éviter les erreurs d'index
-        let dataCount = min(bluetoothManager.vo2Maxvalues.count,
-                            bluetoothManager.vo2values.count,
-                            bluetoothManager.vco2values.count,
-                            bluetoothManager.RQvalues.count)
-        
-        // Boucle sur chaque ensemble de données pour écrire les valeurs sur une même ligne
-        for index in 0..<dataCount {
-            let time = bluetoothManager.vo2Maxvalues[index].time
-            let vo2MaxValue = bluetoothManager.vo2Maxvalues[index].value
-            let vo2Value = bluetoothManager.vo2values[index].value
-            let vco2Value = bluetoothManager.vco2values[index].value
-            let rqValue = bluetoothManager.RQvalues[index].value
-            
-            // Ajouter les données sur une ligne CSV
-            csvText += "\(time), \(vo2MaxValue), \(vo2Value), \(vco2Value), \(rqValue)\n"
-        }
-        
-        // Convertir en Data
-        guard let csvData = csvText.data(using: .utf8) else { return }
-        
+    var csvText = "Time, VO2Max, VO2, VCO2, RQ, Speed, Heart\n"
+    let dataCount = min(
+        bluetoothManager.vo2Maxvalues.count,
+        bluetoothManager.vo2values.count,
+        bluetoothManager.vco2values.count,
+        bluetoothManager.RQvalues.count,
+        locationManager.historicalData.count, // Utiliser les données historiques du LocationManager
+        hrbtManager.historicalData.count // Pour les données de fréquence cardiaque
+    )
+
+    for index in 0..<dataCount {
+        let time = bluetoothManager.vo2Maxvalues[index].time
+        let vo2MaxValue = bluetoothManager.vo2Maxvalues[index].value
+        let vo2Value = bluetoothManager.vo2values[index].value
+        let vco2Value = bluetoothManager.vco2values[index].value
+        let rqValue = bluetoothManager.RQvalues[index].value
+        let speed = index < locationManager.historicalData.count ? locationManager.historicalData[index].speed : 0.0
+        let heartRate = index < hrbtManager.historicalData.count ? hrbtManager.historicalData[index].heartRate : 0
+
+        // Ajouter les données à la ligne CSV
+        csvText += "\(time), \(vo2MaxValue), \(vo2Value), \(vco2Value), \(rqValue), \(speed), \(heartRate)\n"
+    }
+
+    // Convertir en Data
+    guard let csvData = csvText.data(using: .utf8) else { return }
+
+
         // Chemin temporaire pour le fichier
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("VO2MaxData_\(Date().formatted()).csv")
         

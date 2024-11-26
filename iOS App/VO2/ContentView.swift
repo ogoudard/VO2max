@@ -264,6 +264,20 @@ struct ContentView: View {
                 .frame(height: 300)
                 .padding()
 
+                /*.chartYAxis {
+                      AxisMarks(values: .automatic) // Axe Y principal pour VO2Max, VO2, VCO2
+                  }
+                  .chartYAxis(id: "speed") { // Axe Y secondaire pour la vitesse
+                      AxisMarks(values: .stride(by: 5)) // Ajuste l'échelle de la vitesse (par exemple, de 0 à 25 km/h)
+                  }
+                  .chartOverlay { proxy in
+                      GeometryReader { geometry in
+                          // Positionner l'axe secondaire à droite pour la vitesse
+                          proxy.secondaryYAxis
+                              .padding(.horizontal)
+                              .offset(x: geometry.size.width * 0.8) // Décalage de l'axe secondaire à droite
+                      }
+                  }*/
                 
                 //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
                 
@@ -305,6 +319,7 @@ struct ContentView: View {
 
             .onAppear {
                 locationManager.startUpdatingLocation()
+                //hrbtManager.startScanning()
             }
             
         }
@@ -326,31 +341,34 @@ struct ContentView: View {
          isTimerActive = false
      }
 
-   
     func exportCSV() {
-        // Créer le contenu du fichier CSV avec les en-têtes de colonne
-        var csvText = "Time, VO2Max, VO2, VCO2, RQ\n"
-        // Obtenir la longueur minimale des listes pour éviter les erreurs d'index
-        let dataCount = min(bluetoothManager.vo2Maxvalues.count,
-                            bluetoothManager.vo2values.count,
-                            bluetoothManager.vco2values.count,
-                            bluetoothManager.RQvalues.count)
-        
-        // Boucle sur chaque ensemble de données pour écrire les valeurs sur une même ligne
-        for index in 0..<dataCount {
-            let time = bluetoothManager.vo2Maxvalues[index].time
-            let vo2MaxValue = bluetoothManager.vo2Maxvalues[index].value
-            let vo2Value = bluetoothManager.vo2values[index].value
-            let vco2Value = bluetoothManager.vco2values[index].value
-            let rqValue = bluetoothManager.RQvalues[index].value
-            
-            // Ajouter les données sur une ligne CSV
-            csvText += "\(time), \(vo2MaxValue), \(vo2Value), \(vco2Value), \(rqValue)\n"
-        }
-        
-        // Convertir en Data
-        guard let csvData = csvText.data(using: .utf8) else { return }
-        
+    var csvText = "Time, VO2Max, VO2, VCO2, RQ, Speed, Heart\n"
+    let dataCount = min(
+        bluetoothManager.vo2Maxvalues.count,
+        bluetoothManager.vo2values.count,
+        bluetoothManager.vco2values.count,
+        bluetoothManager.RQvalues.count,
+        locationManager.historicalData.count, // Utiliser les données historiques du LocationManager
+        hrbtManager.historicalData.count // Pour les données de fréquence cardiaque
+    )
+
+    for index in 0..<dataCount {
+        let time = bluetoothManager.vo2Maxvalues[index].time
+        let vo2MaxValue = bluetoothManager.vo2Maxvalues[index].value
+        let vo2Value = bluetoothManager.vo2values[index].value
+        let vco2Value = bluetoothManager.vco2values[index].value
+        let rqValue = bluetoothManager.RQvalues[index].value
+        let speed = index < locationManager.historicalData.count ? locationManager.historicalData[index].speed : 0.0
+        let heartRate = index < hrbtManager.historicalData.count ? hrbtManager.historicalData[index].heartRate : 0
+
+        // Ajouter les données à la ligne CSV
+        csvText += "\(time), \(vo2MaxValue), \(vo2Value), \(vco2Value), \(rqValue), \(speed), \(heartRate)\n"
+    }
+
+    // Convertir en Data
+    guard let csvData = csvText.data(using: .utf8) else { return }
+
+
         // Chemin temporaire pour le fichier
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("VO2MaxData_\(Date().formatted()).csv")
         

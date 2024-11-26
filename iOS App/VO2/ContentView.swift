@@ -16,7 +16,9 @@ struct ContentView: View {
     @State private var timer: Timer? = nil // Référence au timer
     @State private var timeElapsed = 0 // Temps écoulé en secondes
     @State private var intervalNumber = 1 // Numéro d'intervalle
-
+    @StateObject var hrbtManager = HRBTManager()  // Création du gestionnaire Bluetooth
+    
+    
     // Récupérer l'intervalle courant basé sur intervalNumber
      var currentInterval: Interval? {
          guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
@@ -27,16 +29,14 @@ struct ContentView: View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
                 HStack(spacing: 20) {
-                    Button(action: {
-                        print("Bouton Settings appuyé")
-                    }) {
-                        HStack {
-                            Image(systemName: "gearshape.fill")
-                            Text("Settings")
-                                .font(.headline)
-                        }
-                    }
-                    .padding()
+                    NavigationLink(destination: SettingsView()) {
+                         HStack {
+                             Image(systemName: "gearshape.fill")
+                             Text("Settings")
+                                 .font(.headline)
+                         }
+                     }
+                .padding()
                     .frame(width: 150) // Largeur fixe pour les boutons
                     .foregroundColor(.white)
                     .background(Color.blue)
@@ -159,7 +159,7 @@ struct ContentView: View {
                             .font(.headline)
                             .padding(.bottom, 2)
 
-                        Text("Heart Rate: 0 bpm")
+                        Text("Heart Rate: \(hrbtManager.heartRate)")
                             .padding(.bottom, 2)
                             .font(.headline)
                         
@@ -238,6 +238,8 @@ struct ContentView: View {
                         .lineStyle(StrokeStyle(lineWidth: 2))
                         .interpolationMethod(.catmullRom) // Lissage
                     }
+                    
+                    
                 }
                 .frame(height: 300)
                 .padding()

@@ -106,7 +106,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     func startBluetooth() {
         print("🟢 Début du scan Bluetooth")
         centralManager.delegate = self
-        centralManager.scanForPeripherals(withServices: [CBUUID(string: "0x180D")], options: nil)
+        centralManager.scanForPeripherals(withServices: [CBUUID(string: "b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")], options: nil)
         //centralManager.scanForPeripherals(withServices: [CBUUID(string: "4225d51b-f1c2-419a-9acc-bd8e70d960ae")], options: nil)
     }
     
@@ -114,7 +114,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         print("🟡 État du Bluetooth: \(central.state.rawValue)")
         if central.state == .poweredOn {
             print("🟢 Bluetooth activé, début du scan")
-            centralManager.scanForPeripherals(withServices: [CBUUID(string: "0x180D")], options: nil)
+            centralManager.scanForPeripherals(withServices: [CBUUID(string: "b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")], options: nil)
             //centralManager.scanForPeripherals(withServices: [CBUUID(string: "4225d51b-f1c2-419a-9acc-bd8e70d960ae")], options: nil)
         } else {
             print("🔴 Bluetooth non disponible")
@@ -144,7 +144,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("🟢 Connecté au périphérique: \(peripheral.name ?? "Inconnu")")
-        peripheral.discoverServices([CBUUID(string: "0x180D")])
+        peripheral.discoverServices([CBUUID(string: "b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")])
         peripheral.discoverServices([CBUUID(string: "231c616b-32a6-4b93-9f0c-fe728deca0a5")])
         peripheral.discoverServices([CBUUID(string: "196c1c76-fe53-47e7-baab-a32b404d63df")])
         peripheral.discoverServices([CBUUID(string: "8868ba7f-cada-4035-85d2-e0002aeb2be6")])
@@ -167,7 +167,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         print("🟢 Services découverts")
         for service in peripheral.services ?? [] {
             print("🔵 Découverte des caractéristiques pour le service \(service.uuid)")
-            peripheral.discoverCharacteristics([CBUUID(string: "0x2A37")], for: service)
+            peripheral.discoverCharacteristics([CBUUID(string: "c70c73fd-b5fb-4a5f-87f4-7a187590b0ef")], for: service)
             peripheral.discoverCharacteristics([CBUUID(string: "4225d51b-f1c2-419a-9acc-bd8e70d960ae")], for: service)
             peripheral.discoverCharacteristics([CBUUID(string: "a4534c9e-0ede-48ec-bee5-7b728ecb25df")], for: service)
             peripheral.discoverCharacteristics([CBUUID(string: "b192eef4-a298-43fe-b85c-b04d934448f7")], for: service)
@@ -184,7 +184,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         }
         
         for characteristic in service.characteristics ?? [] {
-            if characteristic.uuid == CBUUID(string: "0x2A37") {
+            if characteristic.uuid == CBUUID(string: "c70c73fd-b5fb-4a5f-87f4-7a187590b0ef") {
                 vo2MaxCharacteristic = characteristic
                 print("🔵 Enregistrement de notifications pour la caractéristique VO2Max")
                 peripheral.setNotifyValue(true, for: characteristic)
@@ -228,7 +228,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             print("Erreur de mise à jour de la caractéristique: \(error!)")
             return
         }
-        if  characteristic.uuid == CBUUID(string: "0x2A37"){
+        if  characteristic.uuid == CBUUID(string: "c70c73fd-b5fb-4a5f-87f4-7a187590b0ef"){
             if let data = characteristic.value {
                 print("🟢 Données reçues: \(data)")
                 vo2Maxvalue = parseData(data)

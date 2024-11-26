@@ -238,7 +238,27 @@ struct ContentView: View {
                         .lineStyle(StrokeStyle(lineWidth: 2))
                         .interpolationMethod(.catmullRom) // Lissage
                     }
-                    
+                   
+                    // Courbe Speed (provenant de LocationManager)
+                     ForEach(locationManager.historicalData, id: \.time) { entry in
+                         LineMark(
+                             x: .value("Time", entry.time),
+                             y: .value("Speed", entry.speed) // Récupère la vitesse à partir de LocationManager
+                         )
+                         .foregroundStyle(by: .value("Type", "Speed"))
+                         .lineStyle(StrokeStyle(lineWidth: 2))
+                         .interpolationMethod(.catmullRom) // Lissage
+                     }
+                    // Courbe Heart Rate (provenant de hrbtManager)
+                    ForEach(hrbtManager.historicalData, id: \.time) { entry in
+                        LineMark(
+                            x: .value("Time", entry.time),
+                            y: .value("Heart Rate", entry.heartRate) // Récupère le rythme cardiaque à partir de hrbtManager
+                        )
+                        .foregroundStyle(by: .value("Type", "Heart Rate"))
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.catmullRom) // Lissage
+                    }
                     
                 }
                 .frame(height: 300)

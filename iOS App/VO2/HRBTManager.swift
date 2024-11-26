@@ -5,7 +5,7 @@ class HRBTManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPerip
 
     static let heartRateServiceUUID = CBUUID(string: "180D")
     static let heartRateMeasurementCharacteristicUUID = CBUUID(string: "2A37")
-     
+    @Published var historicalData: [HeartRateData] = [] // Données historiques
     var centralManager: CBCentralManager!
     @Published var heartRateSensors: [CBPeripheral] = []
     @Published var heartRate: String = "N/A" // Valeur par défaut avant la connexion
@@ -98,6 +98,9 @@ class HRBTManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPerip
                 DispatchQueue.main.async {
                     self.heartRate = "\(heartRateValue) BPM" // Mise à jour de la fréquence cardiaque
                 }
+                let data = HeartRateData(time: Date(), heartRate: heartRateValue)
+                historicalData.append(data) // Ajouter les données historiques
+                
             }
         }
     }
@@ -107,4 +110,8 @@ class HRBTManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPerip
         let heartRate = Int(data[1]) // Le premier octet est le format de l'intervalle
         return heartRate
     }
+}
+struct HeartRateData {
+    var time: Date
+    var heartRate: Int
 }

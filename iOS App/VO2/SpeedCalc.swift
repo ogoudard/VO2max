@@ -3,6 +3,7 @@ import CoreLocation
 
 class LocationManager:NSObject, ObservableObject, CLLocationManagerDelegate{
     private var locationManager = CLLocationManager()
+    var historicalData: [LocationData] = [] // Liste des données historiques
     @Published var speed: Double = 0.0
     override init() {
         super.init()
@@ -44,6 +45,12 @@ class LocationManager:NSObject, ObservableObject, CLLocationManagerDelegate{
             if speed < 0 {
                 speed=0
             }
+            let data = LocationData(time: Date(), speed: speed)
+              historicalData.append(data)
         }
     }
+}
+struct LocationData {
+    var time: Date
+    var speed: Double
 }

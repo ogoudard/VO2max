@@ -802,7 +802,7 @@ void readCO2() {
       // VCO2 calculation is based on changes in CO2 concentration (difference to baseline)
       vco2Total = volumeVEmean * rhoBTPS / rhoSTPD * co2percdiff * 10; // = vco2 in ml/min (* co2% * 10 for L in ml)
       vco2Max = vco2Total / settings.weightkg;                         // correction for wt
-      respq = (vco2Total * 44) / (vo2Total * 32);                      // respiratory quotient based on molarity
+      respq = (vco2Total * 44) / (vo2Total * 32);                      // respiratory quotient based on molarity: RQ=Moles O2​ consomumed/Moles CO2​ producted
       // CO2: 44g/mol, O2: 32 g/mol
       if (isnan(respq)) respq = 0; // correction for errors/div by 0
       if (respq > 1.5) respq = 0;
@@ -872,6 +872,7 @@ void vo2maxCalc() { // V02max calculation every 5s
     vo2MaxMax = random(200, 700)/10.0;
     vo2Max = random(100, 700)/10.0;
     vco2Max = random(80, 250)/10.0;
+    respq = random(80, 90)/10.0;
   }
  
 }

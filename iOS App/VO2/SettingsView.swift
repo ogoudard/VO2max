@@ -7,31 +7,41 @@ struct SettingsView: View {
     
     var body: some View {
         VStack {
-            Button(action: {
-                hrbtManager.centralManager.scanForPeripherals(withServices: [CBUUID(string: "180D")], options: nil)
-            }) {
-                Text("Search Heart Rate Sensors")
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-            }
-            
-            List(hrbtManager.heartRateSensors, id: \.identifier) { sensor in
-                Button(action: {
-                    hrbtManager.centralManager.connect(sensor, options: nil)
+            VStack(alignment: .leading, spacing: 8) {
+                  Text("App Version: \(AppInfo.version)")
+                      .font(.headline)
+                  Text("Build Number: \(AppInfo.build)")
+                      .font(.subheadline)
+                      .foregroundColor(.gray)
+              }
+              .padding()
+
+            Spacer()
+               Button(action: {
+                    hrbtManager.centralManager.scanForPeripherals(withServices: [CBUUID(string: "180D")], options: nil)
                 }) {
-                    Text(sensor.name ?? "Inconnu")
+                    Text("Search Heart Rate Sensors")
                         .padding()
-                        .background(Color.gray)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
                         .cornerRadius(8)
                 }
-            }
-            
+                
+                List(hrbtManager.heartRateSensors, id: \.identifier) { sensor in
+                    Button(action: {
+                        hrbtManager.centralManager.connect(sensor, options: nil)
+                    }) {
+                        Text(sensor.name ?? "Inconnu")
+                            .padding()
+                            .background(Color.gray)
+                            .cornerRadius(8)
+                    }
+                }
+                
             // Affichage des données de fréquence cardiaque
             Text("Heart Rate: \(hrbtManager.heartRate)")
                 .font(.title)
-                .padding()
+                .padding(.bottom, 2)
                 .foregroundColor(.green)
         }
         .navigationBarTitle("Settings")

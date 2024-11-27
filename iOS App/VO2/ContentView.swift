@@ -89,11 +89,11 @@ struct ContentView: View {
                 .padding()
                 HStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("VO2 Max. = \(String(format: "%.2f", bluetoothManager.vo2Maxvalue)) mL/min/kg")
+                        Text("VO2Max:\(String(format: "%.1f", bluetoothManager.vo2Maxvalue))mL/min/kg")
                             .font(.headline)
                             .padding(.bottom, 2)
                         
-                        Text("VO2 Live = \(String(format: "%.2f", bluetoothManager.vo2value)) mL/min/kg")
+                        Text("VO2Live:\(String(format: "%.1f", bluetoothManager.vo2value))mL/min/kg")
                             .font(.headline)
                             .padding(.bottom, 2)
                         

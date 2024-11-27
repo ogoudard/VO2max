@@ -87,7 +87,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     @Published var energyvalues: [(time: String, value: Float)] = [] // Valeurs VO2max pour le graphique
     @Published var connectionColor: Color = .red  // Rouge par défaut (déconnecté)
     
-    private var centralManager: CBCentralManager!
+    var centralManager: CBCentralManager!
     private var peripheral: CBPeripheral?
     private var vo2MaxCharacteristic: CBCharacteristic?
     private var vo2Characteristic: CBCharacteristic?
@@ -107,7 +107,6 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         print("🟢 Début du scan Bluetooth")
         centralManager.delegate = self
         centralManager.scanForPeripherals(withServices: [CBUUID(string: "b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")], options: nil)
-        //centralManager.scanForPeripherals(withServices: [CBUUID(string: "4225d51b-f1c2-419a-9acc-bd8e70d960ae")], options: nil)
     }
     
     func centralManagerDidUpdateState(_ central: CBCentralManager) {

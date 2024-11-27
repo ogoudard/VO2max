@@ -29,7 +29,7 @@ struct ContentView: View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
                 HStack(spacing: 20) {
-                    NavigationLink(destination: SettingsView()) {
+                    NavigationLink(destination: SettingsView(bluetoothManager: bluetoothManager)) {
                          HStack {
                              Image(systemName: "gearshape.fill")
                              Text("Settings")

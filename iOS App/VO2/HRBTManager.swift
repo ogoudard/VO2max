@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreBluetooth
+import Combine
 
 class HRBTManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
@@ -10,7 +11,7 @@ class HRBTManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPerip
     @Published var heartRateSensors: [CBPeripheral] = []
     @Published var heartRate: String = "N/A" // Valeur par défaut avant la connexion
     private var currentPeripheral: CBPeripheral?
-    
+
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
@@ -31,7 +32,7 @@ class HRBTManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPerip
     
     // Méthode appelée lorsqu'un périphérique est découvert
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        guard let localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String else { return }
+        //guard let localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String else { return }
         
         if advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [] == [CBUUID(string: "180D")] {
             heartRateSensors.append(peripheral)

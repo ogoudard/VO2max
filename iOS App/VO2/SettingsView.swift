@@ -3,8 +3,9 @@ import CoreBluetooth
 
 struct SettingsView: View {
     @ObservedObject var bluetoothManager: BluetoothManager // Ajouter ceci pour observer bluetoothManager
-    @StateObject var hrbtManager = HRBTManager()
+    @ObservedObject var hrbtManager: HRBTManager
     @State private var isVO2HRConnected: Bool? = nil // État de la connexion : nil = inconnu, true = connecté, false = non connecté
+    @State private var ishrbtConnected: Bool? = nil // État de la connexion : nil = inconnu, true = connecté, false = non connecté
     var body: some View {
         VStack {
             // Afficher la version et le build
@@ -21,8 +22,13 @@ struct SettingsView: View {
             
             // Bouton pour rechercher des capteurs de fréquence cardiaque
             Button(action: {
-                hrbtManager.centralManager.scanForPeripherals(withServices: [CBUUID(string: "180D")], options: nil)
-            }) {
+                //hrbtManager.centralManager.scanForPeripherals(withServices: [CBUUID(string: "180D")], options: nil)
+                if hrbtManager.centralManager.state == .poweredOn {
+                    ishrbtConnected = true // Le périphérique VO2-HR est connecté
+                } else {
+                    ishrbtConnected = false // Le périphérique VO2-HR n'est pas connecté
+                }
+                  }) {
                 Text("Search Heart Rate Sensors")
                     .padding()
                     .background(Color.blue)
@@ -35,8 +41,7 @@ struct SettingsView: View {
             Text("Heart Rate: \(hrbtManager.heartRate)")
                 .font(.headline)
                 .padding(.bottom, 16)
-                .foregroundColor(.white)
-            
+                .foregroundColor(getHeartRateColor()) // Appliquer la couleur en fonction de la connexion
  
             // Bouton pour vérifier si VO2-HR est connecté
             Button(action: {
@@ -66,7 +71,6 @@ struct SettingsView: View {
                     hrbtManager.centralManager.connect(sensor, options: nil)
                 }) {
                     Text(sensor.name ?? "Inconnu")
-                        .background(Color.gray)
                         .padding()
                         .cornerRadius(8)
                 }
@@ -78,7 +82,17 @@ struct SettingsView: View {
             hrbtManager.centralManager.scanForPeripherals(withServices: [CBUUID(string: "180D")], options: nil)
         }
     }
-    
+    // Fonction pour déterminer la couleur en fonction de la connexion
+     private func getHeartRateColor() -> Color {
+         if ishrbtConnected == nil {
+             return .gray
+         }
+         if ishrbtConnected == true {
+             return .green // Si le capteur est connecté
+         } else {
+             return .red // Si le capteur n'est pas connecté
+         }
+     }
     // Méthode pour vérifier la connexion VO2-HR
      private func checkVO2HRConnection() {
          // Utiliser bluetoothManager pour récupérer les périphériques connectés
@@ -92,9 +106,10 @@ struct SettingsView: View {
          }
      }
  }
+
 struct SettingsView_Previews: PreviewProvider {
         static var previews: some View {
-            SettingsView(bluetoothManager: BluetoothManager())
+            SettingsView(bluetoothManager: BluetoothManager(), hrbtManager: HRBTManager())
         }
     }
 

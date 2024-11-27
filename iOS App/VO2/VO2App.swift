@@ -11,7 +11,9 @@ import SwiftData
 @main
 struct VO2App: App {
     @StateObject private var intervalManager = IntervalManager()
-    var sharedModelContainer: ModelContainer = {
+    @ObservedObject var bluetoothManager = BluetoothManager()
+    @ObservedObject var hrbtManager = HRBTManager()  // Création du gestionnaire Bluetooth
+   var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
         ])
@@ -27,7 +29,9 @@ struct VO2App: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-            .environmentObject(intervalManager) // Rendre l'objet accessible
+                .environmentObject(intervalManager) // Rendre l'objet accessible
+                .environmentObject(bluetoothManager)
+                .environmentObject(hrbtManager)
         }
         .modelContainer(sharedModelContainer)
     }

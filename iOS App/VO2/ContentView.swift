@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var timeElapsed = 0 // Temps écoulé en secondes
     @State private var intervalNumber = 1 // Numéro d'intervalle
     @StateObject var hrbtManager = HRBTManager()  // Création du gestionnaire Bluetooth
-    
+    @State private var hasButtonBeenPressed = false // Booléen global pour suivre l'état du bouton
     
     // Récupérer l'intervalle courant basé sur intervalNumber
      var currentInterval: Interval? {
@@ -131,19 +131,24 @@ struct ContentView: View {
                              }
                          }
                          
-                         Button(action: {
-                             startTimer() // Démarrer le timer lorsque le bouton est pressé
-                             bluetoothManager.updateHistoricalData()
-                             bluetoothManager.startUpdating()
-                             }) {
-                             Text("Start Test")
-                                 .padding()
-                                 .background(Color.green)
-                                 .foregroundColor(.white)
-                                 .cornerRadius(8)
-                                 .frame(width: 150) // Largeur fixe pour les boutons
-                        }
-                         
+                        Button(action: {
+                              if !hasButtonBeenPressed { // Vérifie si le bouton n'a pas déjà été pressé
+                                  hasButtonBeenPressed = true // Marque le bouton comme pressé
+                                  startTimer() // Démarrer le timer
+                                  bluetoothManager.updateHistoricalData()
+                                  bluetoothManager.startUpdating()
+                                  locationManager.startUpdatingLocation()
+                              }
+                          }) {
+                              Text("Start Test")
+                                  .padding()
+                                  .background(hasButtonBeenPressed ? Color.gray : Color.green) // Grise le bouton après avoir été pressé
+                                  .foregroundColor(.white)
+                                  .cornerRadius(8)
+                                  .frame(width: 150) // Largeur fixe pour les boutons
+                          }
+                          .disabled(hasButtonBeenPressed) // Désactive le bouton après le premier appui
+               
                      
               
                         
@@ -184,15 +189,23 @@ struct ContentView: View {
 
                         
                         Button(action: {
-                            stopTimer() // Arrêter le timer
-                        }) {
+                            if hasButtonBeenPressed { // Vérifie si le bouton n'a pas déjà été pressé
+                                hasButtonBeenPressed = false // Marque le bouton comme pressé
+                                stopTimer() // Arrêter le timer
+                                bluetoothManager.updateHistoricalData()
+                                bluetoothManager.stopUpdating()
+                                locationManager.stopUpdatingLocation()
+                            }
+                       }) {
                             Text("Stop Test")
                                 .padding()
+                                .background(!hasButtonBeenPressed ? Color.gray : Color.green) // Grise le bouton après avoir été pressé
                                 .background(Color.red)
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
                                 .frame(width: 150) // Largeur fixe pour les boutons
                         }
+                       .disabled(!hasButtonBeenPressed) // Désactive le bouton après le premier appui
 
                     }
                 }
@@ -318,7 +331,7 @@ struct ContentView: View {
             .padding(.top, 1) // You can adjust this padding to control the space above the title
 
             .onAppear {
-                locationManager.startUpdatingLocation()
+                //locationManager.startUpdatingLocation()
                 //hrbtManager.startScanning()
             }
             

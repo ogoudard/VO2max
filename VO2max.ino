@@ -61,17 +61,13 @@ BluetoothSerial SerialBT;
 byte hrmPos[1] = {2};
 bool _BLEClientConnected = false;
 
-// heart rate service -> Send VO2MAX value
-// @TODO : change to randomly generate UUID and see if it s still working
-#define vo2maxRateService BLEUUID((uint16_t)0x180D)
-BLECharacteristic vo2maxRateMeasurementCharacteristics(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
+// Send VO2MAX value
+#define vo2maxRateService BLEUUID("b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0")
+BLECharacteristic vo2maxRateMeasurementCharacteristics("c70c73fd-b5fb-4a5f-87f4-7a187590b0ef", BLECharacteristic::PROPERTY_NOTIFY);
 BLEDescriptor     vo2maxRateDescriptor(BLEUUID((uint16_t)0x2901));
-
 // Start Test bit to trig the begining of a new VO2max test protocol 
-// @TODO  :change this when the heart data will be read from the POLAR heart sensor
-BLECharacteristic startTestCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
+BLECharacteristic startTestCharacteristic("a155446f-9680-4e13-8660-12afd3bd844d", BLECharacteristic::PROPERTY_READ);
 BLEDescriptor     startTestDescriptor(BLEUUID((uint16_t)0x2901)); // 0x2901: Characteristic User Description
-
 // Vo2 service
 #define vo2RateService BLEUUID("231c616b-32a6-4b93-9f0c-fe728deca0a5") 
 BLECharacteristic vo2RateMeasurementCharacteristics(BLEUUID("4225d51b-f1c2-419a-9acc-bd8e70d960ae"), BLECharacteristic::PROPERTY_NOTIFY);
@@ -806,7 +802,7 @@ void readCO2() {
       // VCO2 calculation is based on changes in CO2 concentration (difference to baseline)
       vco2Total = volumeVEmean * rhoBTPS / rhoSTPD * co2percdiff * 10; // = vco2 in ml/min (* co2% * 10 for L in ml)
       vco2Max = vco2Total / settings.weightkg;                         // correction for wt
-      respq = (vco2Total * 44) / (vo2Total * 32);                      // respiratory quotient based on molarity
+      respq = (vco2Total * 44) / (vo2Total * 32);                      // respiratory quotient based on molarity: RQ=Moles O2​ consomumed/Moles CO2​ producted
       // CO2: 44g/mol, O2: 32 g/mol
       if (isnan(respq)) respq = 0; // correction for errors/div by 0
       if (respq > 1.5) respq = 0;
@@ -876,6 +872,7 @@ void vo2maxCalc() { // V02max calculation every 5s
     vo2MaxMax = random(200, 700)/10.0;
     vo2Max = random(100, 700)/10.0;
     vco2Max = random(80, 250)/10.0;
+    respq = random(80, 90)/10.0;
   }
  
 }
@@ -1382,8 +1379,6 @@ void InitBLE() {
 
       // (3) Create the characteristics, descriptor, notification
       pHeart->addCharacteristic(&vo2maxRateMeasurementCharacteristics); // creates heartrate
-      // characteristics 0x2837
-      vo2maxRateDescriptor.setValue("Rate from 0 to 200"); // describtion of the characteristic
       vo2maxRateMeasurementCharacteristics.addDescriptor(&vo2maxRateDescriptor);
       vo2maxRateMeasurementCharacteristics.addDescriptor(new BLE2902()); // necessary for notifications
       // client switches server notifications on/off via BLE2902 protocol

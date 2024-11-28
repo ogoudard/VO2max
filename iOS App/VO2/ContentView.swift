@@ -9,6 +9,7 @@ import AVFoundation
 
 
 struct ContentView: View {
+ 
     private let chartHeight: CGFloat = 200
     @StateObject private var locationManager = LocationManager()
     @State private var navigateToSpeedAndWeight = false // Variable d'état pour gérer la navigation
@@ -20,22 +21,16 @@ struct ContentView: View {
     @State private var timeElapsed = 0 // Temps écoulé en secondes
     @State private var intervalNumber = 1 // Numéro d'intervalle
     @State private var hasButtonBeenPressed = false // Booléen global pour suivre l'état du bouton
-   @State private var timerRunning: Bool = false
+    @State private var audioPlayer: AVAudioPlayer?
+    @State private var beepSound: URL? = Bundle.main.url(forResource: "beep", withExtension: "wav")
+    @State private var timerRunning: Bool = false
 
     // Récupérer l'intervalle courant    sur intervalNumber
     var currentInterval: Interval? {
         guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
         return intervalManager.intervals[intervalNumber - 1]
     }
-/*    // Cette fonction initialise les sons
-    func loadSounds() {
-        if let beepURL = Bundle.main.url(forResource: "beep", withExtension: "wav"),
-           let highBeepURL = Bundle.main.url(forResource: "highBeep", withExtension: "wav") {
-            beepSound = beepURL
-            highBeepSound = highBeepURL
-        }
-    }
-
+ 
     // Cette fonction joue un bip
     func playSound(_ sound: URL) {
         do {
@@ -48,23 +43,15 @@ struct ContentView: View {
 
     // Appelée chaque seconde pour mettre à jour le timer
     func updateTimer() {
-        if timeElapsed % 60 == 55 { // À 5 secondes avant la fin de la minute
-            for _ in 0..<4 { // Émettre 4 bips toutes les secondes
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    if let beepSound = beepSound {
-                        playSound(beepSound)
-                    }
+        if timeElapsed % 60 == 54 { // À 5 secondes avant la fin de la minute
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                if let beepSound = beepSound {
+                    playSound(beepSound)
                 }
             }
         }
+     }
 
-        if timeElapsed % 60 == 0 && timeElapsed != 0 { // Quand on change d'intervalle (nouvelle minute)
-            if let highBeepSound = highBeepSound {
-                playSound(highBeepSound)
-            }
-        }
-    }
-*/
     var body: some View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
@@ -312,34 +299,13 @@ struct ContentView: View {
                 }
                 .frame(height: 300)
                 .padding()
-                
-                /*.chartYAxis {
-                 AxisMarks(values: .automatic) // Axe Y principal pour VO2Max, VO2, VCO2
-                 }
-                 .chartYAxis(id: "speed") { // Axe Y secondaire pour la vitesse
-                 AxisMarks(values: .stride(by: 5)) // Ajuste l'échelle de la vitesse (par exemple, de 0 à 25 km/h)
-                 }
-                 .chartOverlay { proxy in
-                 GeometryReader { geometry in
-                 // Positionner l'axe secondaire à droite pour la vitesse
-                 proxy.secondaryYAxis
-                 .padding(.horizontal)
-                 .offset(x: geometry.size.width * 0.8) // Décalage de l'axe secondaire à droite
-                 }
-                 }*/
-                
-                //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
-                
-                //.background(Color.white) // Ajoutez une couleur de fond pour mieux visualiser le graphique
-                //.border(Color.gray) // Optionnel : ajoutez une bordure pour la visibilité
             }
-            // Navigation vers la page de saisie de vitesse et poids
-             //.background(
-             //    NavigationLink(destination: SpeedAndWeightView(), isActive: $navigateToSpeedAndWeight) {
-              //       EmptyView()
-             //    }
-             //)
-
+            .onAppear {
+                 Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                     //timeElapsed += 1
+                     updateTimer()
+                 }
+             }
 
             .toolbar {
                 ToolbarItem(placement: .principal) {

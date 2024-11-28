@@ -302,7 +302,6 @@ struct ContentView: View {
             }
             .onAppear {
                  Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-                     //timeElapsed += 1
                      updateTimer()
                  }
              }

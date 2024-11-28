@@ -374,7 +374,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         historicalData.append(newEntry)
 
         // Optionnel : Limiter la taille de l'historique pour éviter trop de données
-        if historicalData.count > 100 {
+        if historicalData.count > 2500 {
             historicalData.removeFirst()
         }
     }

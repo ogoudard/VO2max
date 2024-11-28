@@ -5,6 +5,8 @@ import Foundation
 import CoreBluetooth
 import UniformTypeIdentifiers
 import UIKit
+import AVFoundation
+
 
 struct ContentView: View {
     private let chartHeight: CGFloat = 200
@@ -18,13 +20,51 @@ struct ContentView: View {
     @State private var timeElapsed = 0 // Temps écoulé en secondes
     @State private var intervalNumber = 1 // Numéro d'intervalle
     @State private var hasButtonBeenPressed = false // Booléen global pour suivre l'état du bouton
-    
-    // Récupérer l'intervalle courant basé sur intervalNumber
+   @State private var timerRunning: Bool = false
+
+    // Récupérer l'intervalle courant    sur intervalNumber
     var currentInterval: Interval? {
         guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
         return intervalManager.intervals[intervalNumber - 1]
     }
-    
+/*    // Cette fonction initialise les sons
+    func loadSounds() {
+        if let beepURL = Bundle.main.url(forResource: "beep", withExtension: "wav"),
+           let highBeepURL = Bundle.main.url(forResource: "highBeep", withExtension: "wav") {
+            beepSound = beepURL
+            highBeepSound = highBeepURL
+        }
+    }
+
+    // Cette fonction joue un bip
+    func playSound(_ sound: URL) {
+        do {
+            audioPlayer = try AVAudioPlayer(contentsOf: sound)
+            audioPlayer?.play()
+        } catch {
+            print("Erreur de lecture du son : \(error)")
+        }
+    }
+
+    // Appelée chaque seconde pour mettre à jour le timer
+    func updateTimer() {
+        if timeElapsed % 60 == 55 { // À 5 secondes avant la fin de la minute
+            for _ in 0..<4 { // Émettre 4 bips toutes les secondes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if let beepSound = beepSound {
+                        playSound(beepSound)
+                    }
+                }
+            }
+        }
+
+        if timeElapsed % 60 == 0 && timeElapsed != 0 { // Quand on change d'intervalle (nouvelle minute)
+            if let highBeepSound = highBeepSound {
+                playSound(highBeepSound)
+            }
+        }
+    }
+*/
     var body: some View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
@@ -402,6 +442,7 @@ struct ContentView: View {
             rootViewController.present(picker, animated: true, completion: nil)
         }
     }
+
     
 }
   extension Date {

@@ -3,7 +3,9 @@ import SwiftUI
 struct LungTestView: View {
     @State private var testStarted = false
     @State private var lungCapacity: Double = 0.0 // En litres
-    
+    @State private var timerCount: Int = 0
+    @State private var timer: Timer? = nil
+
     var body: some View {
         VStack(spacing: 30) {
             Text("Test Your Lung Capacity")
@@ -16,12 +18,13 @@ struct LungTestView: View {
                 .frame(height: 200)
                 .padding()
             
+            // Bouton pour démarrer/arrêter le test
             Button(action: {
                 testStarted.toggle()
                 if testStarted {
                     startSimulation()
                 } else {
-                    lungCapacity = 0.0
+                    stopSimulation()
                 }
             }) {
                 Text(testStarted ? "Stop Test" : "Start Test")
@@ -32,30 +35,38 @@ struct LungTestView: View {
                     .foregroundColor(.white)
                     .cornerRadius(10)
             }
-        }
-        .padding()
-    }
-    
-    private func startSimulation() {
-        lungCapacity = 0.0 // Reset à 0
-        if testStarted {
-            let interval = 15.0 / 50.0 // 50 étapes pour une montée douce sur 15 secondes
-            var step = 0
             
-            Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
-                if !testStarted { // Si le test est arrêté
-                    timer.invalidate()
-                    return
-                }
-                
-                if step > 50 {
-                    step = 0 // Repartir de 0
-                }
-                
-                lungCapacity = Double(step) * 5.0 / 50.0 // Augmente doucement jusqu'à 5.0
-                step += 1
+            // Affichage du compteur
+            if testStarted {
+                Text("\(timerCount) seconds")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .padding()
             }
         }
+        .onDisappear {
+            stopSimulation()
+        }
+    }
+    
+    func startSimulation() {
+        lungCapacity = 0.0
+        timerCount = 0
+
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            timerCount += 1
+            lungCapacity = min(Double(timerCount) * 5.0 / 60.0, 5.0) // Capacité max de 5.0 L
+            
+            if timerCount >= 60 {
+                stopSimulation()
+            }
+        }
+    }
+    
+    func stopSimulation() {
+        timer?.invalidate()
+        timer = nil
+        testStarted = false
     }
 }
 
@@ -65,31 +76,30 @@ struct SevenSegmentDisplay: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 5) {
-                let digits = digits(for: value) // Fonction pour extraire les digits
+                let digits = digits(for: value)
+                
+                // Assure-toi que tu passes correctement les trois digits séparés
                 if digits.count == 3 {
-                    DigitView(digit1: digits[0], digit2: digits[1], digit3: digits[2]) // Passer les 3 digits
+                    DigitView(digit1: digits[0], digit2: digits[1], digit3: digits[2])
                 }
             }
             .padding()
+            
             Text("Liters")
                 .font(.title)
                 .foregroundColor(.green)
         }
     }
     
-    private
-    func digits(for value: Double) -> [Int] {
-        // Assurez-vous d'extraire 3 chiffres. Exemple simple avec 3 digits après la virgule
-        let roundedValue = Int(value * 100) // Multiplie la valeur par 100 pour garder 3 décimales
+    private func digits(for value: Double) -> [Int] {
+        // On extrait 3 digits pour afficher la valeur
+        let roundedValue = Int(value * 100) // Multiplie pour extraire les chiffres après la virgule
         let firstDigit = roundedValue / 100 % 10
         let secondDigit = roundedValue / 10 % 10
         let thirdDigit = roundedValue % 10
         return [firstDigit, secondDigit, thirdDigit]
     }
-    
 }
-
-
 
 struct DigitView: View {
     let digit1: Int
@@ -111,7 +121,7 @@ struct DigitView: View {
     ]
     
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 10) { // Ajuste l'espacement global entre les digits et les séparateurs
             // Premier digit
             ZStack {
                 Color.black
@@ -120,19 +130,17 @@ struct DigitView: View {
                 
                 let activeSegments = segments[digit1]
                 
-                // Dessin des segments
                 ForEach(0..<7) { index in
                     SegmentView(isActive: activeSegments[index], index: index)
                 }
             }
             
-            // Point entre les deux premiers digits
-            ZStack {
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 10, height: 10)
-                    .position(x: 30, y: 60)
-            }
+            // Virgule
+            Circle()
+                .fill(Color.white)
+                .frame(width: 12, height: 12)
+                .offset(x: -5) // Ajuste la position horizontale
+                .padding(.top, 50) // Ajuste la position verticale pour être centrée
             
             // Deuxième digit
             ZStack {
@@ -142,7 +150,6 @@ struct DigitView: View {
                 
                 let activeSegments = segments[digit2]
                 
-                // Dessin des segments
                 ForEach(0..<7) { index in
                     SegmentView(isActive: activeSegments[index], index: index)
                 }
@@ -156,12 +163,12 @@ struct DigitView: View {
                 
                 let activeSegments = segments[digit3]
                 
-                // Dessin des segments
                 ForEach(0..<7) { index in
                     SegmentView(isActive: activeSegments[index], index: index)
                 }
             }
         }
+        .padding(5) // Ajuste l'espacement global autour des digits
     }
 }
 
@@ -169,23 +176,23 @@ struct SegmentView: View {
     let isActive: Bool
     let index: Int
     
-    // Positions des segments par index
-    private let positions = [
-        CGRect(x: 15, y: 0, width: 30, height: 10),  // Segment A (haut)
-        CGRect(x: 45, y: 20, width: 10, height: 30), // Segment B (haut-droite)
-        CGRect(x: 45, y: 60, width: 10, height: 30), // Segment C (bas-droite)
-        CGRect(x: 15, y: 100, width: 30, height: 10), // Segment D (bas)
+    // Positions fixes pour chaque segment dans un écran 60x120
+    private let positions: [CGRect] = [
+        CGRect(x: 10, y: 0, width: 40, height: 10),  // Segment A (haut)
+        CGRect(x: 50, y: 20, width: 10, height: 30), // Segment B (haut-droite)
+        CGRect(x: 50, y: 60, width: 10, height: 30), // Segment C (bas-droite)
+        CGRect(x: 10, y: 100, width: 40, height: 10), // Segment D (bas)
         CGRect(x: 0, y: 60, width: 10, height: 30),  // Segment E (bas-gauche)
         CGRect(x: 0, y: 20, width: 10, height: 30),  // Segment F (haut-gauche)
-        CGRect(x: 15, y: 50, width: 30, height: 10)  // Segment G (milieu)
+        CGRect(x: 10, y: 50, width: 40, height: 10)  // Segment G (milieu)
     ]
     
     var body: some View {
         let position = positions[index]
         
         return Rectangle()
-            .fill(isActive ? Color.green.opacity(0.97) : Color.gray.opacity(0.25))  // Vert clair et gris foncé
+            .fill(isActive ? Color.green : Color.gray.opacity(0.3))
             .frame(width: position.width, height: position.height)
-            .position(x: position.midX, y: position.midY)
+            .position(x: position.midX+10 , y: position.midY ) // Centrer chaque segment
     }
 }

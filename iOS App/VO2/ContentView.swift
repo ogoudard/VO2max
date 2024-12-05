@@ -24,7 +24,8 @@ struct ContentView: View {
     @State private var audioPlayer: AVAudioPlayer?
     @State private var beepSound: URL? = Bundle.main.url(forResource: "beep", withExtension: "wav")
     @State private var timerRunning: Bool = false
-
+    @State private var showLungTest = false
+    
     // Récupérer l'intervalle courant    sur intervalNumber
     var currentInterval: Interval? {
         guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
@@ -70,19 +71,24 @@ struct ContentView: View {
                     .cornerRadius(8)
                     
                     Button(action: {
-                        print("Bouton Golden Lungs appuyé")
+                        showLungTest = true
                     }) {
                         HStack {
                             Image(systemName: "lungs.fill")
                             Text("Gold Lung")
-                                .font(.headline)
+                            .font(.headline)
                         }
                     }
                     .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .frame(width: 150) // Largeur fixe pour les boutons
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(8)
+                    .sheet(isPresented: $showLungTest) {
+                         LungTestView()
+                             .environmentObject(bluetoothManager) // Passer l'objet BluetoothManager
+                     }
+           
                 }
                 
                 HStack(spacing: 20) {
@@ -93,8 +99,7 @@ struct ContentView: View {
                                 .font(.headline)
                         }
                     }
-                    .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .padding() .background(Color.blue)
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(8)
@@ -107,7 +112,7 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .frame(width: 150) // Largeur fixe pour les boutons
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(8)

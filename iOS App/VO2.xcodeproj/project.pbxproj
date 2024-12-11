@@ -128,6 +128,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 09F149662CD3E4AE0083B63C /* Build configuration list for PBXNativeTarget "VO2" */;
 			buildPhases = (
+				09C6FC1D2CF854B100AD739D /* ShellScript */,
 				09F1493C2CD3E4AB0083B63C /* Sources */,
 				09F1493D2CD3E4AB0083B63C /* Frameworks */,
 				09F1493E2CD3E4AB0083B63C /* Resources */,
@@ -259,6 +260,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		09C6FC1D2CF854B100AD739D /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 12;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\n\n# Définir le chemin du fichier Info.plist avec guillemets pour éviter les problèmes d'espaces\nPLIST_PATH=\"${PROJECT_DIR}/${INFOPLIST_FILE}\"\n\n# Vérifier si le fichier existe\nif [ -f \"$PLIST_PATH\" ]; then\n    echo \"Le fichier Info.plist existe à l'emplacement : $PLIST_PATH\"\n    buildNumber=$(/usr/libexec/PlistBuddy -c \"Print MyBuildVersion\" \"$PLIST_PATH\" 2>/dev/null)\n    # Vérifier si le buildNumber est vide\n    if [ -z \"$buildNumber\" ]; then\n        echo \"Build number not found, setting it to 1\"\n        buildNumber=1\n    fi\n\n    # Vérifier si buildNumber est un nombre valide avant de l'incrémenter\n    if [[ \"$buildNumber\" =~ ^[0-9]+$ ]]; then\n        newBuildNumber=$((buildNumber + 1))\n        /usr/libexec/PlistBuddy -c \"Set MyBuildVersion $newBuildNumber\" \"$PLIST_PATH\"\n        echo \"Updated build number to $newBuildNumber\"\n    else\n        echo \"Erreur : Le numéro de build '$buildNumber' n'est pas valide. Défini à 1.\"\n        /usr/libexec/PlistBuddy -c \"Set MyBuildVersion 1\" \"$PLIST_PATH\"\n        echo \"Updated build number to 1\"\n    fi\nelse\n    # Si le fichier n'existe pas, afficher un message d'erreur sans l'assigner à buildNumber\n    echo \"Error: Info.plist not found at $PLIST_PATH\"\n    exit 1\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		09F1493C2CD3E4AB0083B63C /* Sources */ = {
@@ -431,7 +453,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VO2/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "need bluetooth";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "";
 				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";
@@ -470,7 +492,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VO2/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "need bluetooth";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "";
 				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Nous avons besoin d'accéder à votre localisation pour suivre votre vitesse.";

@@ -5,8 +5,11 @@ import Foundation
 import CoreBluetooth
 import UniformTypeIdentifiers
 import UIKit
+import AVFoundation
+
 
 struct ContentView: View {
+ 
     private let chartHeight: CGFloat = 200
     @StateObject private var locationManager = LocationManager()
     @State private var navigateToSpeedAndWeight = false // Variable d'état pour gérer la navigation
@@ -18,13 +21,38 @@ struct ContentView: View {
     @State private var timeElapsed = 0 // Temps écoulé en secondes
     @State private var intervalNumber = 1 // Numéro d'intervalle
     @State private var hasButtonBeenPressed = false // Booléen global pour suivre l'état du bouton
+    @State private var audioPlayer: AVAudioPlayer?
+    @State private var beepSound: URL? = Bundle.main.url(forResource: "beep", withExtension: "wav")
+    @State private var timerRunning: Bool = false
+    @State private var showLungTest = false
     
-    // Récupérer l'intervalle courant basé sur intervalNumber
+    // Récupérer l'intervalle courant    sur intervalNumber
     var currentInterval: Interval? {
         guard intervalNumber > 0, intervalNumber <= intervalManager.intervals.count else { return nil }
         return intervalManager.intervals[intervalNumber - 1]
     }
-    
+ 
+    // Cette fonction joue un bip
+    func playSound(_ sound: URL) {
+        do {
+            audioPlayer = try AVAudioPlayer(contentsOf: sound)
+            audioPlayer?.play()
+        } catch {
+            print("Erreur de lecture du son : \(error)")
+        }
+    }
+
+    // Appelée chaque seconde pour mettre à jour le timer
+    func updateTimer() {
+        if timeElapsed % 60 == 54 { // À 5 secondes avant la fin de la minute
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                if let beepSound = beepSound {
+                    playSound(beepSound)
+                }
+            }
+        }
+     }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 1) { // Ajustez le spacing si nécessaire
@@ -43,19 +71,24 @@ struct ContentView: View {
                     .cornerRadius(8)
                     
                     Button(action: {
-                        print("Bouton Golden Lungs appuyé")
+                        showLungTest = true
                     }) {
                         HStack {
                             Image(systemName: "lungs.fill")
                             Text("Gold Lung")
-                                .font(.headline)
+                            .font(.headline)
                         }
                     }
                     .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .frame(width: 150) // Largeur fixe pour les boutons
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(8)
+                    .sheet(isPresented: $showLungTest) {
+                         LungTestView()
+                             .environmentObject(bluetoothManager) // Passer l'objet BluetoothManager
+                     }
+           
                 }
                 
                 HStack(spacing: 20) {
@@ -66,8 +99,7 @@ struct ContentView: View {
                                 .font(.headline)
                         }
                     }
-                    .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .padding() .background(Color.blue)
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(8)
@@ -80,7 +112,7 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-                    .frame(width: 150) // Largeur fixe pour les boutons                    .background(Color.blue)
+                    .frame(width: 150) // Largeur fixe pour les boutons
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(8)
@@ -272,34 +304,12 @@ struct ContentView: View {
                 }
                 .frame(height: 300)
                 .padding()
-                
-                /*.chartYAxis {
-                 AxisMarks(values: .automatic) // Axe Y principal pour VO2Max, VO2, VCO2
-                 }
-                 .chartYAxis(id: "speed") { // Axe Y secondaire pour la vitesse
-                 AxisMarks(values: .stride(by: 5)) // Ajuste l'échelle de la vitesse (par exemple, de 0 à 25 km/h)
-                 }
-                 .chartOverlay { proxy in
-                 GeometryReader { geometry in
-                 // Positionner l'axe secondaire à droite pour la vitesse
-                 proxy.secondaryYAxis
-                 .padding(.horizontal)
-                 .offset(x: geometry.size.width * 0.8) // Décalage de l'axe secondaire à droite
-                 }
-                 }*/
-                
-                //.frame(height: 75) // Ajuste la taille du graphique si nécessaire
-                
-                //.background(Color.white) // Ajoutez une couleur de fond pour mieux visualiser le graphique
-                //.border(Color.gray) // Optionnel : ajoutez une bordure pour la visibilité
             }
-            // Navigation vers la page de saisie de vitesse et poids
-             //.background(
-             //    NavigationLink(destination: SpeedAndWeightView(), isActive: $navigateToSpeedAndWeight) {
-              //       EmptyView()
-             //    }
-             //)
-
+            .onAppear {
+                 Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                     updateTimer()
+                 }
+             }
 
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -402,6 +412,7 @@ struct ContentView: View {
             rootViewController.present(picker, animated: true, completion: nil)
         }
     }
+
     
 }
   extension Date {

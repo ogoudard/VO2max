@@ -1,34 +1,46 @@
 import SwiftUI
 import CoreBluetooth
+import Foundation
 
 struct SettingsView: View {
     @ObservedObject var bluetoothManager: BluetoothManager // Ajouter ceci pour observer bluetoothManager
     @ObservedObject var hrbtManager: HRBTManager
     @State private var isVO2HRConnected: Bool? = nil // État de la connexion : nil = inconnu, true = connecté, false = non connecté
-    @State private var ishrbtConnected: Bool? = nil // État de la connexion : nil = inconnu, true = connecté, false = non connecté
+    @State private var ishrbtConnected: Bool? = false // État de la connexion : nil = inconnu, true = connecté, false = non connecté
+    @State private var buildNumber: String = "Unknown"
+    
     var body: some View {
         VStack {
             // Afficher la version et le build
             VStack(alignment: .leading, spacing: 8) {
                 Text("App Version: \(AppInfo.version)")
                     .font(.headline)
-                Text("Build Number: \(AppInfo.build)")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-            }
+                Text("Build Number: \(buildNumber)")
+                      .onAppear {
+                          // Récupérer le numéro de build au moment de l'apparition de la vue
+                          if let build = getBuildNumber() {
+                              buildNumber = build
+                          } else {
+                              buildNumber = "Not found"
+                          }
+                      }
+              }
+            .font(.subheadline)
+            .foregroundColor(.gray)
             .padding()
             
             Spacer()
             
             // Bouton pour rechercher des capteurs de fréquence cardiaque
             Button(action: {
-                //hrbtManager.centralManager.scanForPeripherals(withServices: [CBUUID(string: "180D")], options: nil)
-                if hrbtManager.centralManager.state == .poweredOn {
-                    ishrbtConnected = true // Le périphérique VO2-HR est connecté
+                if !hrbtManager.historicalData.isEmpty {
+                    // Les données de la ceinture cardio sont reçues
+                    ishrbtConnected = true
                 } else {
-                    ishrbtConnected = false // Le périphérique VO2-HR n'est pas connecté
+                    // Aucune donnée reçue de la ceinture cardio
+                    ishrbtConnected = false
                 }
-                  }) {
+                 }) {
                 Text("Search Heart Rate Sensors")
                     .padding()
                     .background(Color.blue)
@@ -105,7 +117,16 @@ struct SettingsView: View {
              isVO2HRConnected = false // Le périphérique VO2-HR n'est pas connecté
          }
      }
- }
+
+    // Fonction pour récupérer le CFBundleVersion
+    func getBuildNumber() -> String? {
+        if let infoDict = Bundle.main.infoDictionary {
+            return infoDict["MyBuildVersion"] as? String
+        }
+        return nil
+    }
+
+}
 
 struct SettingsView_Previews: PreviewProvider {
         static var previews: some View {

@@ -44,12 +44,13 @@ BluetoothSerial SerialBT;
 #include <BLEUtils.h>
 
 //Library for barometric sensor  ---------------------
-#include <Adafruit_BMP3XX.h> 
+//#include <Adafruit_BMP3XX.h> 
+#include <Adafruit_BMP280.h> 
 
 // Set this to the correct printed case venturi diameter
 #define DIAMETER 16
 
-//#define VERBOSE // additional debug logging
+#define VERBOSE // additional debug logging
 
 #define ADC_EN  14       // ADC_EN is the ADC detection enable port
 #define ADC_PIN 34
@@ -57,6 +58,8 @@ BluetoothSerial SerialBT;
 // Oxygene sensor defines
 #define COLLECT_NUMBER    10        // collect number, the collection range is 1-100.
 #define Oxygen_IICAddress ADDRESS_3 // I2C  label for o2 address
+
+#define BMP280_ADDRESS 0x76  // ou 0x77 selon ton module
 
 byte hrmPos[1] = {2};
 bool _BLEClientConnected = false;
@@ -112,7 +115,8 @@ class MyServerCallbacks: public BLEServerCallbacks {
 
 // ------------------------------------------
 // Barometer device
-Adafruit_BMP3XX bmp;
+//Adafruit_BMP3XX bmp;
+Adafruit_BMP280 bmp;
 
 // Starts Screen for TTGO device
 TFT_eSPI tft = TFT_eSPI(); // Invoke library, pins defined in User_Setup.h
@@ -136,7 +140,7 @@ int       screenNr = 1;
 int       HeaderStreamed = 0;
 int       HeaderStreamedBT = 0;
 int       DEMO = 0;               // 0 = Normal mode / 1 = DEMO-mode
-int       SCREEN_ONLY = 1;        // 0 = Normal mode / 1 = Screen only mode
+int       SCREEN_ONLY = 0;        // 0 = Normal mode / 1 = Screen only mode
 int       vref = 1100;            // used for battery voltage reading
 
 //############################################
@@ -151,7 +155,7 @@ float area_2 = 0.000314;    // = 20mm diameter
 #elif (DIAMETER == 19)
 float area_2 = 0.000254;    // = 19mm diameter
 #elif (DIAMETER == 16)
-float area_2 = 0.000201;    // = 16mm diameter
+float area_2 = 0.000066;//0.000201;    // = 16mm diameter
 #else // default
 float area_2 = 0.000201;    // = 16mm diameter by default
 #endif
@@ -301,9 +305,23 @@ char errorMessage[256];
   } else {
       tft.drawString("BT ready", 0, 25, 4);
   }
+  Wire.beginTransmission(BMP280_ADDRESS);
+  Wire.write(0xD0); // registre Chip ID
+  Wire.endTransmission();
+
+  Wire.requestFrom(BMP280_ADDRESS, 1);
+
+  if (Wire.available()) {
+    byte chipID = Wire.read();
+    Serial.print("Chip ID: 0x");
+    Serial.println(chipID, HEX);
+  } else {
+    Serial.println("Erreur lecture");
+  }
 
   // init barometric sensor BMP388 ---------
-  if (!bmp.begin_I2C()) {
+  if (!bmp.begin(0x76,0x58)) {
+
     tft.drawString("Temp/Pres. Error!", 0, 50, 4);
   }
   else {
@@ -615,6 +633,7 @@ void VolumeCalc() {
       tft.setTextColor(TFT_WHITE, TFT_RED);
       tft.drawCentreString("Sensor Limit!", 120, 55, 4);
   }
+  //pressure=-pressure;
   if (pressure < 0) pressure = 0;
 
   if (pressure < pressThreshold && readVE == 1) { // read volumeVE
@@ -633,7 +652,9 @@ void VolumeCalc() {
       if (freqVEmean < 1) freqVEmean = 0;
 
     #ifdef VERBOSE
-            Serial.print("volumeExp: ");
+            Serial.print("Pressure: ");
+            Serial.print(pressure);
+            Serial.print("   volumeExp: ");
             Serial.print(volumeExp);
             Serial.print("   VE: ");
             Serial.print(volumeVE);
@@ -954,7 +975,7 @@ void fnCalAir() {
 
   TimerStart = millis();
   float orig = settings.correctionSensor;
-  settings.correctionSensor = 1.16; // precalibration factor
+  settings.correctionSensor = 9.15; // precalibration factor
   // timing of the integral of volume calculation differs
   // between this calibration loop and the main loop
 
@@ -966,7 +987,7 @@ void fnCalAir() {
 
       tft.setTextColor(TFT_GREEN, TFT_BLACK);
       tft.setCursor(0, 5, 4);
-      tft.println("Total Volume (ml):");
+      tft.println("Expired Volume (ml):");
       tft.setTextColor(TFT_WHITE, TFT_BLACK);
       tft.setCursor(0, 55, 7);
       tft.println(volumeTotal2, 0);
@@ -985,10 +1006,75 @@ void fnCalAir() {
   settings.correctionSensor = 3000 / volumeTotal2;
 
   // leave alone if not sensible.
-  if (settings.correctionSensor < 0.8 || settings.correctionSensor > 1.2) settings.correctionSensor = orig;
+  if (settings.correctionSensor < 0.2 || settings.correctionSensor > 50) settings.correctionSensor = orig;
 
   showParameters();
 }
+
+//--------------------------------------------------
+// Calibrate flow sensor
+void fnSpiro() {
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setCursor(0, 5, 4);
+  tft.println("Souffle dans");
+  tft.setCursor(0, 30, 4);
+  tft.println("le bouzingue 10s.");
+  tft.setCursor(0, 105, 4);
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.println("Press to start      >>>");
+
+  while (digitalRead(buttonPin1))
+      ; // Start measurement ---------
+
+  tft.fillScreen(TFT_BLACK);
+
+  volumeTotal2 = 0;
+  TimerStart = millis();
+  //float orig = settings.correctionSensor;
+  settings.correctionSensor = 9.15; // precalibration factor
+  // timing of the integral of volume calculation differs
+  // between this calibration loop and the main loop
+
+  volumeTotal2 = 0;
+volumeTotal =0;volumeTotalOld =0;volumeVE=0;volumeExp=0;
+  do {
+      TotalTime = millis() - TimerStart; // calculates actual total time
+      VolumeCalc();                      // Starts integral function
+
+      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      tft.setCursor(0, 5, 4);
+      tft.println("Total Volume (ml):");
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.setCursor(0, 55, 7);
+      tft.println(volumeTotal2, 0);
+      tft.setCursor(0, 105, 4);
+
+      tft.setCursor(100, 105, 4);
+      tft.print(TotalTime / 1000, 1);
+      // tft.setCursor(170, 105, 4);
+      // tft.println(pressure, 1);
+
+      TimerVolCalc = millis(); // part of the integral function to keep calculation volume over time
+                               // Resets amount of time between calcs
+
+  } while (TotalTime < 10000);
+  do{
+      TotalTime = millis() - TimerStart; // calculates actual total time
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.setCursor(0, 5, 4);
+      tft.println("Expiration Volume");
+      tft.setCursor(0, 30, 4);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.setCursor(0, 55, 7);
+      tft.println(volumeTotal2, 0);
+      tft.setCursor(0, 105, 4);
+  } while (TotalTime < 15000);
+  volumeTotal2 =0;
+  showParameters();
+}
+
+
 //--------------------------------------------------
 
 struct MenuItem {
@@ -1005,7 +1091,7 @@ MenuItem menuitems[] = {{icount++, "Recalibrate O2", false, &fnCalO2, 0},
                         {icount++, "Set Weight", false, &GetWeightkg, 0},
                         {icount++, "Bluetooth", true, 0, &settings.BLE_on},
                         {icount++, "CO2 sensor", true, 0, &settings.co2_on},
-                        {icount++, "", false, 0, &settings.sens_on},
+                        {icount++, "Spirometer", false,  &fnSpiro,0},
                         {icount++, "", false, 0, &settings.cheet_on},
                         {icount++, "Done...", false, 0, 0}};
 

@@ -35,7 +35,7 @@ void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
     i2c_device_config_t devCfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = SCD30_I2C_ADDRESS,
-        .scl_speed_hz = 100000,
+        .scl_speed_hz = 400000,
     };
 
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devCfg, &devHandle));
@@ -107,7 +107,7 @@ bool SCD30_GetMeasures(float *co2, float *temperature, float *humidity)
         if (crcRead == crcComputed)
         {
             *((uint32_t *)co2) = (uint32_t)((((uint32_t)readBuffer[0]) << 24) | (((uint32_t)readBuffer[1]) << 16) |
-                                (((uint32_t)readBuffer[3]) << 8) | ((uint32_t)readBuffer[4]));
+                                            (((uint32_t)readBuffer[3]) << 8) | ((uint32_t)readBuffer[4]));
         }
         else
         {

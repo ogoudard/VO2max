@@ -57,45 +57,11 @@ uint8_t st7789_basic_init(void)
     uint8_t param_negative[14] = ST7789_BASIC_DEFAULT_NEGATIVA_VOLTAGE_GAMMA;
     uint8_t params[64];
 
-    /* link functions */
-    DRIVER_ST7789_LINK_INIT(&gs_handle, st7789_handle_t);
-    DRIVER_ST7789_LINK_SPI_INIT(&gs_handle, st7789_interface_spi_init);
-    DRIVER_ST7789_LINK_SPI_DEINIT(&gs_handle, st7789_interface_spi_deinit);
-    DRIVER_ST7789_LINK_SPI_WRITE_COMMAND(&gs_handle, st7789_interface_spi_write_cmd);
-    DRIVER_ST7789_LINK_COMMAND_DATA_GPIO_INIT(&gs_handle, st7789_interface_cmd_data_gpio_init);
-    DRIVER_ST7789_LINK_COMMAND_DATA_GPIO_DEINIT(&gs_handle, st7789_interface_cmd_data_gpio_deinit);
-    DRIVER_ST7789_LINK_COMMAND_DATA_GPIO_WRITE(&gs_handle, st7789_interface_cmd_data_gpio_write);
-    DRIVER_ST7789_LINK_RESET_GPIO_INIT(&gs_handle, st7789_interface_reset_gpio_init);
-    DRIVER_ST7789_LINK_RESET_GPIO_DEINIT(&gs_handle, st7789_interface_reset_gpio_deinit);
-    DRIVER_ST7789_LINK_RESET_GPIO_WRITE(&gs_handle, st7789_interface_reset_gpio_write);
-    DRIVER_ST7789_LINK_DELAY_MS(&gs_handle, st7789_interface_delay_ms);
-    DRIVER_ST7789_LINK_DEBUG_PRINT(&gs_handle, st7789_interface_debug_print);
-
     /* st7789 init */
-    res = st7789_init(&gs_handle);
+    res = st7789_init(SPI2_HOST);
     if (res != 0)
     {
         ESP_LOGI(TAG, "st7789: init failed.\n");
-
-        return 1;
-    }
-
-    /* set default column */
-    res = st7789_set_column(&gs_handle, ST7789_BASIC_DEFAULT_COLUMN);
-    if (res != 0)
-    {
-        ESP_LOGI(TAG, "st7789: set column failed.\n");
-        (void)st7789_deinit(&gs_handle);
-
-        return 1;
-    }
-
-    /* set default row */
-    res = st7789_set_row(&gs_handle, ST7789_BASIC_DEFAULT_ROW);
-    if (res != 0)
-    {
-        ESP_LOGI(TAG, "st7789: set row failed.\n");
-        (void)st7789_deinit(&gs_handle);
 
         return 1;
     }

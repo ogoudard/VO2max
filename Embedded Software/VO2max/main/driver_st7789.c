@@ -1,11 +1,11 @@
 #include "driver_st7789.h"
-#include "driver_st7789_font.h"
+#include "driver_ST7789_font.h"
 #include <driver/spi_master.h>
 #include <driver/gpio.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver_st7789_settings.h"
+#include "driver_ST7789_settings.h"
 
 /**
  * @brief chip information definition
@@ -19,8 +19,9 @@
 #define TEMPERATURE_MAX 85.0f        /**< chip max operating temperature */
 #define DRIVER_VERSION 1000          /**< driver version */
 
-#define SCREEN_HEIGHT   135
-#define SCREEN_WIDTH    240
+#define SCREEN_HEIGHT 135
+#define SCREEN_WIDTH 240
+#define RGB_FORMAT 5
 
 /**
  * @brief command data type definition
@@ -100,6 +101,8 @@ static const char *TAG = "st7789";
 
 static spi_device_handle_t spiDeviceHandle;
 
+static uint8_t buffer[ST7789_BUFFER_SIZE];
+
 static void spi_write(uint8_t *writeBuffer, uint8_t length);
 
 /**
@@ -112,7 +115,7 @@ static void spi_write(uint8_t *writeBuffer, uint8_t length);
  *            - 1 write failed
  * @note      none
  */
-static uint8_t a_st7789_write_byte(st7789_handle_t *handle, uint8_t data, uint8_t cmd)
+static uint8_t a_ST7789_write_byte(uint8_t data, uint8_t cmd)
 {
     gpio_set_level(GPIO_PIN_NUM_DC, cmd);
 
@@ -132,7 +135,7 @@ static uint8_t a_st7789_write_byte(st7789_handle_t *handle, uint8_t data, uint8_
  *            - 1 write failed
  * @note      none
  */
-static uint8_t a_st7789_write_bytes(st7789_handle_t *handle, uint8_t *data, uint16_t len, uint8_t cmd)
+static uint8_t a_ST7789_write_bytes(uint8_t *data, uint16_t len, uint8_t cmd)
 {
     gpio_set_level(GPIO_PIN_NUM_CS, cmd);
 
@@ -151,9 +154,9 @@ static uint8_t a_st7789_write_bytes(st7789_handle_t *handle, uint8_t *data, uint
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_nop(st7789_handle_t *handle)
+uint8_t ST7789_nop()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_NOP, ST7789_CMD) != 0) /* write nop command */
+    if (a_ST7789_write_byte(ST7789_CMD_NOP, ST7789_CMD) != 0) /* write nop command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -173,9 +176,9 @@ uint8_t st7789_nop(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_software_reset(st7789_handle_t *handle)
+uint8_t ST7789_software_reset()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_SWRESET, ST7789_CMD) != 0) /* write software reset command */
+    if (a_ST7789_write_byte(ST7789_CMD_SWRESET, ST7789_CMD) != 0) /* write software reset command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -196,10 +199,10 @@ uint8_t st7789_software_reset(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_sleep_in(st7789_handle_t *handle)
+uint8_t ST7789_sleep_in()
 {
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_SLPIN, ST7789_CMD) != 0) /* write sleep in command */
+    if (a_ST7789_write_byte(ST7789_CMD_SLPIN, ST7789_CMD) != 0) /* write sleep in command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -219,9 +222,9 @@ uint8_t st7789_sleep_in(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_sleep_out(st7789_handle_t *handle)
+uint8_t ST7789_sleep_out()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_SLPOUT, ST7789_CMD) != 0) /* write sleep out command */
+    if (a_ST7789_write_byte(ST7789_CMD_SLPOUT, ST7789_CMD) != 0) /* write sleep out command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -242,9 +245,9 @@ uint8_t st7789_sleep_out(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_partial_display_mode_on(st7789_handle_t *handle)
+uint8_t ST7789_partial_display_mode_on()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_PTLON, ST7789_CMD) != 0) /* write partial display mode on command */
+    if (a_ST7789_write_byte(ST7789_CMD_PTLON, ST7789_CMD) != 0) /* write partial display mode on command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -264,9 +267,9 @@ uint8_t st7789_partial_display_mode_on(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_normal_display_mode_on(st7789_handle_t *handle)
+uint8_t ST7789_normal_display_mode_on()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_NORON, ST7789_CMD) != 0) /* write normal display mode on command */
+    if (a_ST7789_write_byte(ST7789_CMD_NORON, ST7789_CMD) != 0) /* write normal display mode on command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -286,9 +289,9 @@ uint8_t st7789_normal_display_mode_on(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_display_inversion_off(st7789_handle_t *handle)
+uint8_t ST7789_display_inversion_off()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_INVOFF, ST7789_CMD) != 0) /* write display inversion off command */
+    if (a_ST7789_write_byte(ST7789_CMD_INVOFF, ST7789_CMD) != 0) /* write display inversion off command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -308,9 +311,9 @@ uint8_t st7789_display_inversion_off(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_display_inversion_on(st7789_handle_t *handle)
+uint8_t ST7789_display_inversion_on()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_INVON, ST7789_CMD) != 0) /* write display inversion on command */
+    if (a_ST7789_write_byte(ST7789_CMD_INVON, ST7789_CMD) != 0) /* write display inversion on command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -331,15 +334,15 @@ uint8_t st7789_display_inversion_on(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_gamma(st7789_handle_t *handle, uint8_t gamma)
+uint8_t ST7789_set_gamma(uint8_t gamma)
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_GAMSET, ST7789_CMD) != 0) /* write set gamma command */
+    if (a_ST7789_write_byte(ST7789_CMD_GAMSET, ST7789_CMD) != 0) /* write set gamma command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_byte(handle, gamma & 0x0F, ST7789_DATA) != 0) /* write gamma data */
+    if (a_ST7789_write_byte(gamma & 0x0F, ST7789_DATA) != 0) /* write gamma data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -359,9 +362,9 @@ uint8_t st7789_set_gamma(st7789_handle_t *handle, uint8_t gamma)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_display_off(st7789_handle_t *handle)
+uint8_t ST7789_display_off()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_DISPOFF, ST7789_CMD) != 0) /* write display off command */
+    if (a_ST7789_write_byte(ST7789_CMD_DISPOFF, ST7789_CMD) != 0) /* write display off command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -381,9 +384,9 @@ uint8_t st7789_display_off(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_display_on(st7789_handle_t *handle)
+uint8_t ST7789_display_on()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_DISPON, ST7789_CMD) != 0) /* write display on command */
+    if (a_ST7789_write_byte(ST7789_CMD_DISPON, ST7789_CMD) != 0) /* write display on command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -407,7 +410,7 @@ uint8_t st7789_display_on(st7789_handle_t *handle)
  *            - 5 start_address >= end_address
  * @note      start_address <= 319 && end_address <= 319 && start_address >= start_address
  */
-uint8_t st7789_set_column_address(st7789_handle_t *handle, uint16_t start_address, uint16_t end_address)
+uint8_t ST7789_set_column_address(uint16_t start_address, uint16_t end_address)
 {
     uint8_t buf[4];
 
@@ -424,17 +427,17 @@ uint8_t st7789_set_column_address(st7789_handle_t *handle, uint16_t start_addres
         return 5; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (start_address >> 8) & 0xFF;                       /* start address msb */
-    buf[1] = (start_address >> 0) & 0xFF;                       /* start address lsb */
-    buf[2] = (end_address >> 8) & 0xFF;                         /* end address msb */
-    buf[3] = (end_address >> 0) & 0xFF;                         /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (start_address >> 8) & 0xFF;               /* start address msb */
+    buf[1] = (start_address >> 0) & 0xFF;               /* start address lsb */
+    buf[2] = (end_address >> 8) & 0xFF;                 /* end address msb */
+    buf[3] = (end_address >> 0) & 0xFF;                 /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -458,7 +461,7 @@ uint8_t st7789_set_column_address(st7789_handle_t *handle, uint16_t start_addres
  *            - 5 start_address >= end_address
  * @note      start_address <= 319 && end_address <= 319 && start_address >= start_address
  */
-uint8_t st7789_set_row_address(st7789_handle_t *handle, uint16_t start_address, uint16_t end_address)
+uint8_t ST7789_set_row_address(uint16_t start_address, uint16_t end_address)
 {
     uint8_t buf[4];
 
@@ -475,17 +478,17 @@ uint8_t st7789_set_row_address(st7789_handle_t *handle, uint16_t start_address, 
         return 5; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (start_address >> 8) & 0xFF;                       /* start address msb */
-    buf[1] = (start_address >> 0) & 0xFF;                       /* start address lsb */
-    buf[2] = (end_address >> 8) & 0xFF;                         /* end address msb */
-    buf[3] = (end_address >> 0) & 0xFF;                         /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (start_address >> 8) & 0xFF;               /* start address msb */
+    buf[1] = (start_address >> 0) & 0xFF;               /* start address lsb */
+    buf[2] = (end_address >> 8) & 0xFF;                 /* end address msb */
+    buf[3] = (end_address >> 0) & 0xFF;                 /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -507,15 +510,15 @@ uint8_t st7789_set_row_address(st7789_handle_t *handle, uint16_t start_address, 
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_memory_write(st7789_handle_t *handle, uint8_t *data, uint16_t len)
+uint8_t ST7789_memory_write(uint8_t *data, uint16_t len)
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, data, len, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(data, len, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -537,21 +540,21 @@ uint8_t st7789_memory_write(st7789_handle_t *handle, uint8_t *data, uint16_t len
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_partial_areas(st7789_handle_t *handle, uint16_t start_row, uint16_t end_row)
+uint8_t ST7789_set_partial_areas(uint16_t start_row, uint16_t end_row)
 {
     uint8_t buf[4];
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_PTLAR, ST7789_CMD) != 0) /* write set partial areas command */
+    if (a_ST7789_write_byte(ST7789_CMD_PTLAR, ST7789_CMD) != 0) /* write set partial areas command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (start_row >> 8) & 0xFF;                           /* start row msb */
-    buf[1] = (start_row >> 0) & 0xFF;                           /* start row lsb */
-    buf[2] = (end_row >> 8) & 0xFF;                             /* end row msb */
-    buf[3] = (end_row >> 0) & 0xFF;                             /* end row lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (start_row >> 8) & 0xFF;                   /* start row msb */
+    buf[1] = (start_row >> 0) & 0xFF;                   /* start row lsb */
+    buf[2] = (end_row >> 8) & 0xFF;                     /* end row msb */
+    buf[3] = (end_row >> 0) & 0xFF;                     /* end row lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -574,24 +577,24 @@ uint8_t st7789_set_partial_areas(st7789_handle_t *handle, uint16_t start_row, ui
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_vertical_scrolling(st7789_handle_t *handle, uint16_t top_fixed_area,
+uint8_t ST7789_set_vertical_scrolling(uint16_t top_fixed_area,
                                       uint16_t scrolling_area, uint16_t bottom_fixed_area)
 {
     uint8_t buf[6];
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_VSCRDEF, ST7789_CMD) != 0) /* write set vertical scrolling definition command */
+    if (a_ST7789_write_byte(ST7789_CMD_VSCRDEF, ST7789_CMD) != 0) /* write set vertical scrolling definition command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (top_fixed_area >> 8) & 0xFF;                      /* top fixed area msb */
-    buf[1] = (top_fixed_area >> 0) & 0xFF;                      /* top fixed area lsb */
-    buf[2] = (scrolling_area >> 8) & 0xFF;                      /* scrolling area msb */
-    buf[3] = (scrolling_area >> 0) & 0xFF;                      /* scrolling area lsb */
-    buf[4] = (bottom_fixed_area >> 8) & 0xFF;                   /* bottom fixed area msb */
-    buf[5] = (bottom_fixed_area >> 0) & 0xFF;                   /* bottom fixed area lsb */
-    if (a_st7789_write_bytes(handle, buf, 6, ST7789_DATA) != 0) /* write data */
+    buf[0] = (top_fixed_area >> 8) & 0xFF;              /* top fixed area msb */
+    buf[1] = (top_fixed_area >> 0) & 0xFF;              /* top fixed area lsb */
+    buf[2] = (scrolling_area >> 8) & 0xFF;              /* scrolling area msb */
+    buf[3] = (scrolling_area >> 0) & 0xFF;              /* scrolling area lsb */
+    buf[4] = (bottom_fixed_area >> 8) & 0xFF;           /* bottom fixed area msb */
+    buf[5] = (bottom_fixed_area >> 0) & 0xFF;           /* bottom fixed area lsb */
+    if (a_ST7789_write_bytes(buf, 6, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -611,18 +614,9 @@ uint8_t st7789_set_vertical_scrolling(st7789_handle_t *handle, uint16_t top_fixe
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_tearing_effect_line_off(st7789_handle_t *handle)
+uint8_t ST7789_tearing_effect_line_off()
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_TEOFF, ST7789_CMD) != 0) /* write tearing effect line off command */
+    if (a_ST7789_write_byte(ST7789_CMD_TEOFF, ST7789_CMD) != 0) /* write tearing effect line off command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -643,24 +637,15 @@ uint8_t st7789_tearing_effect_line_off(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_tearing_effect_line_on(st7789_handle_t *handle, st7789_tearing_effect_t effect)
+uint8_t ST7789_tearing_effect_line_on(ST7789_tearing_effect_t effect)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_TEON, ST7789_CMD) != 0) /* write tearing effect line off command */
+    if (a_ST7789_write_byte(ST7789_CMD_TEON, ST7789_CMD) != 0) /* write tearing effect line off command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_byte(handle, effect, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_byte(effect, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -681,24 +666,15 @@ uint8_t st7789_tearing_effect_line_on(st7789_handle_t *handle, st7789_tearing_ef
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_memory_data_access_control(st7789_handle_t *handle, uint8_t order)
+uint8_t ST7789_set_memory_data_access_control(uint8_t order)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_MADCTL, ST7789_CMD) != 0) /* write set memory data access control command */
+    if (a_ST7789_write_byte(ST7789_CMD_MADCTL, ST7789_CMD) != 0) /* write set memory data access control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_byte(handle, order, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_byte(order, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -720,18 +696,10 @@ uint8_t st7789_set_memory_data_access_control(st7789_handle_t *handle, uint8_t o
  *            - 4 address is invalid
  * @note      none
  */
-uint8_t st7789_set_vertical_scroll_start_address(st7789_handle_t *handle, uint16_t start_address)
+uint8_t ST7789_set_vertical_scroll_start_address(uint16_t start_address)
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (start_address > 319) /* check range */
     {
         ESP_LOGE(TAG, "st7789: address is invalid.\n"); /* address is invalid */
@@ -739,15 +707,15 @@ uint8_t st7789_set_vertical_scroll_start_address(st7789_handle_t *handle, uint16
         return 4; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_VSCRSADD, ST7789_CMD) != 0) /* write vertical scrolling start address command */
+    if (a_ST7789_write_byte(ST7789_CMD_VSCRSADD, ST7789_CMD) != 0) /* write vertical scrolling start address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (start_address >> 8) & 0xFF;                       /* start address msb */
-    buf[1] = (start_address >> 0) & 0xFF;                       /* start address lsb */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+    buf[0] = (start_address >> 8) & 0xFF;               /* start address msb */
+    buf[1] = (start_address >> 0) & 0xFF;               /* start address lsb */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -767,9 +735,9 @@ uint8_t st7789_set_vertical_scroll_start_address(st7789_handle_t *handle, uint16
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_idle_mode_off(st7789_handle_t *handle)
+uint8_t ST7789_idle_mode_off()
 {
-    if (a_st7789_write_byte(handle, ST7789_CMD_IDMOFF, ST7789_CMD) != 0) /* write idle mode off command */
+    if (a_ST7789_write_byte(ST7789_CMD_IDMOFF, ST7789_CMD) != 0) /* write idle mode off command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -789,18 +757,9 @@ uint8_t st7789_idle_mode_off(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_idle_mode_on(st7789_handle_t *handle)
+uint8_t ST7789_idle_mode_on()
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_IDMON, ST7789_CMD) != 0) /* write idle mode on command */
+    if (a_ST7789_write_byte(ST7789_CMD_IDMON, ST7789_CMD) != 0) /* write idle mode on command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -822,35 +781,25 @@ uint8_t st7789_idle_mode_on(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_interface_pixel_format(st7789_handle_t *handle, st7789_rgb_interface_color_format_t rgb,
-                                          st7789_control_interface_color_format_t control)
+uint8_t ST7789_set_interface_pixel_format(ST7789_rgb_interface_color_format_t rgb,
+                                          ST7789_control_interface_color_format_t control)
 {
     uint8_t data;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_COLMOD, ST7789_CMD) != 0) /* write interface pixel format command */
+    if (a_ST7789_write_byte(ST7789_CMD_COLMOD, ST7789_CMD) != 0) /* write interface pixel format command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    data = (rgb << 4) | (control << 0);                      /* set pixel format */
-    if (a_st7789_write_byte(handle, data, ST7789_DATA) != 0) /* write data */
+    data = (rgb << 4) | (control << 0);              /* set pixel format */
+    if (a_ST7789_write_byte(data, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
-    handle->format = data; /* set format */
 
     return 0; /* success return 0 */
 }
@@ -867,24 +816,15 @@ uint8_t st7789_set_interface_pixel_format(st7789_handle_t *handle, st7789_rgb_in
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_memory_continue_write(st7789_handle_t *handle, uint8_t *data, uint16_t len)
+uint8_t ST7789_memory_continue_write(uint8_t *data, uint16_t len)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWRC, ST7789_CMD) != 0) /* write memory write continue command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWRC, ST7789_CMD) != 0) /* write memory write continue command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, data, len, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(data, len, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -905,28 +845,19 @@ uint8_t st7789_memory_continue_write(st7789_handle_t *handle, uint8_t *data, uin
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_tear_scanline(st7789_handle_t *handle, uint16_t l)
+uint8_t ST7789_set_tear_scanline(uint16_t l)
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_TESCAN, ST7789_CMD) != 0) /* write set tear scanline command */
+    if (a_ST7789_write_byte(ST7789_CMD_TESCAN, ST7789_CMD) != 0) /* write set tear scanline command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (l >> 8) & 0xFF;                                   /* start line msb */
-    buf[1] = (l >> 0) & 0xFF;                                   /* start line lsb */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+    buf[0] = (l >> 8) & 0xFF;                           /* start line msb */
+    buf[1] = (l >> 0) & 0xFF;                           /* start line lsb */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -947,25 +878,16 @@ uint8_t st7789_set_tear_scanline(st7789_handle_t *handle, uint16_t l)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_display_brightness(st7789_handle_t *handle, uint8_t brightness)
+uint8_t ST7789_set_display_brightness(uint8_t brightness)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_WRDISBV, ST7789_CMD) != 0) /* write display brightness command */
+    if (a_ST7789_write_byte(ST7789_CMD_WRDISBV, ST7789_CMD) != 0) /* write display brightness command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, brightness, ST7789_DATA) != 0) /* write brightness */
+    if (a_ST7789_write_byte(brightness, ST7789_DATA) != 0) /* write brightness */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -988,21 +910,12 @@ uint8_t st7789_set_display_brightness(st7789_handle_t *handle, uint8_t brightnes
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_display_control(st7789_handle_t *handle, st7789_bool_t brightness_control_block,
-                                   st7789_bool_t display_dimming, st7789_bool_t backlight_control)
+uint8_t ST7789_set_display_control(ST7789_bool_t brightness_control_block,
+                                   ST7789_bool_t display_dimming, ST7789_bool_t backlight_control)
 {
     uint8_t data;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_WRCTRLD, ST7789_CMD) != 0) /* write CTRL display command */
+    if (a_ST7789_write_byte(ST7789_CMD_WRCTRLD, ST7789_CMD) != 0) /* write CTRL display command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1010,7 +923,7 @@ uint8_t st7789_set_display_control(st7789_handle_t *handle, st7789_bool_t bright
     }
 
     data = (brightness_control_block << 5) | (display_dimming << 3) | (backlight_control << 2); /* set control data */
-    if (a_st7789_write_byte(handle, data, ST7789_DATA) != 0)                                    /* write control */
+    if (a_ST7789_write_byte(data, ST7789_DATA) != 0)                                            /* write control */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1033,21 +946,12 @@ uint8_t st7789_set_display_control(st7789_handle_t *handle, st7789_bool_t bright
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_brightness_control_and_color_enhancement(st7789_handle_t *handle, st7789_bool_t color_enhancement,
-                                                            st7789_color_enhancement_mode_t mode, st7789_color_enhancement_level_t level)
+uint8_t ST7789_set_brightness_control_and_color_enhancement(ST7789_bool_t color_enhancement,
+                                                            ST7789_color_enhancement_mode_t mode, ST7789_color_enhancement_level_t level)
 {
     uint8_t data;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_WRCACE, ST7789_CMD) != 0) /* write content adaptive brightness control and color enhancement command */
+    if (a_ST7789_write_byte(ST7789_CMD_WRCACE, ST7789_CMD) != 0) /* write content adaptive brightness control and color enhancement command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1055,7 +959,7 @@ uint8_t st7789_set_brightness_control_and_color_enhancement(st7789_handle_t *han
     }
 
     data = (color_enhancement << 7) | (level << 4) | (mode << 0); /* set control data */
-    if (a_st7789_write_byte(handle, data, ST7789_DATA) != 0)      /* write control */
+    if (a_ST7789_write_byte(data, ST7789_DATA) != 0)              /* write control */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1076,25 +980,16 @@ uint8_t st7789_set_brightness_control_and_color_enhancement(st7789_handle_t *han
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_cabc_minimum_brightness(st7789_handle_t *handle, uint8_t brightness)
+uint8_t ST7789_set_cabc_minimum_brightness(uint8_t brightness)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_WRCABCMB, ST7789_CMD) != 0) /* write CABC minimum brightness command */
+    if (a_ST7789_write_byte(ST7789_CMD_WRCABCMB, ST7789_CMD) != 0) /* write CABC minimum brightness command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, brightness, ST7789_DATA) != 0) /* write brightness */
+    if (a_ST7789_write_byte(brightness, ST7789_DATA) != 0) /* write brightness */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1120,26 +1015,17 @@ uint8_t st7789_set_cabc_minimum_brightness(st7789_handle_t *handle, uint8_t brig
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_ram_control(st7789_handle_t *handle,
-                               st7789_ram_access_t ram_mode,
-                               st7789_display_mode_t display_mode,
-                               st7789_frame_type_t frame_type,
-                               st7789_data_mode_t data_mode,
-                               st7789_rgb_bus_width_t bus_width,
-                               st7789_pixel_type_t pixel_type)
+uint8_t ST7789_set_ram_control(
+    ST7789_ram_access_t ram_mode,
+    ST7789_display_mode_t display_mode,
+    ST7789_frame_type_t frame_type,
+    ST7789_data_mode_t data_mode,
+    ST7789_rgb_bus_width_t bus_width,
+    ST7789_pixel_type_t pixel_type)
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMCTRL, ST7789_CMD) != 0) /* write ram control command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMCTRL, ST7789_CMD) != 0) /* write ram control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1147,8 +1033,8 @@ uint8_t st7789_set_ram_control(st7789_handle_t *handle,
     }
     buf[0] = (ram_mode << 4) | (display_mode << 0); /* set param1 */
     buf[1] = (frame_type << 4) | (data_mode << 3) |
-             (bus_width << 2) | (pixel_type << 0);              /* set param2 */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+             (bus_width << 2) | (pixel_type << 0);      /* set param2 */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1179,26 +1065,18 @@ uint8_t st7789_set_ram_control(st7789_handle_t *handle,
  * @note      0x02 <= vbp <= 0x7F
  *            0x02 <= hbp <= 0x1F
  */
-uint8_t st7789_set_rgb_interface_control(st7789_handle_t *handle,
-                                         st7789_direct_rgb_mode_t rgb_mode,
-                                         st7789_rgb_if_enable_mode_t rgb_if_mode,
-                                         st7789_pin_level_t vspl,
-                                         st7789_pin_level_t hspl,
-                                         st7789_pin_level_t dpl,
-                                         st7789_pin_level_t epl,
-                                         uint8_t vbp,
-                                         uint8_t hbp)
+uint8_t ST7789_set_rgb_interface_control(
+    ST7789_direct_rgb_mode_t rgb_mode,
+    ST7789_rgb_if_enable_mode_t rgb_if_mode,
+    ST7789_pin_level_t vspl,
+    ST7789_pin_level_t hspl,
+    ST7789_pin_level_t dpl,
+    ST7789_pin_level_t epl,
+    uint8_t vbp,
+    uint8_t hbp)
 {
     uint8_t buf[3];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (vbp > 0x7F) /* check vbp */
     {
         ESP_LOGE(TAG, "st7789: vbp > 0x7F.\n"); /* vbp > 0x7F */
@@ -1212,7 +1090,7 @@ uint8_t st7789_set_rgb_interface_control(st7789_handle_t *handle,
         return 5; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RGBCTRL, ST7789_CMD) != 0) /* write rgb control command */
+    if (a_ST7789_write_byte(ST7789_CMD_RGBCTRL, ST7789_CMD) != 0) /* write rgb control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1222,7 +1100,7 @@ uint8_t st7789_set_rgb_interface_control(st7789_handle_t *handle,
              (vspl << 3) | (hspl << 2) | (dpl << 1) | (epl << 0); /* set param1 */
     buf[1] = vbp & 0x7F;                                          /* set param2 */
     buf[2] = hbp & 0x1F;                                          /* set param3 */
-    if (a_st7789_write_bytes(handle, buf, 3, ST7789_DATA) != 0)   /* write data */
+    if (a_ST7789_write_bytes(buf, 3, ST7789_DATA) != 0)           /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1260,10 +1138,9 @@ uint8_t st7789_set_rgb_interface_control(st7789_handle_t *handle,
  *            0x01 <= back_porch_partial <= 0xF
  *            0x01 <= front_porch_partial <= 0xF
  */
-uint8_t st7789_set_porch(st7789_handle_t *handle,
-                         uint8_t back_porch_normal,
+uint8_t ST7789_set_porch(uint8_t back_porch_normal,
                          uint8_t front_porch_normal,
-                         st7789_bool_t separate_porch_enable,
+                         ST7789_bool_t separate_porch_enable,
                          uint8_t back_porch_idle,
                          uint8_t front_porch_idle,
                          uint8_t back_porch_partial,
@@ -1271,14 +1148,6 @@ uint8_t st7789_set_porch(st7789_handle_t *handle,
 {
     uint8_t buf[5];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (back_porch_normal > 0x7F) /* check back_porch_normal */
     {
         ESP_LOGE(TAG, "st7789: back_porch_normal > 0x7F.\n"); /* back_porch_normal > 0x7F */
@@ -1316,7 +1185,7 @@ uint8_t st7789_set_porch(st7789_handle_t *handle,
         return 9; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_PORCTRL, ST7789_CMD) != 0) /* write porch control command */
+    if (a_ST7789_write_byte(ST7789_CMD_PORCTRL, ST7789_CMD) != 0) /* write porch control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1327,7 +1196,7 @@ uint8_t st7789_set_porch(st7789_handle_t *handle,
     buf[2] = separate_porch_enable;                                         /* set param3 */
     buf[3] = (back_porch_idle & 0xF) << 4 | (front_porch_idle & 0xF);       /* set param4 */
     buf[4] = (back_porch_partial & 0xF) << 4 | (front_porch_partial & 0xF); /* set param5 */
-    if (a_st7789_write_bytes(handle, buf, 5, ST7789_DATA) != 0)             /* write data */
+    if (a_ST7789_write_bytes(buf, 5, ST7789_DATA) != 0)                     /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1356,24 +1225,15 @@ uint8_t st7789_set_porch(st7789_handle_t *handle,
  * @note      0 <= idle_frame_rate <= 0x1F
  *            0 <= partial_frame_rate <= 0x1F
  */
-uint8_t st7789_set_frame_rate_control(st7789_handle_t *handle,
-                                      st7789_bool_t separate_fr_control,
-                                      st7789_frame_rate_divided_control_t div_control,
-                                      st7789_inversion_idle_mode_t idle_mode,
+uint8_t ST7789_set_frame_rate_control(ST7789_bool_t separate_fr_control,
+                                      ST7789_frame_rate_divided_control_t div_control,
+                                      ST7789_inversion_idle_mode_t idle_mode,
                                       uint8_t idle_frame_rate,
-                                      st7789_inversion_partial_mode_t partial_mode,
+                                      ST7789_inversion_partial_mode_t partial_mode,
                                       uint8_t partial_frame_rate)
 {
     uint8_t buf[3];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (idle_frame_rate > 0x1F) /* check idle_frame_rate */
     {
         ESP_LOGE(TAG, "st7789: idle_frame_rate > 0x1F.\n"); /* idle_frame_rate > 0x1F */
@@ -1387,7 +1247,7 @@ uint8_t st7789_set_frame_rate_control(st7789_handle_t *handle,
         return 5; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_FRCTRL1, ST7789_CMD) != 0) /* write frame rate control 1 command */
+    if (a_ST7789_write_byte(ST7789_CMD_FRCTRL1, ST7789_CMD) != 0) /* write frame rate control 1 command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1396,7 +1256,7 @@ uint8_t st7789_set_frame_rate_control(st7789_handle_t *handle,
     buf[0] = (separate_fr_control << 4) | (div_control << 0);          /* set param1 */
     buf[1] = (idle_mode << 5) | ((idle_frame_rate & 0x1F) << 0);       /* set param2 */
     buf[2] = (partial_mode << 5) | ((partial_frame_rate & 0x1F) << 0); /* set param3 */
-    if (a_st7789_write_bytes(handle, buf, 3, ST7789_DATA) != 0)        /* write data */
+    if (a_ST7789_write_bytes(buf, 3, ST7789_DATA) != 0)                /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1419,30 +1279,21 @@ uint8_t st7789_set_frame_rate_control(st7789_handle_t *handle,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_partial_mode_control(st7789_handle_t *handle,
-                                        st7789_non_display_source_output_level_t level,
-                                        st7789_non_display_area_scan_mode_t mode,
-                                        st7789_non_display_frame_frequency_t frequency)
+uint8_t ST7789_set_partial_mode_control(
+    ST7789_non_display_source_output_level_t level,
+    ST7789_non_display_area_scan_mode_t mode,
+    ST7789_non_display_frame_frequency_t frequency)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PARCTRL, ST7789_CMD) != 0) /* write partial mode control command */
+    if (a_ST7789_write_byte(ST7789_CMD_PARCTRL, ST7789_CMD) != 0) /* write partial mode control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = (level << 7) | (mode << 4) | (frequency << 0);    /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = (level << 7) | (mode << 4) | (frequency << 0); /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0)      /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1464,27 +1315,18 @@ uint8_t st7789_set_partial_mode_control(st7789_handle_t *handle,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_gate_control(st7789_handle_t *handle, st7789_vghs_t vghs, st7789_vgls_t vgls)
+uint8_t ST7789_set_gate_control(ST7789_vghs_t vghs, ST7789_vgls_t vgls)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_GCTRL, ST7789_CMD) != 0) /* write gate control command */
+    if (a_ST7789_write_byte(ST7789_CMD_GCTRL, ST7789_CMD) != 0) /* write gate control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = (vghs << 4) | (vgls << 0);                        /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = (vghs << 4) | (vgls << 0);                /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1509,21 +1351,12 @@ uint8_t st7789_set_gate_control(st7789_handle_t *handle, st7789_vghs_t vghs, st7
  *            gate_off_timing_adjustment_rgb <= 0xF
  *            gate_off_timing_adjustment <= 0xF
  */
-uint8_t st7789_set_gate_on_timing_adjustment(st7789_handle_t *handle,
-                                             uint8_t gate_on_timing_adjustment,
+uint8_t ST7789_set_gate_on_timing_adjustment(uint8_t gate_on_timing_adjustment,
                                              uint8_t gate_off_timing_adjustment_rgb,
                                              uint8_t gate_off_timing_adjustment)
 {
     uint8_t buf[4];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (gate_on_timing_adjustment > 0x3F) /* check gate_on_timing_adjustment */
     {
         ESP_LOGE(TAG, "st7789: gate_on_timing_adjustment > 0x3F.\n"); /* gate_on_timing_adjustment > 0x3F */
@@ -1543,7 +1376,7 @@ uint8_t st7789_set_gate_on_timing_adjustment(st7789_handle_t *handle,
         return 6; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_GTADJ, ST7789_CMD) != 0) /* write gate on timing adjustment command */
+    if (a_ST7789_write_byte(ST7789_CMD_GTADJ, ST7789_CMD) != 0) /* write gate on timing adjustment command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
@@ -1553,8 +1386,8 @@ uint8_t st7789_set_gate_on_timing_adjustment(st7789_handle_t *handle,
     buf[1] = 0x2B;                             /* set param2 */
     buf[2] = gate_on_timing_adjustment & 0x3F; /* set param3 */
     buf[3] = ((gate_off_timing_adjustment_rgb & 0xF) << 4) |
-             ((gate_off_timing_adjustment & 0xF) << 0);         /* set param4 */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+             ((gate_off_timing_adjustment & 0xF) << 0); /* set param4 */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1575,27 +1408,18 @@ uint8_t st7789_set_gate_on_timing_adjustment(st7789_handle_t *handle,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_digital_gamma(st7789_handle_t *handle, st7789_bool_t enable)
+uint8_t ST7789_set_digital_gamma(ST7789_bool_t enable)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_DGMEN, ST7789_CMD) != 0) /* write digital gamma enable command */
+    if (a_ST7789_write_byte(ST7789_CMD_DGMEN, ST7789_CMD) != 0) /* write digital gamma enable command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = enable << 2;                                      /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = enable << 2;                              /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1617,18 +1441,10 @@ uint8_t st7789_set_digital_gamma(st7789_handle_t *handle, st7789_bool_t enable)
  *            - 4 vcoms > 0x3F
  * @note      0 <= vcoms <= 0x3F
  */
-uint8_t st7789_set_vcoms(st7789_handle_t *handle, uint8_t vcoms)
+uint8_t ST7789_set_vcoms(uint8_t vcoms)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (vcoms > 0x3F) /* check vcoms */
     {
         ESP_LOGE(TAG, "st7789: vcoms > 0x3F.\n"); /* vcoms > 0x3F */
@@ -1636,14 +1452,14 @@ uint8_t st7789_set_vcoms(st7789_handle_t *handle, uint8_t vcoms)
         return 4; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_VCOMS, ST7789_CMD) != 0) /* write vcoms setting command */
+    if (a_ST7789_write_byte(ST7789_CMD_VCOMS, ST7789_CMD) != 0) /* write vcoms setting command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = vcoms & 0x3F;                                     /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = vcoms & 0x3F;                             /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1664,16 +1480,8 @@ uint8_t st7789_set_vcoms(st7789_handle_t *handle, uint8_t vcoms)
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vcom_convert_to_register(st7789_handle_t *handle, float v, uint8_t *reg)
+uint8_t ST7789_vcom_convert_to_register(float v, uint8_t *reg)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *reg = (uint8_t)((v - 0.1f) / 0.025f); /* convert real data to register data */
 
@@ -1691,16 +1499,8 @@ uint8_t st7789_vcom_convert_to_register(st7789_handle_t *handle, float v, uint8_
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vcom_convert_to_data(st7789_handle_t *handle, uint8_t reg, float *v)
+uint8_t ST7789_vcom_convert_to_data(uint8_t reg, float *v)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *v = (uint8_t)((float)(reg) * 0.025f + 0.1f); /* convert raw data to real data */
 
@@ -1724,35 +1524,26 @@ uint8_t st7789_vcom_convert_to_data(st7789_handle_t *handle, uint8_t reg, float 
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_lcm_control(st7789_handle_t *handle,
-                               st7789_bool_t xmy,
-                               st7789_bool_t xbgr,
-                               st7789_bool_t xinv,
-                               st7789_bool_t xmx,
-                               st7789_bool_t xmh,
-                               st7789_bool_t xmv,
-                               st7789_bool_t xgs)
+uint8_t ST7789_set_lcm_control(
+    ST7789_bool_t xmy,
+    ST7789_bool_t xbgr,
+    ST7789_bool_t xinv,
+    ST7789_bool_t xmx,
+    ST7789_bool_t xmh,
+    ST7789_bool_t xmv,
+    ST7789_bool_t xgs)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_LCMCTRL, ST7789_CMD) != 0) /* write lcm control command */
+    if (a_ST7789_write_byte(ST7789_CMD_LCMCTRL, ST7789_CMD) != 0) /* write lcm control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
     reg = (xmy << 6) | (xbgr << 5) | (xinv << 4) | (xmx << 3) |
-          (xmh << 2) | (xmv << 1) | (xgs << 0);             /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+          (xmh << 2) | (xmv << 1) | (xgs << 0);     /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1773,24 +1564,16 @@ uint8_t st7789_set_lcm_control(st7789_handle_t *handle,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_id_code_setting(st7789_handle_t *handle, uint8_t id[3])
+uint8_t ST7789_set_id_code_setting(uint8_t id[3])
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_IDSET, ST7789_CMD) != 0) /* write id setting command */
+    if (a_ST7789_write_byte(ST7789_CMD_IDSET, ST7789_CMD) != 0) /* write id setting command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, id, 3, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(id, 3, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1811,28 +1594,19 @@ uint8_t st7789_set_id_code_setting(st7789_handle_t *handle, uint8_t id[3])
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_vdv_vrh_from(st7789_handle_t *handle, st7789_vdv_vrh_from_t from)
+uint8_t ST7789_set_vdv_vrh_from(ST7789_vdv_vrh_from_t from)
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_VDVVRHEN, ST7789_CMD) != 0) /* write vdv and vrh command enable command */
+    if (a_ST7789_write_byte(ST7789_CMD_VDVVRHEN, ST7789_CMD) != 0) /* write vdv and vrh command enable command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = from;                                              /* set param1 */
-    buf[1] = 0xFF;                                              /* set param2 */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+    buf[0] = from;                                      /* set param1 */
+    buf[1] = 0xFF;                                      /* set param2 */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1854,18 +1628,10 @@ uint8_t st7789_set_vdv_vrh_from(st7789_handle_t *handle, st7789_vdv_vrh_from_t f
  *            - 4 vrhs > 0x27
  * @note      0 <= vrhs <= 0x27
  */
-uint8_t st7789_set_vrhs(st7789_handle_t *handle, uint8_t vrhs)
+uint8_t ST7789_set_vrhs(uint8_t vrhs)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (vrhs > 0x27) /* check vrhs */
     {
         ESP_LOGE(TAG, "st7789: vrhs > 0x27.\n"); /* vrhs > 0x27 */
@@ -1873,14 +1639,14 @@ uint8_t st7789_set_vrhs(st7789_handle_t *handle, uint8_t vrhs)
         return 4; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_VRHS, ST7789_CMD) != 0) /* write vrh set command */
+    if (a_ST7789_write_byte(ST7789_CMD_VRHS, ST7789_CMD) != 0) /* write vrh set command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = vrhs & 0x3F;                                      /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = vrhs & 0x3F;                              /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -1901,16 +1667,8 @@ uint8_t st7789_set_vrhs(st7789_handle_t *handle, uint8_t vrhs)
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vrhs_convert_to_register(st7789_handle_t *handle, float v, uint8_t *reg)
+uint8_t ST7789_vrhs_convert_to_register(float v, uint8_t *reg)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *reg = (uint8_t)((v - 3.55f) / 0.05f); /* convert real data to register data */
 
@@ -1928,16 +1686,8 @@ uint8_t st7789_vrhs_convert_to_register(st7789_handle_t *handle, float v, uint8_
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vrhs_convert_to_data(st7789_handle_t *handle, uint8_t reg, float *v)
+uint8_t ST7789_vrhs_convert_to_data(uint8_t reg, float *v)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *v = (uint8_t)((float)(reg) * 0.05f + 3.55f); /* convert raw data to real data */
 
@@ -1956,18 +1706,10 @@ uint8_t st7789_vrhs_convert_to_data(st7789_handle_t *handle, uint8_t reg, float 
  *            - 4 vdv > 0x3F
  * @note      0 <= vdv <= 0x3F
  */
-uint8_t st7789_set_vdv(st7789_handle_t *handle, uint8_t vdv)
+uint8_t ST7789_set_vdv(uint8_t vdv)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (vdv > 0x3F) /* check vdv */
     {
         ESP_LOGE(TAG, "st7789: vdv > 0x3F.\n"); /* vdv > 0x3F */
@@ -1975,14 +1717,14 @@ uint8_t st7789_set_vdv(st7789_handle_t *handle, uint8_t vdv)
         return 4; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_VDVSET, ST7789_CMD) != 0) /* write vdv setting command */
+    if (a_ST7789_write_byte(ST7789_CMD_VDVSET, ST7789_CMD) != 0) /* write vdv setting command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = vdv & 0x3F;                                       /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = vdv & 0x3F;                               /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2003,16 +1745,8 @@ uint8_t st7789_set_vdv(st7789_handle_t *handle, uint8_t vdv)
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vdv_convert_to_register(st7789_handle_t *handle, float v, uint8_t *reg)
+uint8_t ST7789_vdv_convert_to_register(float v, uint8_t *reg)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *reg = (uint8_t)((v + 0.8f) / 0.025f); /* convert real data to register data */
 
@@ -2030,16 +1764,8 @@ uint8_t st7789_vdv_convert_to_register(st7789_handle_t *handle, float v, uint8_t
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vdv_convert_to_data(st7789_handle_t *handle, uint8_t reg, float *v)
+uint8_t ST7789_vdv_convert_to_data(uint8_t reg, float *v)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *v = (uint8_t)((float)(reg) * 0.025f - 0.8f); /* convert raw data to real data */
 
@@ -2058,18 +1784,10 @@ uint8_t st7789_vdv_convert_to_data(st7789_handle_t *handle, uint8_t reg, float *
  *            - 4 offset > 0x3F
  * @note      0 <= offset <= 0x3F
  */
-uint8_t st7789_set_vcoms_offset(st7789_handle_t *handle, uint8_t offset)
+uint8_t ST7789_set_vcoms_offset(uint8_t offset)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (offset > 0x3F) /* check offset */
     {
         ESP_LOGE(TAG, "st7789: offset > 0x3F.\n"); /* offset > 0x3F */
@@ -2077,14 +1795,14 @@ uint8_t st7789_set_vcoms_offset(st7789_handle_t *handle, uint8_t offset)
         return 4; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_VCMOFSET, ST7789_CMD) != 0) /* write vcoms offset set command */
+    if (a_ST7789_write_byte(ST7789_CMD_VCMOFSET, ST7789_CMD) != 0) /* write vcoms offset set command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = offset & 0x3F;                                    /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = offset & 0x3F;                            /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2105,16 +1823,8 @@ uint8_t st7789_set_vcoms_offset(st7789_handle_t *handle, uint8_t offset)
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vcoms_offset_convert_to_register(st7789_handle_t *handle, float v, uint8_t *reg)
+uint8_t ST7789_vcoms_offset_convert_to_register(float v, uint8_t *reg)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *reg = (uint8_t)((v + 0.8f) / 0.025f); /* convert real data to register data */
 
@@ -2132,16 +1842,8 @@ uint8_t st7789_vcoms_offset_convert_to_register(st7789_handle_t *handle, float v
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_vcoms_offset_convert_to_data(st7789_handle_t *handle, uint8_t reg, float *v)
+uint8_t ST7789_vcoms_offset_convert_to_data(uint8_t reg, float *v)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *v = (uint8_t)((float)(reg) * 0.025f - 0.8f); /* convert raw data to real data */
 
@@ -2160,27 +1862,18 @@ uint8_t st7789_vcoms_offset_convert_to_data(st7789_handle_t *handle, uint8_t reg
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_frame_rate(st7789_handle_t *handle, st7789_inversion_selection_t selection, st7789_frame_rate_t rate)
+uint8_t ST7789_set_frame_rate(ST7789_inversion_selection_t selection, ST7789_frame_rate_t rate)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_FRCTR2, ST7789_CMD) != 0) /* write fr control 2 command */
+    if (a_ST7789_write_byte(ST7789_CMD_FRCTR2, ST7789_CMD) != 0) /* write fr control 2 command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = (selection << 5) | (rate << 0);                   /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = (selection << 5) | (rate << 0);           /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2204,32 +1897,23 @@ uint8_t st7789_set_frame_rate(st7789_handle_t *handle, st7789_inversion_selectio
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_cabc_control(st7789_handle_t *handle,
-                                st7789_bool_t led_on,
-                                st7789_bool_t led_pwm_init,
-                                st7789_bool_t led_pwm_fix,
-                                st7789_bool_t led_pwm_polarity)
+uint8_t ST7789_set_cabc_control(
+    ST7789_bool_t led_on,
+    ST7789_bool_t led_pwm_init,
+    ST7789_bool_t led_pwm_fix,
+    ST7789_bool_t led_pwm_polarity)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_CABCCTRL, ST7789_CMD) != 0) /* write cabc control command */
+    if (a_ST7789_write_byte(ST7789_CMD_CABCCTRL, ST7789_CMD) != 0) /* write cabc control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
     reg = (led_on << 3) | (led_pwm_init << 2) |
-          (led_pwm_fix << 1) | (led_pwm_polarity << 0);     /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+          (led_pwm_fix << 1) | (led_pwm_polarity << 0); /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0)     /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2250,27 +1934,18 @@ uint8_t st7789_set_cabc_control(st7789_handle_t *handle,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_pwm_frequency(st7789_handle_t *handle, st7789_pwm_frequency_t frequency)
+uint8_t ST7789_set_pwm_frequency(ST7789_pwm_frequency_t frequency)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PWMFRSEL, ST7789_CMD) != 0) /* write pwm frequency selection command */
+    if (a_ST7789_write_byte(ST7789_CMD_PWMFRSEL, ST7789_CMD) != 0) /* write pwm frequency selection command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = frequency;                                        /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = frequency;                                /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2293,28 +1968,19 @@ uint8_t st7789_set_pwm_frequency(st7789_handle_t *handle, st7789_pwm_frequency_t
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_power_control_1(st7789_handle_t *handle, st7789_avdd_t avdd, st7789_avcl_t avcl, st7789_vds_t vds)
+uint8_t ST7789_set_power_control_1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_t vds)
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PWCTRL1, ST7789_CMD) != 0) /* write power control 1 command */
+    if (a_ST7789_write_byte(ST7789_CMD_PWCTRL1, ST7789_CMD) != 0) /* write power control 1 command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = 0xA4;                                              /* set param 1 */
-    buf[1] = (avdd << 6) | (avcl << 4) | (vds << 0);            /* set param 2 */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+    buf[0] = 0xA4;                                      /* set param 1 */
+    buf[1] = (avdd << 6) | (avcl << 4) | (vds << 0);    /* set param 2 */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2334,27 +2000,18 @@ uint8_t st7789_set_power_control_1(st7789_handle_t *handle, st7789_avdd_t avdd, 
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_enable_vap_van_signal_output(st7789_handle_t *handle)
+uint8_t ST7789_enable_vap_van_signal_output()
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_VAPVANEN, ST7789_CMD) != 0) /* write enable vap/van signal output command */
+    if (a_ST7789_write_byte(ST7789_CMD_VAPVANEN, ST7789_CMD) != 0) /* write enable vap/van signal output command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = 0x4C;                                             /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = 0x4C;                                     /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2375,30 +2032,21 @@ uint8_t st7789_enable_vap_van_signal_output(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_command_2_enable(st7789_handle_t *handle, st7789_bool_t enable)
+uint8_t ST7789_set_command_2_enable(ST7789_bool_t enable)
 {
     uint8_t buf[4];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_CMD2EN, ST7789_CMD) != 0) /* write command 2 enable command */
+    if (a_ST7789_write_byte(ST7789_CMD_CMD2EN, ST7789_CMD) != 0) /* write command 2 enable command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = 0x5A;                                              /* set param 1 */
-    buf[1] = 0x69;                                              /* set param 2 */
-    buf[2] = 0x02;                                              /* set param 3 */
-    buf[3] = enable;                                            /* set param 4 */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = 0x5A;                                      /* set param 1 */
+    buf[1] = 0x69;                                      /* set param 2 */
+    buf[2] = 0x02;                                      /* set param 3 */
+    buf[3] = enable;                                    /* set param 4 */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2419,24 +2067,16 @@ uint8_t st7789_set_command_2_enable(st7789_handle_t *handle, st7789_bool_t enabl
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_positive_voltage_gamma_control(st7789_handle_t *handle, uint8_t param[14])
+uint8_t ST7789_set_positive_voltage_gamma_control(uint8_t param[14])
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_PVGAMCTRL, ST7789_CMD) != 0) /* write positive voltage gamma control command */
+    if (a_ST7789_write_byte(ST7789_CMD_PVGAMCTRL, ST7789_CMD) != 0) /* write positive voltage gamma control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, param, 14, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(param, 14, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2457,24 +2097,16 @@ uint8_t st7789_set_positive_voltage_gamma_control(st7789_handle_t *handle, uint8
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_negative_voltage_gamma_control(st7789_handle_t *handle, uint8_t param[14])
+uint8_t ST7789_set_negative_voltage_gamma_control(uint8_t param[14])
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_NVGAMCTRL, ST7789_CMD) != 0) /* write negative voltage gamma control command */
+    if (a_ST7789_write_byte(ST7789_CMD_NVGAMCTRL, ST7789_CMD) != 0) /* write negative voltage gamma control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, param, 14, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(param, 14, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2495,24 +2127,16 @@ uint8_t st7789_set_negative_voltage_gamma_control(st7789_handle_t *handle, uint8
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_digital_gamma_look_up_table_red(st7789_handle_t *handle, uint8_t param[64])
+uint8_t ST7789_set_digital_gamma_look_up_table_red(uint8_t param[64])
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_DGMLUTR, ST7789_CMD) != 0) /* write digital gamma look-up table for red command */
+    if (a_ST7789_write_byte(ST7789_CMD_DGMLUTR, ST7789_CMD) != 0) /* write digital gamma look-up table for red command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, param, 64, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(param, 64, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2533,24 +2157,16 @@ uint8_t st7789_set_digital_gamma_look_up_table_red(st7789_handle_t *handle, uint
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_digital_gamma_look_up_table_blue(st7789_handle_t *handle, uint8_t param[64])
+uint8_t ST7789_set_digital_gamma_look_up_table_blue(uint8_t param[64])
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_DGMLUTB, ST7789_CMD) != 0) /* write digital gamma look-up table for blue command */
+    if (a_ST7789_write_byte(ST7789_CMD_DGMLUTB, ST7789_CMD) != 0) /* write digital gamma look-up table for blue command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    if (a_st7789_write_bytes(handle, param, 64, ST7789_DATA) != 0) /* write data */
+    if (a_ST7789_write_bytes(param, 64, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2577,22 +2193,14 @@ uint8_t st7789_set_digital_gamma_look_up_table_blue(st7789_handle_t *handle, uin
  * @note      0 <= gate_line_number <= 0x3F
  *            0 <= first_scan_line_number 0x3F
  */
-uint8_t st7789_set_gate(st7789_handle_t *handle,
-                        uint8_t gate_line_number,
-                        uint8_t first_scan_line_number,
-                        st7789_gate_scan_mode_t mode,
-                        st7789_gate_scan_direction_t direction)
+uint8_t ST7789_set_gate(
+    uint8_t gate_line_number,
+    uint8_t first_scan_line_number,
+    ST7789_gate_scan_mode_t mode,
+    ST7789_gate_scan_direction_t direction)
 {
     uint8_t buf[3];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (gate_line_number > 0x3F) /* check gate_line_number */
     {
         ESP_LOGE(TAG, "st7789: gate_line_number > 0x3F.\n"); /* gate_line_number > 0x3F */
@@ -2606,16 +2214,16 @@ uint8_t st7789_set_gate(st7789_handle_t *handle,
         return 5; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_GATECTRL, ST7789_CMD) != 0) /* write gate control command */
+    if (a_ST7789_write_byte(ST7789_CMD_GATECTRL, ST7789_CMD) != 0) /* write gate control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = gate_line_number;                                  /* set param 1 */
-    buf[1] = first_scan_line_number;                            /* set param 2 */
-    buf[2] = 0x10 | (mode << 2) | (direction << 0);             /* set param 3 */
-    if (a_st7789_write_bytes(handle, buf, 3, ST7789_DATA) != 0) /* write data */
+    buf[0] = gate_line_number;                          /* set param 1 */
+    buf[1] = first_scan_line_number;                    /* set param 2 */
+    buf[2] = 0x10 | (mode << 2) | (direction << 0);     /* set param 3 */
+    if (a_ST7789_write_bytes(buf, 3, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2636,16 +2244,8 @@ uint8_t st7789_set_gate(st7789_handle_t *handle,
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_gate_line_convert_to_register(st7789_handle_t *handle, uint16_t l, uint8_t *reg)
+uint8_t ST7789_gate_line_convert_to_register(uint16_t l, uint8_t *reg)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *reg = (uint8_t)((l / 8) - 1); /* convert real data to register data */
 
@@ -2663,16 +2263,8 @@ uint8_t st7789_gate_line_convert_to_register(st7789_handle_t *handle, uint16_t l
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t st7789_gate_line_convert_to_data(st7789_handle_t *handle, uint8_t reg, uint16_t *l)
+uint8_t ST7789_gate_line_convert_to_data(uint8_t reg, uint16_t *l)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
 
     *l = (uint8_t)(reg * 8 + 8); /* convert raw data to real data */
 
@@ -2691,27 +2283,18 @@ uint8_t st7789_gate_line_convert_to_data(st7789_handle_t *handle, uint8_t reg, u
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_spi2_enable(st7789_handle_t *handle, st7789_bool_t date_lane, st7789_bool_t command_table_2)
+uint8_t ST7789_set_spi2_enable(ST7789_bool_t date_lane, ST7789_bool_t command_table_2)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_SPI2EN, ST7789_CMD) != 0) /* write spi2 command */
+    if (a_ST7789_write_byte(ST7789_CMD_SPI2EN, ST7789_CMD) != 0) /* write spi2 command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = (date_lane << 4) | (command_table_2 << 0);        /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = (date_lane << 4) | (command_table_2 << 0); /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0)  /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2733,27 +2316,18 @@ uint8_t st7789_set_spi2_enable(st7789_handle_t *handle, st7789_bool_t date_lane,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_power_control_2(st7789_handle_t *handle, st7789_sbclk_div_t sbclk, st7789_stp14ck_div_t stp14ck)
+uint8_t ST7789_set_power_control_2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck)
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PWCTRL2, ST7789_CMD) != 0) /* write power control 2 command */
+    if (a_ST7789_write_byte(ST7789_CMD_PWCTRL2, ST7789_CMD) != 0) /* write power control 2 command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = (sbclk << 4) | (stp14ck << 0);                    /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = (sbclk << 4) | (stp14ck << 0);            /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2779,21 +2353,13 @@ uint8_t st7789_set_power_control_2(st7789_handle_t *handle, st7789_sbclk_div_t s
  *            - 6 gate_equalize_time > 0xF
  * @note      0 <= source_equalize_time <= 0x1F
  */
-uint8_t st7789_set_equalize_time_control(st7789_handle_t *handle,
-                                         uint8_t source_equalize_time,
-                                         uint8_t source_pre_drive_time,
-                                         uint8_t gate_equalize_time)
+uint8_t ST7789_set_equalize_time_control(
+    uint8_t source_equalize_time,
+    uint8_t source_pre_drive_time,
+    uint8_t gate_equalize_time)
 {
     uint8_t buf[3];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (source_equalize_time > 0x1F) /* check source_equalize_time */
     {
         ESP_LOGE(TAG, "st7789: source_equalize_time > 0x1F.\n"); /* source_equalize_time > 0x1F */
@@ -2813,16 +2379,16 @@ uint8_t st7789_set_equalize_time_control(st7789_handle_t *handle,
         return 6; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_EQCTRL, ST7789_CMD) != 0) /* write equalize time control command */
+    if (a_ST7789_write_byte(ST7789_CMD_EQCTRL, ST7789_CMD) != 0) /* write equalize time control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = source_equalize_time;                              /* set param 1 */
-    buf[1] = source_pre_drive_time;                             /* set param 2 */
-    buf[2] = gate_equalize_time;                                /* set param 3 */
-    if (a_st7789_write_bytes(handle, buf, 3, ST7789_DATA) != 0) /* write data */
+    buf[0] = source_equalize_time;                      /* set param 1 */
+    buf[1] = source_pre_drive_time;                     /* set param 2 */
+    buf[2] = gate_equalize_time;                        /* set param 3 */
+    if (a_ST7789_write_bytes(buf, 3, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2842,27 +2408,18 @@ uint8_t st7789_set_equalize_time_control(st7789_handle_t *handle,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_program_mode_control(st7789_handle_t *handle)
+uint8_t ST7789_set_program_mode_control()
 {
     uint8_t reg;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PROMCTRL, ST7789_CMD) != 0) /* write program control command */
+    if (a_ST7789_write_byte(ST7789_CMD_PROMCTRL, ST7789_CMD) != 0) /* write program control command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    reg = 0x01;                                             /* set param */
-    if (a_st7789_write_byte(handle, reg, ST7789_DATA) != 0) /* write data */
+    reg = 0x01;                                     /* set param */
+    if (a_ST7789_write_byte(reg, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2883,30 +2440,21 @@ uint8_t st7789_set_program_mode_control(st7789_handle_t *handle)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_program_mode_enable(st7789_handle_t *handle, st7789_bool_t enable)
+uint8_t ST7789_set_program_mode_enable(ST7789_bool_t enable)
 {
     uint8_t buf[4];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PROMEN, ST7789_CMD) != 0) /* write program mode enable command */
+    if (a_ST7789_write_byte(ST7789_CMD_PROMEN, ST7789_CMD) != 0) /* write program mode enable command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = 0x5A;                                              /* set param 1 */
-    buf[1] = 0x69;                                              /* set param 2 */
-    buf[2] = 0xEE;                                              /* set param 3 */
-    buf[3] = enable << 2;                                       /* set param 4 */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = 0x5A;                                      /* set param 1 */
+    buf[1] = 0x69;                                      /* set param 2 */
+    buf[2] = 0xEE;                                      /* set param 3 */
+    buf[3] = enable << 2;                               /* set param 4 */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2928,28 +2476,19 @@ uint8_t st7789_set_program_mode_enable(st7789_handle_t *handle, st7789_bool_t en
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_nvm_setting(st7789_handle_t *handle, uint8_t addr, uint8_t data)
+uint8_t ST7789_set_nvm_setting(uint8_t addr, uint8_t data)
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_NVMSET, ST7789_CMD) != 0) /* write nvm setting command */
+    if (a_ST7789_write_byte(ST7789_CMD_NVMSET, ST7789_CMD) != 0) /* write nvm setting command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = addr;                                              /* set param 1 */
-    buf[1] = data;                                              /* set param 2 */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+    buf[0] = addr;                                      /* set param 1 */
+    buf[1] = data;                                      /* set param 2 */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2969,28 +2508,19 @@ uint8_t st7789_set_nvm_setting(st7789_handle_t *handle, uint8_t addr, uint8_t da
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_set_program_action(st7789_handle_t *handle)
+uint8_t ST7789_set_program_action()
 {
     uint8_t buf[2];
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_PROMACT, ST7789_CMD) != 0) /* write program action command */
+    if (a_ST7789_write_byte(ST7789_CMD_PROMACT, ST7789_CMD) != 0) /* write program action command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = 0x29;                                              /* set param 1 */
-    buf[1] = 0xA5;                                              /* set param 2 */
-    if (a_st7789_write_bytes(handle, buf, 2, ST7789_DATA) != 0) /* write data */
+    buf[0] = 0x29;                                      /* set param 1 */
+    buf[1] = 0xA5;                                      /* set param 2 */
+    if (a_ST7789_write_bytes(buf, 2, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3012,7 +2542,7 @@ uint8_t st7789_set_program_action(st7789_handle_t *handle)
  *            - 5 command && data init failed
  * @note      none
  */
-uint8_t st7789_init(spi_host_device_t host)
+uint8_t ST7789_Initialize(spi_host_device_t host)
 {
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 10 * 1000 * 1000, // Clock out at 10 MHz
@@ -3024,11 +2554,13 @@ uint8_t st7789_init(spi_host_device_t host)
 
     gpio_config_t gpiosConf = {.intr_type = GPIO_INTR_DISABLE,
                                .mode = GPIO_MODE_OUTPUT,
-                               .pin_bit_mask = (1 << GPIO_PIN_NUM_DC) | (1 << GPIO_PIN_NUM_RST),
+                               .pin_bit_mask = (1 << GPIO_PIN_NUM_DC) | (1 << GPIO_PIN_NUM_RST) | (1 << GPIO_PIN_NUM_BCKL),
                                .pull_down_en = GPIO_PULLDOWN_DISABLE,
                                .pull_up_en = GPIO_PULLUP_DISABLE};
 
     gpio_config(&gpiosConf);
+
+    gpio_set_level(GPIO_PIN_NUM_BCKL, 1);
 
     gpio_set_level(GPIO_PIN_NUM_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(25)); /* at least 10 us */
@@ -3055,15 +2587,12 @@ uint8_t st7789_init(spi_host_device_t host)
  *            - 6 command && data deinit failed
  * @note      none
  */
-uint8_t st7789_deinit(st7789_handle_t *handle)
+uint8_t ST7789_deinit()
 {
     spi_bus_remove_device(spiDeviceHandle);
 
-    handle->inited = 0; /* flag close */
-
     return 0; /* success return 0 */
 }
-
 
 /**
  * @brief     clear the display
@@ -3076,74 +2605,64 @@ uint8_t st7789_deinit(st7789_handle_t *handle)
  *            - 4 format is invalid
  * @note      none
  */
-uint8_t st7789_clear(st7789_handle_t *handle)
+uint8_t ST7789_clear()
 {
     uint8_t buf[4];
     uint32_t i;
     uint32_t m;
     uint32_t n;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (0x00 >> 8) & 0xFF;                                /* start address msb */
-    buf[1] = (0x00 >> 0) & 0xFF;                                /* start address lsb */
-    buf[2] = ((SCREEN_WIDTH - 1) >> 8) & 0xFF;                /* end address msb */
-    buf[3] = ((SCREEN_WIDTH - 1) >> 0) & 0xFF;                /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (0x00 >> 8) & 0xFF;                        /* start address msb */
+    buf[1] = (0x00 >> 0) & 0xFF;                        /* start address lsb */
+    buf[2] = ((SCREEN_WIDTH - 1) >> 8) & 0xFF;          /* end address msb */
+    buf[3] = ((SCREEN_WIDTH - 1) >> 0) & 0xFF;          /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (0x00 >> 8) & 0xFF;                                /* start address msb */
-    buf[1] = (0x00 >> 0) & 0xFF;                                /* start address lsb */
-    buf[2] = ((SCREEN_HEIGHT - 1) >> 8) & 0xFF;                   /* end address msb */
-    buf[3] = ((SCREEN_HEIGHT - 1) >> 0) & 0xFF;                   /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (0x00 >> 8) & 0xFF;                        /* start address msb */
+    buf[1] = (0x00 >> 0) & 0xFF;                        /* start address lsb */
+    buf[2] = ((SCREEN_HEIGHT - 1) >> 8) & 0xFF;         /* end address msb */
+    buf[3] = ((SCREEN_HEIGHT - 1) >> 0) & 0xFF;         /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if ((handle->format & 0x03) == 0x03) /* rgb444 */
+    if (RGB_FORMAT == 0x03) /* rgb444 */
     {
-        memset(handle->buf, 0x00, sizeof(uint8_t) * ST7789_BUFFER_SIZE); /* clear buffer */
-        m = ((uint32_t)(SCREEN_HEIGHT) * SCREEN_WIDTH * 3 / 2) /
+        memset(buffer, 0x00, sizeof(uint8_t) * ST7789_BUFFER_SIZE); /* clear buffer */
+        m = ((uint32_t)SCREEN_HEIGHT * (uint32_t)SCREEN_WIDTH * 3 / 2) /
             ST7789_BUFFER_SIZE; /* total times */
-        n = ((uint32_t)(SCREEN_HEIGHT) * SCREEN_WIDTH * 3 / 2) %
+        n = ((uint32_t)SCREEN_HEIGHT * (uint32_t)SCREEN_WIDTH * 3 / 2) %
             ST7789_BUFFER_SIZE; /* the last */
         for (i = 0; i < m; i++)
         {
-            if (a_st7789_write_bytes(handle, handle->buf,
-                                     ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buffer, ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3152,7 +2671,7 @@ uint8_t st7789_clear(st7789_handle_t *handle)
         }
         if (n != 0) /* not end */
         {
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buffer, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3160,14 +2679,14 @@ uint8_t st7789_clear(st7789_handle_t *handle)
             }
         }
     }
-    else if ((handle->format & 0x05) == 0x05) /* rgb565 */
+    else if (RGB_FORMAT == 0x05) /* rgb565 */
     {
-        memset(handle->buf, 0x00, sizeof(uint8_t) * ST7789_BUFFER_SIZE);       /* clear buffer */
-        m = (uint32_t)(SCREEN_HEIGHT) * SCREEN_WIDTH * 2 / ST7789_BUFFER_SIZE; /* total times */
-        n = (uint32_t)(SCREEN_HEIGHT) * SCREEN_WIDTH * 2 % ST7789_BUFFER_SIZE; /* the last */
+        memset(buffer, 0x00, sizeof(uint8_t) * ST7789_BUFFER_SIZE);                    /* clear buffer */
+        m = (uint32_t)SCREEN_HEIGHT * (uint32_t)SCREEN_WIDTH * 2 / ST7789_BUFFER_SIZE; /* total times */
+        n = (uint32_t)SCREEN_HEIGHT * (uint32_t)SCREEN_WIDTH * 2 % ST7789_BUFFER_SIZE; /* the last */
         for (i = 0; i < m; i++)
         {
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buffer,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3177,7 +2696,7 @@ uint8_t st7789_clear(st7789_handle_t *handle)
         }
         if (n != 0) /* not end */
         {
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buffer, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3185,14 +2704,14 @@ uint8_t st7789_clear(st7789_handle_t *handle)
             }
         }
     }
-    else if ((handle->format & 0x06) == 0x06) /* rgb666 */
+    else if (RGB_FORMAT == 0x06) /* rgb666 */
     {
-        memset(handle->buf, 0x00, sizeof(uint8_t) * ST7789_BUFFER_SIZE);       /* clear buffer */
-        m = (uint32_t)(SCREEN_HEIGHT) * SCREEN_WIDTH * 3 / ST7789_BUFFER_SIZE; /* total times */
-        n = (uint32_t)(SCREEN_HEIGHT) * SCREEN_WIDTH * 3 % ST7789_BUFFER_SIZE; /* the last */
+        memset(buffer, 0x00, sizeof(uint8_t) * ST7789_BUFFER_SIZE);                    /* clear buffer */
+        m = (uint32_t)SCREEN_HEIGHT * (uint32_t)SCREEN_WIDTH * 3 / ST7789_BUFFER_SIZE; /* total times */
+        n = (uint32_t)SCREEN_HEIGHT * (uint32_t)SCREEN_WIDTH * 3 % ST7789_BUFFER_SIZE; /* the last */
         for (i = 0; i < m; i++)
         {
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buffer,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3202,7 +2721,7 @@ uint8_t st7789_clear(st7789_handle_t *handle)
         }
         if (n != 0) /* not end */
         {
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buffer, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3241,21 +2760,13 @@ uint8_t st7789_clear(st7789_handle_t *handle)
  *            - 9 top >= bottom
  * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
  */
-uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color)
+uint8_t ST7789_fill_rect(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color)
 {
     uint8_t buf[4];
     uint32_t i;
     uint32_t m;
     uint32_t n;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (left > (SCREEN_WIDTH - 1)) /* check left */
     {
         ESP_LOGE(TAG, "st7789: left is over column.\n"); /* left is over column */
@@ -3293,57 +2804,57 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
         return 9; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (left >> 8) & 0xFF;                                /* start address msb */
-    buf[1] = (left >> 0) & 0xFF;                                /* start address lsb */
-    buf[2] = ((right) >> 8) & 0xFF;                             /* end address msb */
-    buf[3] = ((right) >> 0) & 0xFF;                             /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (left >> 8) & 0xFF;                        /* start address msb */
+    buf[1] = (left >> 0) & 0xFF;                        /* start address lsb */
+    buf[2] = ((right) >> 8) & 0xFF;                     /* end address msb */
+    buf[3] = ((right) >> 0) & 0xFF;                     /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (top >> 8) & 0xFF;                                 /* start address msb */
-    buf[1] = (top >> 0) & 0xFF;                                 /* start address lsb */
-    buf[2] = ((bottom) >> 8) & 0xFF;                            /* end address msb */
-    buf[3] = ((bottom) >> 0) & 0xFF;                            /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (top >> 8) & 0xFF;                         /* start address msb */
+    buf[1] = (top >> 0) & 0xFF;                         /* start address lsb */
+    buf[2] = ((bottom) >> 8) & 0xFF;                    /* end address msb */
+    buf[3] = ((bottom) >> 0) & 0xFF;                    /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if ((handle->format & 0x03) == 0x03) /* rgb444 */
+    if (RGB_FORMAT == 0x03) /* rgb444 */
     {
         for (i = 0; i < ST7789_BUFFER_SIZE; i += 3) /* fill the buffer */
         {
-            handle->buf[i] = (((color >> 8) & 0xF) << 4) |
-                             (((color >> 4) & 0xF) << 0); /* set the color */
-            handle->buf[i + 1] = (((color >> 0) & 0xF) << 4) |
-                                 (((color >> 8) & 0xF) << 0); /* set the color */
-            handle->buf[i + 2] = (((color >> 4) & 0xF) << 4) |
-                                 (((color >> 0) & 0xF) << 0); /* set the color */
+            buf[i] = (((color >> 8) & 0xF) << 4) |
+                     (((color >> 4) & 0xF) << 0); /* set the color */
+            buf[i + 1] = (((color >> 0) & 0xF) << 4) |
+                         (((color >> 8) & 0xF) << 0); /* set the color */
+            buf[i + 2] = (((color >> 4) & 0xF) << 4) |
+                         (((color >> 0) & 0xF) << 0); /* set the color */
         }
         m = ((uint32_t)(right - left + 1) * (bottom - top + 1) * 3 / 2) /
             ST7789_BUFFER_SIZE; /* total times */
@@ -3351,7 +2862,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
             ST7789_BUFFER_SIZE; /* the last */
         for (i = 0; i < m; i++)
         {
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buf,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3361,7 +2872,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
         }
         if (n != 0) /* not end */
         {
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buf, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3369,12 +2880,12 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
             }
         }
     }
-    else if ((handle->format & 0x05) == 0x05) /* rgb565 */
+    else if (RGB_FORMAT == 0x05) /* rgb565 */
     {
         for (i = 0; i < ST7789_BUFFER_SIZE; i += 2) /* fill the buffer */
         {
-            handle->buf[i] = (color >> 8) & 0xFF;     /* set the color */
-            handle->buf[i + 1] = (color >> 0) & 0xFF; /* set the color */
+            buffer[i] = (color >> 8) & 0xFF;     /* set the color */
+            buffer[i + 1] = (color >> 0) & 0xFF; /* set the color */
         }
         m = (uint32_t)(right - left + 1) * (bottom - top + 1) * 2 /
             ST7789_BUFFER_SIZE; /* total times */
@@ -3382,7 +2893,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
             ST7789_BUFFER_SIZE; /* the last */
         for (i = 0; i < m; i++)
         {
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buf,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3392,7 +2903,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
         }
         if (n != 0) /* not end */
         {
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buf, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3400,13 +2911,13 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
             }
         }
     }
-    else if ((handle->format & 0x06) == 0x06) /* rgb666 */
+    else if (RGB_FORMAT == 0x06) /* rgb666 */
     {
         for (i = 0; i < ST7789_BUFFER_SIZE; i += 3) /* fill the buffer */
         {
-            handle->buf[i] = ((color >> 12) & 0x3F) << 2;    /* set the color */
-            handle->buf[i + 1] = ((color >> 6) & 0x3F) << 2; /* set the color */
-            handle->buf[i + 2] = ((color >> 0) & 0x3F) << 2; /* set the color */
+            buf[i] = ((color >> 12) & 0x3F) << 2;    /* set the color */
+            buf[i + 1] = ((color >> 6) & 0x3F) << 2; /* set the color */
+            buf[i + 2] = ((color >> 0) & 0x3F) << 2; /* set the color */
         }
         m = (uint32_t)(right - left + 1) * (bottom - top + 1) * 3 /
             ST7789_BUFFER_SIZE; /* total times */
@@ -3414,7 +2925,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
             ST7789_BUFFER_SIZE; /* the last */
         for (i = 0; i < m; i++)
         {
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buf,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3424,7 +2935,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
         }
         if (n != 0) /* not end */
         {
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buf, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3463,7 +2974,7 @@ uint8_t st7789_fill_rect(st7789_handle_t *handle, uint16_t left, uint16_t top, u
  *            - 9 top >= bottom
  * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
  */
-uint8_t st7789_draw_picture_12bits(st7789_handle_t *handle, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image)
+uint8_t ST7789_draw_picture_12bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image)
 {
     uint8_t buf[4];
     uint32_t i;
@@ -3472,14 +2983,6 @@ uint8_t st7789_draw_picture_12bits(st7789_handle_t *handle, uint16_t left, uint1
     uint32_t n;
     uint32_t point;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (left > (SCREEN_WIDTH - 1)) /* check left */
     {
         ESP_LOGE(TAG, "st7789: left is over column.\n"); /* left is over column */
@@ -3517,48 +3020,48 @@ uint8_t st7789_draw_picture_12bits(st7789_handle_t *handle, uint16_t left, uint1
         return 9; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (left >> 8) & 0xFF;                                /* start address msb */
-    buf[1] = (left >> 0) & 0xFF;                                /* start address lsb */
-    buf[2] = ((right) >> 8) & 0xFF;                             /* end address msb */
-    buf[3] = ((right) >> 0) & 0xFF;                             /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (left >> 8) & 0xFF;                        /* start address msb */
+    buf[1] = (left >> 0) & 0xFF;                        /* start address lsb */
+    buf[2] = ((right) >> 8) & 0xFF;                     /* end address msb */
+    buf[3] = ((right) >> 0) & 0xFF;                     /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (top >> 8) & 0xFF;                                 /* start address msb */
-    buf[1] = (top >> 0) & 0xFF;                                 /* start address lsb */
-    buf[2] = ((bottom) >> 8) & 0xFF;                            /* end address msb */
-    buf[3] = ((bottom) >> 0) & 0xFF;                            /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (top >> 8) & 0xFF;                         /* start address msb */
+    buf[1] = (top >> 0) & 0xFF;                         /* start address lsb */
+    buf[2] = ((bottom) >> 8) & 0xFF;                    /* end address msb */
+    buf[3] = ((bottom) >> 0) & 0xFF;                    /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if ((handle->format & 0x03) == 0x03) /* rgb444 */
+    if (RGB_FORMAT == 0x03) /* rgb444 */
     {
         uint16_t r;
         uint16_t c;
@@ -3576,15 +3079,15 @@ uint8_t st7789_draw_picture_12bits(st7789_handle_t *handle, uint16_t left, uint1
             for (j = 0; j < ST7789_BUFFER_SIZE; j += 3) /* fill the buffer */
             {
                 color = image[(point % c) * r + (point / c)]; /* set color */
-                handle->buf[i] = (((color >> 8) & 0xF) << 4) |
-                                 (((color >> 4) & 0xF) << 0); /* set the color */
-                handle->buf[i + 1] = (((color >> 0) & 0xF) << 4) |
-                                     (((color >> 8) & 0xF) << 0); /* set the color */
-                handle->buf[i + 2] = (((color >> 4) & 0xF) << 4) |
-                                     (((color >> 0) & 0xF) << 0); /* set the color */
-                point++;                                          /* point++ */
+                buf[i] = (((color >> 8) & 0xF) << 4) |
+                         (((color >> 4) & 0xF) << 0); /* set the color */
+                buf[i + 1] = (((color >> 0) & 0xF) << 4) |
+                             (((color >> 8) & 0xF) << 0); /* set the color */
+                buf[i + 2] = (((color >> 4) & 0xF) << 4) |
+                             (((color >> 0) & 0xF) << 0); /* set the color */
+                point++;                                  /* point++ */
             }
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buf,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3597,15 +3100,15 @@ uint8_t st7789_draw_picture_12bits(st7789_handle_t *handle, uint16_t left, uint1
             for (j = 0; j < n; j += 3) /* fill the buffer */
             {
                 color = image[(point % c) * r + (point / c)]; /* set color */
-                handle->buf[i] = (((color >> 8) & 0xF) << 4) |
-                                 (((color >> 4) & 0xF) << 0); /* set the color */
-                handle->buf[i + 1] = (((color >> 0) & 0xF) << 4) |
-                                     (((color >> 8) & 0xF) << 0); /* set the color */
-                handle->buf[i + 2] = (((color >> 4) & 0xF) << 4) |
-                                     (((color >> 0) & 0xF) << 0); /* set the color */
-                point++;                                          /* point++ */
+                buf[i] = (((color >> 8) & 0xF) << 4) |
+                         (((color >> 4) & 0xF) << 0); /* set the color */
+                buf[i + 1] = (((color >> 0) & 0xF) << 4) |
+                             (((color >> 8) & 0xF) << 0); /* set the color */
+                buf[i + 2] = (((color >> 4) & 0xF) << 4) |
+                             (((color >> 0) & 0xF) << 0); /* set the color */
+                point++;                                  /* point++ */
             }
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buf, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3644,7 +3147,7 @@ uint8_t st7789_draw_picture_12bits(st7789_handle_t *handle, uint16_t left, uint1
  *            - 9 top >= bottom
  * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
  */
-uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image)
+uint8_t ST7789_draw_picture_16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image)
 {
     uint8_t buf[4];
     uint32_t i;
@@ -3653,14 +3156,6 @@ uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint1
     uint32_t n;
     uint32_t point;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (left > (SCREEN_WIDTH - 1)) /* check left */
     {
         ESP_LOGE(TAG, "st7789: left is over column.\n"); /* left is over column */
@@ -3698,48 +3193,48 @@ uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint1
         return 9; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (left >> 8) & 0xFF;                                /* start address msb */
-    buf[1] = (left >> 0) & 0xFF;                                /* start address lsb */
-    buf[2] = ((right) >> 8) & 0xFF;                             /* end address msb */
-    buf[3] = ((right) >> 0) & 0xFF;                             /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (left >> 8) & 0xFF;                        /* start address msb */
+    buf[1] = (left >> 0) & 0xFF;                        /* start address lsb */
+    buf[2] = ((right) >> 8) & 0xFF;                     /* end address msb */
+    buf[3] = ((right) >> 0) & 0xFF;                     /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (top >> 8) & 0xFF;                                 /* start address msb */
-    buf[1] = (top >> 0) & 0xFF;                                 /* start address lsb */
-    buf[2] = ((bottom) >> 8) & 0xFF;                            /* end address msb */
-    buf[3] = ((bottom) >> 0) & 0xFF;                            /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (top >> 8) & 0xFF;                         /* start address msb */
+    buf[1] = (top >> 0) & 0xFF;                         /* start address lsb */
+    buf[2] = ((bottom) >> 8) & 0xFF;                    /* end address msb */
+    buf[3] = ((bottom) >> 0) & 0xFF;                    /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if ((handle->format & 0x05) == 0x05) /* rgb565 */
+    if (RGB_FORMAT == 0x05) /* rgb565 */
     {
         uint16_t r;
         uint16_t c;
@@ -3757,11 +3252,11 @@ uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint1
             for (j = 0; j < ST7789_BUFFER_SIZE; j += 2) /* fill the buffer */
             {
                 color = image[(point % c) * r + (point / c)]; /* set color */
-                handle->buf[j] = (color >> 8) & 0xFF;         /* set the color */
-                handle->buf[j + 1] = (color >> 0) & 0xFF;     /* set the color */
+                buffer[j] = (color >> 8) & 0xFF;              /* set the color */
+                buffer[j + 1] = (color >> 0) & 0xFF;          /* set the color */
                 point++;                                      /* point++ */
             }
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buf,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3774,11 +3269,11 @@ uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint1
             for (j = 0; j < n; j += 2) /* fill the buffer */
             {
                 color = image[(point % c) * r + (point / c)]; /* set color */
-                handle->buf[j] = (color >> 8) & 0xFF;         /* set the color */
-                handle->buf[j + 1] = (color >> 0) & 0xFF;     /* set the color */
+                buf[j] = (color >> 8) & 0xFF;                 /* set the color */
+                buf[j + 1] = (color >> 0) & 0xFF;             /* set the color */
                 point++;                                      /* point++ */
             }
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buf, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3817,7 +3312,7 @@ uint8_t st7789_draw_picture_16bits(st7789_handle_t *handle, uint16_t left, uint1
  *            - 9 top >= bottom
  * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
  */
-uint8_t st7789_draw_picture_18bits(st7789_handle_t *handle, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t *image)
+uint8_t ST7789_draw_picture_18bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t *image)
 {
     uint8_t buf[4];
     uint32_t i;
@@ -3826,14 +3321,6 @@ uint8_t st7789_draw_picture_18bits(st7789_handle_t *handle, uint16_t left, uint1
     uint32_t n;
     uint32_t point;
 
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (left > (SCREEN_WIDTH - 1)) /* check left */
     {
         ESP_LOGE(TAG, "st7789: left is over column.\n"); /* left is over column */
@@ -3871,48 +3358,48 @@ uint8_t st7789_draw_picture_18bits(st7789_handle_t *handle, uint16_t left, uint1
         return 9; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (left >> 8) & 0xFF;                                /* start address msb */
-    buf[1] = (left >> 0) & 0xFF;                                /* start address lsb */
-    buf[2] = ((right) >> 8) & 0xFF;                             /* end address msb */
-    buf[3] = ((right) >> 0) & 0xFF;                             /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (left >> 8) & 0xFF;                        /* start address msb */
+    buf[1] = (left >> 0) & 0xFF;                        /* start address lsb */
+    buf[2] = ((right) >> 8) & 0xFF;                     /* end address msb */
+    buf[3] = ((right) >> 0) & 0xFF;                     /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (top >> 8) & 0xFF;                                 /* start address msb */
-    buf[1] = (top >> 0) & 0xFF;                                 /* start address lsb */
-    buf[2] = ((bottom) >> 8) & 0xFF;                            /* end address msb */
-    buf[3] = ((bottom) >> 0) & 0xFF;                            /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (top >> 8) & 0xFF;                         /* start address msb */
+    buf[1] = (top >> 0) & 0xFF;                         /* start address lsb */
+    buf[2] = ((bottom) >> 8) & 0xFF;                    /* end address msb */
+    buf[3] = ((bottom) >> 0) & 0xFF;                    /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if ((handle->format & 0x06) == 0x06) /* rgb666 */
+    if (RGB_FORMAT == 0x06) /* rgb666 */
     {
         uint16_t r;
         uint16_t c;
@@ -3929,13 +3416,13 @@ uint8_t st7789_draw_picture_18bits(st7789_handle_t *handle, uint16_t left, uint1
         {
             for (j = 0; j < ST7789_BUFFER_SIZE; j += 3) /* fill the buffer */
             {
-                color = image[(point % c) * r + (point / c)];    /* set color */
-                handle->buf[j] = ((color >> 12) & 0x3F) << 2;    /* set the color */
-                handle->buf[j + 1] = ((color >> 6) & 0x3F) << 2; /* set the color */
-                handle->buf[j + 2] = ((color >> 0) & 0x3F) << 2; /* set the color */
-                point++;                                         /* point++ */
+                color = image[(point % c) * r + (point / c)]; /* set color */
+                buf[j] = ((color >> 12) & 0x3F) << 2;         /* set the color */
+                buf[j + 1] = ((color >> 6) & 0x3F) << 2;      /* set the color */
+                buf[j + 2] = ((color >> 0) & 0x3F) << 2;      /* set the color */
+                point++;                                      /* point++ */
             }
-            if (a_st7789_write_bytes(handle, handle->buf,
+            if (a_ST7789_write_bytes(buf,
                                      ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -3947,13 +3434,13 @@ uint8_t st7789_draw_picture_18bits(st7789_handle_t *handle, uint16_t left, uint1
         {
             for (j = 0; j < n; j += 3) /* fill the buffer */
             {
-                color = image[(point % c) * r + (point / c)];    /* set color */
-                handle->buf[j] = ((color >> 12) & 0x3F) << 2;    /* set the color */
-                handle->buf[j + 1] = ((color >> 6) & 0x3F) << 2; /* set the color */
-                handle->buf[j + 2] = ((color >> 0) & 0x3F) << 2; /* set the color */
-                point++;                                         /* point++ */
+                color = image[(point % c) * r + (point / c)]; /* set color */
+                buf[j] = ((color >> 12) & 0x3F) << 2;         /* set the color */
+                buf[j + 1] = ((color >> 6) & 0x3F) << 2;      /* set the color */
+                buf[j + 2] = ((color >> 0) & 0x3F) << 2;      /* set the color */
+                point++;                                      /* point++ */
             }
-            if (a_st7789_write_bytes(handle, handle->buf, n, ST7789_DATA) != 0) /* write data */
+            if (a_ST7789_write_bytes(buf, n, ST7789_DATA) != 0) /* write data */
             {
                 ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -3982,57 +3469,57 @@ uint8_t st7789_draw_picture_18bits(st7789_handle_t *handle, uint16_t left, uint1
  *            - 1 draw point failed
  * @note      none
  */
-static uint8_t a_st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t y, uint32_t color)
+static uint8_t a_ST7789_draw_point(uint16_t x, uint16_t y, uint32_t color)
 {
     uint8_t buf[4];
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
+    if (a_ST7789_write_byte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (x >> 8) & 0xFF;                                   /* start address msb */
-    buf[1] = (x >> 0) & 0xFF;                                   /* start address lsb */
-    buf[2] = (x >> 8) & 0xFF;                                   /* end address msb */
-    buf[3] = (x >> 0) & 0xFF;                                   /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (x >> 8) & 0xFF;                           /* start address msb */
+    buf[1] = (x >> 0) & 0xFF;                           /* start address lsb */
+    buf[2] = (x >> 8) & 0xFF;                           /* end address msb */
+    buf[3] = (x >> 0) & 0xFF;                           /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
+    if (a_ST7789_write_byte(ST7789_CMD_RASET, ST7789_CMD) != 0) /* write set row address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (y >> 8) & 0xFF;                                   /* start address msb */
-    buf[1] = (y >> 0) & 0xFF;                                   /* start address lsb */
-    buf[2] = (y >> 8) & 0xFF;                                   /* end address msb */
-    buf[3] = (y >> 0) & 0xFF;                                   /* end address lsb */
-    if (a_st7789_write_bytes(handle, buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = (y >> 8) & 0xFF;                           /* start address msb */
+    buf[1] = (y >> 0) & 0xFF;                           /* start address lsb */
+    buf[2] = (y >> 8) & 0xFF;                           /* end address msb */
+    buf[3] = (y >> 0) & 0xFF;                           /* end address lsb */
+    if (a_ST7789_write_bytes(buf, 4, ST7789_DATA) != 0) /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
         return 1; /* return error */
     }
 
-    if (a_st7789_write_byte(handle, ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
+    if (a_ST7789_write_byte(ST7789_CMD_RAMWR, ST7789_CMD) != 0) /* write memory write command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
 
-    if ((handle->format & 0x03) == 0x03) /* rgb444 */
+    if (RGB_FORMAT == 0x03) /* rgb444 */
     {
-        handle->buf[0] = (((color >> 8) & 0xF) << 4) |
-                         (((color >> 4) & 0xF) << 0); /* set the color */
-        handle->buf[1] = (((color >> 0) & 0xF) << 4); /* set the color */
-        if (a_st7789_write_bytes(handle, handle->buf,
+        buf[0] = (((color >> 8) & 0xF) << 4) |
+                 (((color >> 4) & 0xF) << 0); /* set the color */
+        buf[1] = (((color >> 0) & 0xF) << 4); /* set the color */
+        if (a_ST7789_write_bytes(buf,
                                  2, ST7789_DATA) != 0) /* write data */
         {
             ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -4040,11 +3527,11 @@ static uint8_t a_st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t
             return 1; /* return error */
         }
     }
-    else if ((handle->format & 0x05) == 0x05) /* rgb565 */
+    else if (RGB_FORMAT == 0x05) /* rgb565 */
     {
-        handle->buf[0] = (color >> 8) & 0xFF; /* set the color */
-        handle->buf[1] = (color >> 0) & 0xFF; /* set the color */
-        if (a_st7789_write_bytes(handle, handle->buf,
+        buf[0] = (color >> 8) & 0xFF; /* set the color */
+        buf[1] = (color >> 0) & 0xFF; /* set the color */
+        if (a_ST7789_write_bytes(buf,
                                  2, ST7789_DATA) != 0) /* write data */
         {
             ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -4052,12 +3539,12 @@ static uint8_t a_st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t
             return 1; /* return error */
         }
     }
-    else if ((handle->format & 0x06) == 0x06) /* rgb666 */
+    else if (RGB_FORMAT == 0x06) /* rgb666 */
     {
-        handle->buf[0] = ((color >> 12) & 0x3F) << 2; /* set the color */
-        handle->buf[1] = ((color >> 6) & 0x3F) << 2;  /* set the color */
-        handle->buf[2] = ((color >> 0) & 0x3F) << 2;  /* set the color */
-        if (a_st7789_write_bytes(handle, handle->buf,
+        buf[0] = ((color >> 12) & 0x3F) << 2; /* set the color */
+        buf[1] = ((color >> 6) & 0x3F) << 2;  /* set the color */
+        buf[2] = ((color >> 0) & 0x3F) << 2;  /* set the color */
+        if (a_ST7789_write_bytes(buf,
                                  3, ST7789_DATA) != 0) /* write data */
         {
             ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
@@ -4088,7 +3575,7 @@ static uint8_t a_st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t
  *            - 1 show char failed
  * @note      none
  */
-static uint8_t a_st7789_show_char(st7789_handle_t *handle, uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color)
+static uint8_t a_ST7789_show_char(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color)
 {
     uint8_t temp, t, t1;
     uint16_t y0 = y;
@@ -4117,7 +3604,7 @@ static uint8_t a_st7789_show_char(st7789_handle_t *handle, uint16_t x, uint16_t 
         {
             if ((temp & 0x80) != 0) /* if 1 */
             {
-                if (a_st7789_draw_point(handle, x, y, color) != 0) /* draw point */
+                if (a_ST7789_draw_point(x, y, color) != 0) /* draw point */
                 {
                     return 1; /* return error */
                 }
@@ -4154,16 +3641,8 @@ static uint8_t a_st7789_show_char(st7789_handle_t *handle, uint16_t x, uint16_t 
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t st7789_write_string(st7789_handle_t *handle, uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, st7789_font_t font)
+uint8_t ST7789_write_string(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if ((x >= SCREEN_WIDTH) || (y >= SCREEN_HEIGHT)) /* check x, y */
     {
         ESP_LOGE(TAG, "ssd1351: x or y is invalid.\n"); /* x or y is invalid */
@@ -4182,7 +3661,7 @@ uint8_t st7789_write_string(st7789_handle_t *handle, uint16_t x, uint16_t y, cha
         {
             y = x = 0; /* reset to 0 */
         }
-        if (a_st7789_show_char(handle, x, y, *str, font, color) != 0) /* show a char */
+        if (a_ST7789_show_char(x, y, *str, font, color) != 0) /* show a char */
         {
             return 1; /* return error */
         }
@@ -4209,16 +3688,8 @@ uint8_t st7789_write_string(st7789_handle_t *handle, uint16_t x, uint16_t y, cha
  *            - 5 y is over row
  * @note      x < column && y < row
  */
-uint8_t st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t y, uint32_t color)
+uint8_t ST7789_draw_point(uint16_t x, uint16_t y, uint32_t color)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
     if (x >= SCREEN_WIDTH) /* check x */
     {
         ESP_LOGE(TAG, "ssd1351: x is over column.\n"); /* x is over column */
@@ -4232,7 +3703,7 @@ uint8_t st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t y, uint3
         return 5; /* return error */
     }
 
-    return a_st7789_draw_point(handle, x, y, color); /* draw point */
+    return a_ST7789_draw_point(x, y, color); /* draw point */
 }
 
 /**
@@ -4246,18 +3717,9 @@ uint8_t st7789_draw_point(st7789_handle_t *handle, uint16_t x, uint16_t y, uint3
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_write_cmd(st7789_handle_t *handle, uint8_t cmd)
+uint8_t ST7789_write_cmd(uint8_t cmd)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    return a_st7789_write_byte(handle, cmd, ST7789_CMD); /* write command */
+    return a_ST7789_write_byte(cmd, ST7789_CMD); /* write command */
 }
 
 /**
@@ -4271,18 +3733,9 @@ uint8_t st7789_write_cmd(st7789_handle_t *handle, uint8_t cmd)
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t st7789_write_data(st7789_handle_t *handle, uint8_t data)
+uint8_t ST7789_write_data(uint8_t data)
 {
-    if (handle == NULL) /* check handle */
-    {
-        return 2; /* return error */
-    }
-    if (handle->inited != 1) /* check handle initialization */
-    {
-        return 3; /* return error */
-    }
-
-    return a_st7789_write_byte(handle, data, ST7789_DATA); /* write data */
+    return a_ST7789_write_byte(data, ST7789_DATA); /* write data */
 }
 
 /**
@@ -4293,14 +3746,14 @@ uint8_t st7789_write_data(st7789_handle_t *handle, uint8_t data)
  *             - 2 handle is NULL
  * @note       none
  */
-uint8_t st7789_info(st7789_info_t *info)
+uint8_t ST7789_info(ST7789_info_t *info)
 {
     if (info == NULL) /* check handle */
     {
         return 2; /* return error */
     }
 
-    memset(info, 0, sizeof(st7789_info_t));                  /* initialize st7789 info structure */
+    memset(info, 0, sizeof(ST7789_info_t));                  /* initialize st7789 info structure */
     strncpy(info->chip_name, CHIP_NAME, 32);                 /* copy chip name */
     strncpy(info->manufacturer_name, MANUFACTURER_NAME, 32); /* copy manufacturer name */
     strncpy(info->interface, "SPI", 8);                      /* copy interface name */
@@ -4317,10 +3770,14 @@ uint8_t st7789_info(st7789_info_t *info)
 static void spi_write(uint8_t *writeBuffer, uint8_t length)
 {
     spi_transaction_t transaction;
-    memset(&transaction, 0, sizeof(transaction)); // Zero out the transaction
-    transaction.length = length;                  // Command is 8 bits
-    transaction.tx_buffer = writeBuffer;          // The data is the cmd itself
-    transaction.user = (void *)0;
 
-    spi_device_queue_trans(spiDeviceHandle, &transaction, portMAX_DELAY);
+    if(length > 0)
+    {
+        memset(&transaction, 0, sizeof(transaction)); // Zero out the transaction
+        transaction.length = length;                  // Command is 8 bits
+        transaction.tx_buffer = writeBuffer;          // The data is the cmd itself
+        transaction.user = (void *)0;
+
+        spi_device_transmit(spiDeviceHandle, &transaction);
+    }
 }

@@ -28,7 +28,7 @@ void BATTERY_Initialize()
         .bitwidth = channelConfig.bitwidth,
     };
 
-    ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&cali_config, &adcCalibration));
+    //ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&cali_config, &adcCalibration));
 
     ESP_ERROR_CHECK(adc_oneshot_new_unit(&unitConfig, &adcHandle));
 
@@ -43,10 +43,10 @@ float BATTERY_MeasureSoc()
     float batteryVoltage;
 
     adc_oneshot_read(adcHandle, ADC_CHANNEL_VBAT, &adcReading);
-    adc_cali_raw_to_voltage(adcCalibration, adcReading, &adcVoltagemV);
+    //adc_cali_raw_to_voltage(adcCalibration, adcReading, &adcVoltagemV);
 
-    batteryVoltage = ADC_VOLTAGE_TO_BATTERY_VOLTAGE(adcVoltagemV);
+    batteryVoltage = ADC_VOLTAGE_TO_BATTERY_VOLTAGE(adcReading);
 
     ESP_LOGI(TAG, "Battery voltage = %f V", batteryVoltage);
-    return batteryVoltage * 83.3f - 249.86f;
+    return batteryVoltage * 71.42f - 214.25f;
 }

@@ -98,15 +98,16 @@ static void DifferentialPressureTask(void *pvParameters)
     float temperatureSdp810;
 
     SDP810_Initialize(i2cHandle);
-    SDP810_StartContinuousMeasurementWithMassFlowTCompAndAveraging();
+    SDP810_StartContinuousMeasurementWithMassFlowTComp();
 
     while (1)
     {
         if (SDP810_ReadMeasurement(&diffPressure, &temperatureSdp810))
         {
-            ESP_LOGI(TAG, "Differential pressure = %.3f hPa, Temperature = %.1f C\n", diffPressure, temperatureSdp810);
+            ESP_LOGI(TAG, "Differential pressure = %.3f hPa", diffPressure);
+            //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureSdp810);
         }
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -121,7 +122,7 @@ static void O2Task(void *pvParameters)
     {
         o2 = ME2O2_ReadOxygen();
 
-        ESP_LOGI(TAG, "O2 = %.1f %\n", o2);
+        ESP_LOGI(TAG, "O2 = %.1f %%", o2);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -131,7 +132,7 @@ static void CO2Task(void *pvParameters)
     float co2;
     float temperatureScd30;
     float humidity;
-   
+
     SCD30_Initialize(i2cHandle);
     SCD30_SetMeasurementInterval(2);
     SCD30_StartPeriodicMeasurment();
@@ -140,7 +141,9 @@ static void CO2Task(void *pvParameters)
     {
         if (SCD30_GetMeasures(&co2, &temperatureScd30, &humidity))
         {
-            ESP_LOGI(TAG, "CO2 = %.1f ppm, Temperature = %.1f C, Humidity = %.1f %%\n", co2, temperatureScd30, humidity);
+            ESP_LOGI(TAG, "CO2 = %.1f ppm", co2);
+            //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureScd30);
+            //ESP_LOGI(TAG, "Humidity = %.1f %%", humidity);
         }
 
         vTaskDelay(pdMS_TO_TICKS(2000));

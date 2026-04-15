@@ -104,27 +104,43 @@ static void SpiBusInit()
 
 static void DifferentialPressureTask(void *pvParameters)
 {
-    int64_t timeSinceBoot;
+    int64_t timestamp;
     float diffPressure;
     float temperatureSdp810;
     float massFlow;
+    float exhaledVolume = 0.0f;
+    int64_t lastTimestamp;
+    int64_t deltaT;
+    float lastMassFlow = 0.0F;
 
     SDP810_Initialize(i2cHandle);
     SDP810_StartContinuousMeasurementWithMassFlowTComp();
 
+    lastTimestamp = esp_timer_get_time();
     while (1)
     {
-        timeSinceBoot = esp_timer_get_time()/1000;
+        timestamp = esp_timer_get_time()/1000;
         if (SDP810_ReadMeasurement(&diffPressure, &temperatureSdp810))
         {
+            deltaT = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+
             if(diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD)
             {
                 diffPressure = 0.0f;
+                exhaledVolume = 0.0f;
+                massFlow = 0.0f;
+            }
+            else
+            {
+                massFlow = 3.186F * sqrt(diffPressure);
+                exhaledVolume += (float)deltaT * (massFlow + lastMassFlow) / 120000.0f; // Trapezoidal rule
             }
 
-            massFlow = 3.186F * sqrt(diffPressure);
+            lastMassFlow = massFlow;
 
-            ESP_LOGI(TAG, "#1,%.3f,%d", massFlow, timeSinceBoot);
+            ESP_LOGI(TAG, "#1,%.3f,%d", massFlow, timestamp);
+            ESP_LOGI(TAG, "#4,%.3f,%d", exhaledVolume, timestamp);
             //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureSdp810);
         }
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
@@ -133,7 +149,7 @@ static void DifferentialPressureTask(void *pvParameters)
 
 static void O2Task(void *pvParameters)
 {
-    int64_t timeSinceBoot;
+    int64_t timestamp;
     float o2;
 
     ME2O2_Initialize(i2cHandle);
@@ -141,17 +157,17 @@ static void O2Task(void *pvParameters)
 
     while (1)
     {
-        timeSinceBoot = esp_timer_get_time()/1000;
+        timestamp = esp_timer_get_time()/1000;
         o2 = ME2O2_ReadOxygen();
 
-        ESP_LOGI(TAG, "#2,%.1f,%d", o2, timeSinceBoot);
+        ESP_LOGI(TAG, "#2,%.1f,%d", o2, timestamp);
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
     }
 }
 
 static void CO2Task(void *pvParameters)
 {
-    int64_t timeSinceBoot;
+    int64_t timestamp;
     float co2;
     float temperatureScd30;
     float humidity;
@@ -162,10 +178,10 @@ static void CO2Task(void *pvParameters)
 
     while (1)
     {
-        timeSinceBoot = esp_timer_get_time()/1000;
+        timestamp = esp_timer_get_time()/1000;
         if (SCD30_GetMeasures(&co2, &temperatureScd30, &humidity))
         {
-            ESP_LOGI(TAG, "#3,%.1f,%d", co2, timeSinceBoot);
+            ESP_LOGI(TAG, "#3,%.1f,%d", co2, timestamp);
             //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureScd30);
             //ESP_LOGI(TAG, "Humidity = %.1f %%", humidity);
         }

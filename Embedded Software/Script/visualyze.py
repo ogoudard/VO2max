@@ -52,45 +52,64 @@ def animate(i):
         ax3.spines.right.set_position(("axes", 1.2))
         ax3.set_ylabel("CO2 Concentration (ppm)")
 
+    elif id == 4:
+        animate.xExhaled.append(timestamp)
+        animate.exhaledArray.append(value)
+
+        # Draw x and y lists
+        ax4.clear()
+        ax4.plot(animate.xExhaled, animate.exhaledArray, color='yellow')
+        ax4.spines.left.set_position(("axes", 1.2))
+        ax4.set_ylabel("Exhaled volume")
+        
 animate.xPressure = []
 animate.xO2 = []
 animate.xCo2 = []
+animate.xExhaled = []
 
 animate.pressureArray = []
 animate.o2Array = []
 animate.co2Array = []
+animate.exhaledArray = []
 
 fig, ax1 = plt.subplots()
 fig.subplots_adjust(right=0.75)
 
 ax2 = ax1.twinx()
 ax3 = ax1.twinx()
+ax4 = ax1.twinx()
 
 # Offset the right spine of twin2.  The ticks and label have already been
 # placed on the right by twinx above.
 ax3.spines.right.set_position(("axes", 1.2))
+ax4.spines.left.set_position(("axes", 1.2))
 
 p1, = ax1.plot([0, 1, 2], [0, 1, 2], "r-")
 p2, = ax2.plot([0, 1, 2], [0, 3, 2], "g-")
 p3, = ax3.plot([0, 1, 2], [50, 30, 15], "b-")
+p4, = ax4.plot([0, 1, 2], [50, 30, 15], "y-")
 
 ax1.set_xlabel("Time")
 ax1.set_ylabel("Mass Flow")
 ax2.set_ylabel("O2 Concentration")
 ax3.set_ylabel("CO2 Concentration")
+ax4.set_ylabel("Exhaled volume")
+
 
 ax1.yaxis.label.set_color(p1.get_color())
 ax2.yaxis.label.set_color(p2.get_color())
 ax3.yaxis.label.set_color(p3.get_color())
+ax4.yaxis.label.set_color(p4.get_color())
 
 tkw = dict(size=4, width=1.5)
 ax1.tick_params(axis='y', colors=p1.get_color(), **tkw)
 ax2.tick_params(axis='y', colors=p2.get_color(), **tkw)
 ax3.tick_params(axis='y', colors=p3.get_color(), **tkw)
+ax4.tick_params(axis='y', colors=p4.get_color(), **tkw)
 
 ax1.tick_params(axis='x', **tkw)
 
-ax1.legend(handles=[p1, p2, p3])
+ax1.legend(handles=[p1, p2, p3, p4])
 
 ani = animation.FuncAnimation(fig, animate, frames=1000, interval=50)
 plt.show()

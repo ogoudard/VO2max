@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 
 #define SCD30_I2C_ADDRESS 0x61
+#define SCD30_I2C_FREQUENCY 400000
 
 #define SCD30_CONTINUOUS_MEASUREMENT 0x0010
 #define SCD30_SET_MEASUREMENT_INTERVAL 0x4600
@@ -35,7 +36,7 @@ void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
     i2c_device_config_t devCfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = SCD30_I2C_ADDRESS,
-        .scl_speed_hz = 100000,
+        .scl_speed_hz = SCD30_I2C_FREQUENCY,
     };
 
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devCfg, &devHandle));

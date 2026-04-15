@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 
 #include "version.h"
 #include "freertos/FreeRTOS.h"
@@ -11,6 +12,8 @@
 #include "driver_scd30.h"
 #include "driver_me2o2.h"
 #include "battery.h"
+#include "esp_timer.h"
+
 
 #define SPI_HOST SPI2_HOST
 
@@ -22,6 +25,12 @@
 #define GPIO_PIN_NUM_SPI_MISO 25
 #define GPIO_PIN_NUM_SPI_MOSI 19
 #define GPIO_PIN_NUM_SPI_CLK 18
+
+#define MEASURE_PERIOD_PRESSURE_MS  100
+#define MEASURE_PERIOD_O2_MS        2000
+#define MEASURE_PERIOD_CO2_MS       2000
+
+#define DIFFERENTIAL_PRESSURE_THRESHOLD 0.1f
 
 static const char *TAG = "main";
 
@@ -47,6 +56,8 @@ void app_main(void)
     batterySoc = BATTERY_MeasureSoc();
     ESP_LOGI(TAG, "Battery SOC = %.0f %%", batterySoc);
 
+    esp_timer_early_init();
+
     SpiBusInit();
     // LCD_Initialize();
     // char string[] =  "Hello, world!";
@@ -60,7 +71,6 @@ void app_main(void)
 
     while (1)
     {
-
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
@@ -94,25 +104,36 @@ static void SpiBusInit()
 
 static void DifferentialPressureTask(void *pvParameters)
 {
+    int64_t timeSinceBoot;
     float diffPressure;
     float temperatureSdp810;
+    float massFlow;
 
     SDP810_Initialize(i2cHandle);
     SDP810_StartContinuousMeasurementWithMassFlowTComp();
 
     while (1)
     {
+        timeSinceBoot = esp_timer_get_time()/1000;
         if (SDP810_ReadMeasurement(&diffPressure, &temperatureSdp810))
         {
-            ESP_LOGI(TAG, "Differential pressure = %.3f hPa", diffPressure);
+            if(diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD)
+            {
+                diffPressure = 0.0f;
+            }
+
+            massFlow = 3.186F * sqrt(diffPressure);
+
+            ESP_LOGI(TAG, "#1,%.3f,%d", massFlow, timeSinceBoot);
             //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureSdp810);
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
     }
 }
 
 static void O2Task(void *pvParameters)
 {
+    int64_t timeSinceBoot;
     float o2;
 
     ME2O2_Initialize(i2cHandle);
@@ -120,15 +141,17 @@ static void O2Task(void *pvParameters)
 
     while (1)
     {
+        timeSinceBoot = esp_timer_get_time()/1000;
         o2 = ME2O2_ReadOxygen();
 
-        ESP_LOGI(TAG, "O2 = %.1f %%", o2);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        ESP_LOGI(TAG, "#2,%.1f,%d", o2, timeSinceBoot);
+        vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
     }
 }
 
 static void CO2Task(void *pvParameters)
 {
+    int64_t timeSinceBoot;
     float co2;
     float temperatureScd30;
     float humidity;
@@ -139,13 +162,14 @@ static void CO2Task(void *pvParameters)
 
     while (1)
     {
+        timeSinceBoot = esp_timer_get_time()/1000;
         if (SCD30_GetMeasures(&co2, &temperatureScd30, &humidity))
         {
-            ESP_LOGI(TAG, "CO2 = %.1f ppm", co2);
+            ESP_LOGI(TAG, "#3,%.1f,%d", co2, timeSinceBoot);
             //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureScd30);
             //ESP_LOGI(TAG, "Humidity = %.1f %%", humidity);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
     }
 }

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #define SDP810_I2C_ADDRESS 0x25
+#define SDP810_I2C_FREQUENCY 400000
 
 #define SDP810_POLYNOMIAL 0x31 // P(x) = x^8 + x^5 + x^4 + 1 = 100110001
 
@@ -22,7 +23,7 @@ void SDP810_Initialize(i2c_master_bus_handle_t i2cBusHandle)
     i2c_device_config_t devCfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = SDP810_I2C_ADDRESS,
-        .scl_speed_hz = 100000,
+        .scl_speed_hz = SDP810_I2C_FREQUENCY,
     };
 
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devCfg, &devHandle));

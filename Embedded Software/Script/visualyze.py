@@ -16,100 +16,104 @@ ser = serial.Serial(
         
 startTime = int(time.time())
 
+
 def animate(i):
     line = ser.readline().decode("ascii").replace("\r\n", "")
-    data = line.split("#")[1]
-    dataSplitted = data.split(",")
-    id = int(dataSplitted[0])
-    value = float(dataSplitted[1])
-    timestamp = int(dataSplitted[2])
+    lineSplitted = line.split("#")
     
-    if id == 1:
-        animate.xPressure.append(timestamp)
-        animate.pressureArray.append(value)
-
-        # Draw x and y lists
-        ax1.clear()
-        ax1.plot(animate.xPressure, animate.pressureArray, color='red')
-        ax1.set_ylabel("Mass Flow (l/min)")
+    if len(lineSplitted) == 2:
+        data = lineSplitted[1]
+        dataSplitted = data.split(",")
+        id = int(dataSplitted[0])
+        value = float(dataSplitted[1])
+        timestamp = int(dataSplitted[2])
         
-    elif id == 2:
-        animate.xCo2.append(timestamp)
-        animate.co2Array.append(value)
-
-        # Draw x and y lists
-        ax2.clear()
-        ax2.plot(animate.xCo2, animate.co2Array, color='green')
-        ax2.set_ylabel("O2 Concentration (%)")
-
-    elif id == 3:
-        animate.xO2.append(timestamp)
-        animate.o2Array.append(value)
-
-        # Draw x and y lists
-        ax3.clear()
-        ax3.plot(animate.xO2, animate.o2Array, color='blue')
-        ax3.spines.right.set_position(("axes", 1.2))
-        ax3.set_ylabel("CO2 Concentration (ppm)")
-
-    elif id == 4:
-        animate.xExhaled.append(timestamp)
-        animate.exhaledArray.append(value)
-
-        # Draw x and y lists
-        ax4.clear()
-        ax4.plot(animate.xExhaled, animate.exhaledArray, color='yellow')
-        ax4.spines.left.set_position(("axes", 1.2))
-        ax4.set_ylabel("Exhaled volume")
+        if animate.firstMeasure == True:
+            animate.firstTimestamp = timestamp
+            animate.firstMeasure = False
         
+        if id == 1:
+            animate.xPressure.append(timestamp)
+            animate.pressureArray.append(value)
+            #print("Mass flow = " + str(value), flush = True)
+
+            # Draw x and y lists
+            ax1.clear()
+            ax1.plot(animate.xPressure, animate.pressureArray, color='red')
+            ax1.set_ylabel("Mass Flow (l/min)")
+            
+        elif id == 2:
+            animate.xO2.append(timestamp)
+            animate.o2Array.append(value)
+            #print("O2 = " + str(value), flush = True)
+
+            # Draw x and y lists
+            ax2.clear()
+            ax2.plot(animate.xO2, animate.o2Array, color='green')
+            ax2.set_ylabel("O2 Concentration (%)")
+            
+        elif id == 3:
+            animate.xCo2.append(timestamp)
+            animate.co2Array.append(value)
+            #print("CO2 = " + str(value), flush = True)
+
+            # Draw x and y lists
+            ax3.clear()
+            ax3.plot(animate.xO2, animate.co2Array, color='blue')
+            #ax3.set_ylabel("CO2 Concentration (ppm)")
+            
+        elif id == 4:
+            animate.xExhaledCycle.append(timestamp)
+            animate.exhaledCycleArray.append(value)
+            #print("Exhaled volume cycle = " + str(value), flush = True)
+
+            # Draw x and y lists
+            ax4.clear()
+            ax4.plot(animate.xExhaledCycle, animate.exhaledCycleArray, color='yellow')
+            ax4.set_ylabel("Exhaled volume cycle")
+            ax4.autoscale()
+
+        elif id == 5:
+            animate.xExhaledTotal.append(timestamp)
+            animate.exhaledTotalArray.append(value)
+            #print("Exhaled volume total = " + str(value), flush = True)
+
+            # Draw x and y lists
+            ax5.clear()
+            ax5.plot(animate.xExhaledTotal, animate.exhaledTotalArray, color='yellow')
+            ax5.set_ylabel("Exhaled volume total")
+
+            
+        ax1.set_xlim(left = animate.firstTimestamp, right = timestamp)
+        ax2.set_xlim(left = animate.firstTimestamp, right = timestamp)
+        ax3.set_xlim(left = animate.firstTimestamp, right = timestamp)
+        ax4.set_xlim(left = animate.firstTimestamp, right = timestamp)
+        ax5.set_xlim(left = animate.firstTimestamp, right = timestamp)
+    
+animate.firstMeasure = True
+
 animate.xPressure = []
 animate.xO2 = []
 animate.xCo2 = []
-animate.xExhaled = []
+animate.xExhaledCycle = []
+animate.xExhaledTotal = []
 
 animate.pressureArray = []
 animate.o2Array = []
 animate.co2Array = []
-animate.exhaledArray = []
+animate.exhaledCycleArray = []
+animate.exhaledTotalArray = []
 
-fig, ax1 = plt.subplots()
-fig.subplots_adjust(right=0.75)
+fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, layout='constrained')
 
-ax2 = ax1.twinx()
-ax3 = ax1.twinx()
-ax4 = ax1.twinx()
-
-# Offset the right spine of twin2.  The ticks and label have already been
-# placed on the right by twinx above.
-ax3.spines.right.set_position(("axes", 1.2))
-ax4.spines.left.set_position(("axes", 1.2))
-
-p1, = ax1.plot([0, 1, 2], [0, 1, 2], "r-")
-p2, = ax2.plot([0, 1, 2], [0, 3, 2], "g-")
-p3, = ax3.plot([0, 1, 2], [50, 30, 15], "b-")
-p4, = ax4.plot([0, 1, 2], [50, 30, 15], "y-")
-
-ax1.set_xlabel("Time")
-ax1.set_ylabel("Mass Flow")
-ax2.set_ylabel("O2 Concentration")
-ax3.set_ylabel("CO2 Concentration")
-ax4.set_ylabel("Exhaled volume")
-
-
-ax1.yaxis.label.set_color(p1.get_color())
-ax2.yaxis.label.set_color(p2.get_color())
-ax3.yaxis.label.set_color(p3.get_color())
-ax4.yaxis.label.set_color(p4.get_color())
-
-tkw = dict(size=4, width=1.5)
-ax1.tick_params(axis='y', colors=p1.get_color(), **tkw)
-ax2.tick_params(axis='y', colors=p2.get_color(), **tkw)
-ax3.tick_params(axis='y', colors=p3.get_color(), **tkw)
-ax4.tick_params(axis='y', colors=p4.get_color(), **tkw)
-
-ax1.tick_params(axis='x', **tkw)
-
-ax1.legend(handles=[p1, p2, p3, p4])
+ax1.set_ylabel("Mass Flow (l/min)")
+ax2.set_ylabel("O2 Concentration (%)")
+ax3.set_ylabel("CO2 Concentration (ppm)")
+ax4.set_ylabel("Exhaled volume cycle")
+ax5.set_ylabel("Exhaled volume total")
+# ax2 = ax1.twinx()
+# ax3 = ax1.twinx()
+# ax4 = ax1.twinx()
 
 ani = animation.FuncAnimation(fig, animate, frames=1000, interval=50)
 plt.show()

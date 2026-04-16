@@ -6,14 +6,13 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver_lcd.h"
-#include "driver_sdp810.h"
+#include "driver_sdp8XX.h"
 #include "driver/i2c_master.h"
 #include "driver/spi_master.h"
 #include "driver_scd30.h"
 #include "driver_me2o2.h"
 #include "battery.h"
 #include "esp_timer.h"
-
 
 #define SPI_HOST SPI2_HOST
 
@@ -26,11 +25,14 @@
 #define GPIO_PIN_NUM_SPI_MOSI 19
 #define GPIO_PIN_NUM_SPI_CLK 18
 
-#define MEASURE_PERIOD_PRESSURE_MS  100
-#define MEASURE_PERIOD_O2_MS        2000
-#define MEASURE_PERIOD_CO2_MS       2000
+#define MEASURE_PERIOD_PRESSURE_MS 10
+#define MEASURE_PERIOD_O2_MS 2000
+#define MEASURE_PERIOD_CO2_MS 2010
 
-#define DIFFERENTIAL_PRESSURE_THRESHOLD 0.1f
+#define PRESSURE_SENSOR_MODEL SDP8XX_SDP810_500PA
+
+#define DIFFERENTIAL_PRESSURE_THRESHOLD 0.2f
+#define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
 static const char *TAG = "main";
 
@@ -106,43 +108,81 @@ static void DifferentialPressureTask(void *pvParameters)
 {
     int64_t timestamp;
     float diffPressure;
-    float temperatureSdp810;
-    float massFlow;
-    float exhaledVolume = 0.0f;
+    float massFlow = 0.0f;
+    float exhaledVolumeCycle = 0.0f;
+    float exhaledVolumeTotal = 0.0f;
     int64_t lastTimestamp;
     int64_t deltaT;
     float lastMassFlow = 0.0F;
+    int16_t scalingFactor;
+    int16_t diffPressureRaw;
+    uint16_t i = 0;
+    bool exhale = false;
 
-    SDP810_Initialize(i2cHandle);
-    SDP810_StartContinuousMeasurementWithMassFlowTComp();
+    SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL);
+
+    SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging();
+
+    vTaskDelay(pdMS_TO_TICKS(10)); // Wait for first measure
+
+    SDP8XX_ReadScalingFactor(&scalingFactor);
+    ESP_LOGI(TAG, "Scaling factor = %d", scalingFactor);
 
     lastTimestamp = esp_timer_get_time();
+
     while (1)
     {
-        timestamp = esp_timer_get_time()/1000;
-        if (SDP810_ReadMeasurement(&diffPressure, &temperatureSdp810))
+        timestamp = esp_timer_get_time() / 1000;
+
+        if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
         {
+            diffPressure = (float)diffPressureRaw / (float)scalingFactor;
             deltaT = timestamp - lastTimestamp;
             lastTimestamp = timestamp;
 
-            if(diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD)
+            if(diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
             {
+                if(exhale == true)
+                {
+                    exhaledVolumeTotal += exhaledVolumeCycle;
+                    ESP_LOGI(TAG, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
+                    exhale = false;
+                    ESP_LOGI(TAG, "#4,%.3f,%d", 0.0f, timestamp);
+                }
                 diffPressure = 0.0f;
-                exhaledVolume = 0.0f;
+                exhaledVolumeCycle = 0.0f;
                 massFlow = 0.0f;
             }
-            else
+            else if(diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
             {
-                massFlow = 3.186F * sqrt(diffPressure); //Bernoulli equation Q=k⋅sqrt(ΔP)
-                exhaledVolume += (float)deltaT * (massFlow + lastMassFlow) / 120000.0f; // Trapezoidal rule
+                if(exhale == false)
+                {
+                    ESP_LOGI(TAG, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
+                    exhale = true;
+                }
+                  
+                massFlow = 4.9855f * sqrt(diffPressure); // Bernoulli equation Q=k⋅sqrt(ΔP)
+                exhaledVolumeCycle += (float)deltaT * (massFlow + lastMassFlow) / 120000.0f; // Trapezoidal rule
+                ESP_LOGI(TAG, "#4,%.3f,%d", exhaledVolumeCycle, timestamp);
             }
 
             lastMassFlow = massFlow;
 
-            ESP_LOGI(TAG, "#1,%.3f,%d", massFlow, timestamp);
-            ESP_LOGI(TAG, "#4,%.3f,%d", exhaledVolume, timestamp);
-            //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureSdp810);
+            if((i % 5) == 0)
+            {
+                ESP_LOGI(TAG, "#1,%.3f,%d", massFlow, timestamp);
+            }
+
+            if(i < 1000)
+            {
+                i++;
+            }
+            else
+            {
+                i = 0;
+            }   
         }
+
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
     }
 }
@@ -157,7 +197,7 @@ static void O2Task(void *pvParameters)
 
     while (1)
     {
-        timestamp = esp_timer_get_time()/1000;
+        timestamp = esp_timer_get_time() / 1000;
         o2 = ME2O2_ReadOxygen();
 
         ESP_LOGI(TAG, "#2,%.1f,%d", o2, timestamp);
@@ -178,12 +218,12 @@ static void CO2Task(void *pvParameters)
 
     while (1)
     {
-        timestamp = esp_timer_get_time()/1000;
+        timestamp = esp_timer_get_time() / 1000;
         if (SCD30_GetMeasures(&co2, &temperatureScd30, &humidity))
         {
             ESP_LOGI(TAG, "#3,%.1f,%d", co2, timestamp);
-            //ESP_LOGI(TAG, "Temperature = %.1f C", temperatureScd30);
-            //ESP_LOGI(TAG, "Humidity = %.1f %%", humidity);
+            // ESP_LOGI(TAG, "Temperature = %.1f C", temperatureScd30);
+            // ESP_LOGI(TAG, "Humidity = %.1f %%", humidity);
         }
 
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));

@@ -22,13 +22,6 @@ void BATTERY_Initialize()
 {
     adc_oneshot_unit_init_cfg_t unitConfig = {.unit_id = ADC_UNIT_1, .clk_src = 0, .ulp_mode = ADC_ULP_MODE_DISABLE};
     adc_oneshot_chan_cfg_t channelConfig = {.atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12};
-    adc_cali_line_fitting_config_t cali_config = {
-        .unit_id = unitConfig.unit_id,
-        .atten = channelConfig.atten,
-        .bitwidth = channelConfig.bitwidth,
-    };
-
-    //ESP_ERROR_CHECK(adc_cali_create_scheme_line_fitting(&cali_config, &adcCalibration));
 
     ESP_ERROR_CHECK(adc_oneshot_new_unit(&unitConfig, &adcHandle));
 
@@ -43,7 +36,6 @@ float BATTERY_MeasureSoc()
     float batteryVoltage;
 
     adc_oneshot_read(adcHandle, ADC_CHANNEL_VBAT, &adcReading);
-    //adc_cali_raw_to_voltage(adcCalibration, adcReading, &adcVoltagemV);
 
     batteryVoltage = ADC_VOLTAGE_TO_BATTERY_VOLTAGE(adcReading);
 

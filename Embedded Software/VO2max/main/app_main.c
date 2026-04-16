@@ -133,7 +133,7 @@ static void DifferentialPressureTask(void *pvParameters)
             }
             else
             {
-                massFlow = 3.186F * sqrt(diffPressure);
+                massFlow = 3.186F * sqrt(diffPressure); //Bernoulli equation Q=k⋅sqrt(ΔP)
                 exhaledVolume += (float)deltaT * (massFlow + lastMassFlow) / 120000.0f; // Trapezoidal rule
             }
 

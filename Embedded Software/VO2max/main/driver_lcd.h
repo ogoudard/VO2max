@@ -13,14 +13,8 @@
 /**
  * @brief st7789 basic example default definition
  */
-#define LCD_DEFAULT_GAMMA_CURVE ST7789_GAMMA_CURVE_1
-#define LCD_DEFAULT_ACCESS (ST7789_ORDER_PAGE_TOP_TO_BOTTOM |   \
-                            ST7789_ORDER_COLUMN_LEFT_TO_RIGHT | \
-                            ST7789_ORDER_PAGE_COLUMN_NORMAL |   \
-                            ST7789_ORDER_LINE_TOP_TO_BOTTOM |   \
-                            ST7789_ORDER_COLOR_RGB |            \
-                            ST7789_ORDER_REFRESH_LEFT_TO_RIGHT)                                 /**< access */
-#define LCD_DEFAULT_RGB_INTERFACE_COLOR_FORMAT ST7789_RGB_INTERFACE_COLOR_FORMAT_262K           /**< 262K color format */
+#define LCD_DEFAULT_GAMMA_CURVE ST7789_GAMMA_CURVE_1                          /**< access */
+#define LCD_DEFAULT_RGB_INTERFACE_COLOR_FORMAT ST7789_RGB_INTERFACE_COLOR_FORMAT_65K           /**< 262K color format */
 #define LCD_DEFAULT_CONTROL_INTERFACE_COLOR_FORMAT ST7789_CONTROL_INTERFACE_COLOR_FORMAT_16_BIT /**< 16bit color format */
 #define LCD_DEFAULT_BRIGHTNESS 0xFF                                                             /**< 0xFF brightness */
 #define LCD_DEFAULT_BRIGHTNESS_BLOCK ST7789_BOOL_FALSE                                          /**< disable brightness block */
@@ -122,7 +116,7 @@ uint8_t LCD_Initialize(void);
  *         - 1 deinit failed
  * @note   none
  */
-uint8_t LCD_deinit(void);
+uint8_t LCD_Deinitialize(void);
 
 /**
  * @brief  basic example clear
@@ -131,7 +125,7 @@ uint8_t LCD_deinit(void);
  *         - 1 clear failed
  * @note   none
  */
-uint8_t LCD_clear(void);
+uint8_t LCD_Clear(void);
 
 /**
  * @brief  basic example display on
@@ -140,7 +134,7 @@ uint8_t LCD_clear(void);
  *         - 1 display on failed
  * @note   none
  */
-uint8_t LCD_display_on(void);
+uint8_t LCD_DisplayOn(void);
 
 /**
  * @brief  basic example display off
@@ -149,7 +143,7 @@ uint8_t LCD_display_on(void);
  *         - 1 display off failed
  * @note   none
  */
-uint8_t LCD_display_off(void);
+uint8_t LCD_DisplayOff(void);
 
 /**
  * @brief     basic example draw a string
@@ -164,7 +158,7 @@ uint8_t LCD_display_off(void);
  *            - 1 draw string failed
  * @note      none
  */
-uint8_t LCD_string(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font);
+uint8_t LCD_String(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font);
 
 /**
  * @brief     basic example write a point
@@ -176,7 +170,7 @@ uint8_t LCD_string(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t col
  *            - 1 write point failed
  * @note      none
  */
-uint8_t LCD_write_point(uint16_t x, uint16_t y, uint32_t color);
+uint8_t LCD_WritePoint(uint16_t x, uint16_t y, uint32_t color);
 
 /**
  * @brief     basic example fill a rectangle
@@ -190,7 +184,7 @@ uint8_t LCD_write_point(uint16_t x, uint16_t y, uint32_t color);
  *            - 1 fill rect failed
  * @note      none
  */
-uint8_t LCD_rect(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color);
+uint8_t LCD_Rectangle(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color);
 
 /**
  * @brief     basic example draw a 16 bits picture
@@ -204,6 +198,6 @@ uint8_t LCD_rect(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, u
  *            - 1 draw picture 16 bits failed
  * @note      none
  */
-uint8_t LCD_draw_picture_16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *img);
+uint8_t LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *img);
 
 #endif

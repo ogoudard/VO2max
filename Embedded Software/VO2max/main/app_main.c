@@ -34,18 +34,20 @@
 #define DIFFERENTIAL_PRESSURE_THRESHOLD 0.2f
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
-static const char *TAG = "main";
+static const char *TAG = "[Main]";
 
 static i2c_master_bus_handle_t i2cHandle;
 
 static void I2cBusInit(i2c_master_bus_handle_t *busHandle);
 static void SpiBusInit();
-static void DifferentialPressureTask(void *pvParameters);
+static void DisplayTask(void *pvParameters);
+static void MassFlowTask(void *pvParameters);
 static void O2Task(void *pvParameters);
 static void CO2Task(void *pvParameters);
 
 void app_main(void)
 {
+    TaskHandle_t displayTaskHandle;
     TaskHandle_t differentialPressureTaskHandle;
     TaskHandle_t o2TaskHandle;
     TaskHandle_t co2TaskHandle;
@@ -60,14 +62,10 @@ void app_main(void)
 
     esp_timer_early_init();
 
-    SpiBusInit();
-    // LCD_Initialize();
-    // char string[] =  "Hello, world!";
-    // LCD_string(20, 20, string, sizeof(string), 0xFFFFFF, ST7789_FONT_24);
-
     I2cBusInit(&i2cHandle);
 
-    xTaskCreate(DifferentialPressureTask, "Differential Pressure Task", 4096, NULL, 0, &differentialPressureTaskHandle);
+    xTaskCreate(DisplayTask, "Display Task", 4096, NULL, 0, &displayTaskHandle);
+    xTaskCreate(MassFlowTask, "Differential Pressure Task", 4096, NULL, 0, &differentialPressureTaskHandle);
     xTaskCreate(O2Task, "O2 Task", 4096, NULL, 0, &o2TaskHandle);
     xTaskCreate(CO2Task, "CO2 Task", 4096, NULL, 0, &co2TaskHandle);
 
@@ -93,19 +91,37 @@ static void I2cBusInit(i2c_master_bus_handle_t *busHandle)
 static void SpiBusInit()
 {
     spi_bus_config_t buscfg = {
-        .miso_io_num = GPIO_PIN_NUM_SPI_MISO,
+        .miso_io_num = -1,
         .mosi_io_num = GPIO_PIN_NUM_SPI_MOSI,
         .sclk_io_num = GPIO_PIN_NUM_SPI_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 1000 * 1000 * 2 + 8,
+        .max_transfer_sz = SCREEN_WIDTH * SCREEN_HEIGHT * 2 + 8
     };
 
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST, &buscfg, SPI_DMA_CH_AUTO));
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST, &buscfg, SPI_DMA_CH1));
 }
 
-static void DifferentialPressureTask(void *pvParameters)
+static void DisplayTask(void *pvParameters)
 {
+    char version[20];
+
+    sprintf(version, "version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
+    SpiBusInit();
+    LCD_Initialize();
+    LCD_String(0, 25, "VO2max", strlen("VO2max"), 0, ST7789_FONT_24);
+    LCD_String(0, 50, version, strlen(version), 0, ST7789_FONT_24);
+    LCD_String(0, 75, "Initializing...", strlen("Initializing..."), 0, ST7789_FONT_24);
+
+    while (1)
+    {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+}
+
+static void MassFlowTask(void *pvParameters)
+{
+    const char *tagMassFlow = "[Mass Flow Task]";
     int64_t timestamp;
     float diffPressure;
     float massFlow = 0.0f;
@@ -126,7 +142,7 @@ static void DifferentialPressureTask(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(10)); // Wait for first measure
 
     SDP8XX_ReadScalingFactor(&scalingFactor);
-    ESP_LOGI(TAG, "Scaling factor = %d", scalingFactor);
+    ESP_LOGI(tagMassFlow, "Scaling factor = %d", scalingFactor);
 
     lastTimestamp = esp_timer_get_time();
 
@@ -140,47 +156,47 @@ static void DifferentialPressureTask(void *pvParameters)
             deltaT = timestamp - lastTimestamp;
             lastTimestamp = timestamp;
 
-            if(diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
+            if (diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
             {
-                if(exhale == true)
+                if (exhale == true)
                 {
                     exhaledVolumeTotal += exhaledVolumeCycle;
-                    ESP_LOGI(TAG, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
+                    ESP_LOGI(tagMassFlow, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
                     exhale = false;
-                    ESP_LOGI(TAG, "#4,%.3f,%d", 0.0f, timestamp);
+                    ESP_LOGI(tagMassFlow, "#4,%.3f,%d", 0.0f, timestamp);
                 }
                 diffPressure = 0.0f;
                 exhaledVolumeCycle = 0.0f;
                 massFlow = 0.0f;
             }
-            else if(diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
+            else if (diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
             {
-                if(exhale == false)
+                if (exhale == false)
                 {
-                    ESP_LOGI(TAG, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
+                    ESP_LOGI(tagMassFlow, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
                     exhale = true;
                 }
-                  
-                massFlow = 4.9855f * sqrt(diffPressure); // Bernoulli equation Q=k⋅sqrt(ΔP)
+
+                massFlow = 4.9855f * sqrt(diffPressure);                                     // Bernoulli equation Q=k⋅sqrt(ΔP)
                 exhaledVolumeCycle += (float)deltaT * (massFlow + lastMassFlow) / 120000.0f; // Trapezoidal rule
-                ESP_LOGI(TAG, "#4,%.3f,%d", exhaledVolumeCycle, timestamp);
+                ESP_LOGI(tagMassFlow, "#4,%.3f,%d", exhaledVolumeCycle, timestamp);
             }
 
             lastMassFlow = massFlow;
 
-            if((i % 5) == 0)
+            if ((i % 5) == 0)
             {
-                ESP_LOGI(TAG, "#1,%.3f,%d", massFlow, timestamp);
+                ESP_LOGI(tagMassFlow, "#1,%.3f,%d", massFlow, timestamp);
             }
 
-            if(i < 1000)
+            if (i < 1000)
             {
                 i++;
             }
             else
             {
                 i = 0;
-            }   
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
@@ -189,6 +205,7 @@ static void DifferentialPressureTask(void *pvParameters)
 
 static void O2Task(void *pvParameters)
 {
+    const char *tagO2 = "[O2 Task]";
     int64_t timestamp;
     float o2;
 
@@ -200,13 +217,14 @@ static void O2Task(void *pvParameters)
         timestamp = esp_timer_get_time() / 1000;
         o2 = ME2O2_ReadOxygen();
 
-        ESP_LOGI(TAG, "#2,%.1f,%d", o2, timestamp);
+        ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
     }
 }
 
 static void CO2Task(void *pvParameters)
 {
+    const char *tagCO2 = "[CO2 Task]";
     int64_t timestamp;
     float co2;
     float temperatureScd30;
@@ -221,9 +239,7 @@ static void CO2Task(void *pvParameters)
         timestamp = esp_timer_get_time() / 1000;
         if (SCD30_GetMeasures(&co2, &temperatureScd30, &humidity))
         {
-            ESP_LOGI(TAG, "#3,%.1f,%d", co2, timestamp);
-            // ESP_LOGI(TAG, "Temperature = %.1f C", temperatureScd30);
-            // ESP_LOGI(TAG, "Humidity = %.1f %%", humidity);
+            ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
         }
 
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));

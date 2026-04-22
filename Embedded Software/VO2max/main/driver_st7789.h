@@ -6,6 +6,9 @@
 #include <string.h>
 #include "driver/spi_master.h"
 
+#define SCREEN_HEIGHT 240
+#define SCREEN_WIDTH 135
+
 /**
  * @defgroup ST7789_driver st7789 driver function
  * @brief    st7789 driver modules
@@ -556,7 +559,7 @@ typedef struct ST7789_info_s
  *             - 2 handle is NULL
  * @note       none
  */
-uint8_t ST7789_info(ST7789_info_t *info);
+uint8_t ST7789_Info(ST7789_info_t *info);
 
 /**
  * @brief     initialize the chip
@@ -585,7 +588,7 @@ uint8_t ST7789_Initialize(spi_host_device_t host);
  *            - 6 command && data deinit failed
  * @note      none
  */
-uint8_t ST7789_deinit();
+uint8_t ST7789_Deinitialize();
 
 /**
  * @brief     clear the display
@@ -598,7 +601,7 @@ uint8_t ST7789_deinit();
  *            - 4 format is invalid
  * @note      none
  */
-uint8_t ST7789_clear();
+uint8_t ST7789_Clear();
 
 /**
  * @brief     draw a point in the display
@@ -615,7 +618,7 @@ uint8_t ST7789_clear();
  *            - 5 y is over row
  * @note      x < column && y < row
  */
-uint8_t ST7789_draw_point(uint16_t x, uint16_t y, uint32_t color);
+uint8_t ST7789_DrawPoint(uint16_t x, uint16_t y, uint32_t color);
 
 /**
  * @brief     write a string in the display
@@ -634,7 +637,7 @@ uint8_t ST7789_draw_point(uint16_t x, uint16_t y, uint32_t color);
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t ST7789_write_string(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font);
+uint8_t ST7789_WriteString(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font);
 
 /**
  * @brief     fill the rect
@@ -657,30 +660,7 @@ uint8_t ST7789_write_string(uint16_t x, uint16_t y, char *str, uint16_t len, uin
  *            - 9 top >= bottom
  * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
  */
-uint8_t ST7789_fill_rect(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color);
-
-/**
- * @brief     draw a picture
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] left left coordinate x
- * @param[in] top top coordinate y
- * @param[in] right right coordinate x
- * @param[in] bottom bottom coordinate y
- * @param[in] *image pointer to an image buffer
- * @return    status code
- *            - 0 success
- *            - 1 draw picture 12bits failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 left is over column
- *            - 5 right is over column
- *            - 6 left >= right
- *            - 7 top is over row
- *            - 8 bottom is over row
- *            - 9 top >= bottom
- * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
- */
-uint8_t ST7789_draw_picture_12bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image);
+uint8_t ST7789_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color);
 
 /**
  * @brief     draw a picture
@@ -703,31 +683,7 @@ uint8_t ST7789_draw_picture_12bits(uint16_t left, uint16_t top, uint16_t right, 
  *            - 9 top >= bottom
  * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
  */
-uint8_t ST7789_draw_picture_16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image);
-
-/**
- * @brief     draw a picture
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] left left coordinate x
- * @param[in] top top coordinate y
- * @param[in] right right coordinate x
- * @param[in] bottom bottom coordinate y
- * @param[in] *image pointer to an image buffer
- * @return    status code
- *            - 0 success
- *            - 1 draw picture 18bits failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 left is over column
- *            - 5 right is over column
- *            - 6 left >= right
- *            - 7 top is over row
- *            - 8 bottom is over row
- *            - 9 top >= bottom
- * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
- */
-uint8_t ST7789_draw_picture_18bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t *image);
-
+uint8_t ST7789_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image);
 /**
  * @brief     nop
  * @param[in] *handle pointer to an st7789 handle structure
@@ -738,7 +694,7 @@ uint8_t ST7789_draw_picture_18bits(uint16_t left, uint16_t top, uint16_t right, 
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_nop();
+uint8_t ST7789_Nop();
 
 /**
  * @brief     software reset
@@ -750,7 +706,7 @@ uint8_t ST7789_nop();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_software_reset();
+uint8_t ST7789_SoftwareReset();
 
 /**
  * @brief     sleep in
@@ -762,7 +718,7 @@ uint8_t ST7789_software_reset();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_sleep_in();
+uint8_t ST7789_SleepIn();
 
 /**
  * @brief     sleep out
@@ -774,7 +730,7 @@ uint8_t ST7789_sleep_in();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_sleep_out();
+uint8_t ST7789_SleepOut();
 
 /**
  * @brief     partial display mode on
@@ -786,7 +742,7 @@ uint8_t ST7789_sleep_out();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_partial_display_mode_on();
+uint8_t ST7789_PartialDisplayModeOn();
 
 /**
  * @brief     normal display mode on
@@ -798,7 +754,7 @@ uint8_t ST7789_partial_display_mode_on();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_normal_display_mode_on();
+uint8_t ST7789_NormalDisplayModeOn();
 
 /**
  * @brief     display inversion off
@@ -810,7 +766,7 @@ uint8_t ST7789_normal_display_mode_on();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_display_inversion_off();
+uint8_t ST7789_DisplayInversionOff();
 
 /**
  * @brief     display inversion on
@@ -822,7 +778,7 @@ uint8_t ST7789_display_inversion_off();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_display_inversion_on();
+uint8_t ST7789_DisplayInversionOn();
 
 /**
  * @brief     set gamma
@@ -835,7 +791,7 @@ uint8_t ST7789_display_inversion_on();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_gamma(uint8_t gamma);
+uint8_t ST7789_SetGamma(uint8_t gamma);
 
 /**
  * @brief     display off
@@ -847,7 +803,7 @@ uint8_t ST7789_set_gamma(uint8_t gamma);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_display_off();
+uint8_t ST7789_DisplayOff();
 
 /**
  * @brief     display on
@@ -859,7 +815,7 @@ uint8_t ST7789_display_off();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_display_on();
+uint8_t ST7789_DisplayOn();
 
 /**
  * @brief     set the column address
@@ -875,7 +831,7 @@ uint8_t ST7789_display_on();
  *            - 5 start_address >= end_address
  * @note      start_address <= 319 && end_address <= 319 && start_address >= start_address
  */
-uint8_t ST7789_set_column_address(uint16_t start_address, uint16_t end_address);
+uint8_t ST7789_SetColumnAddress(uint16_t start_address, uint16_t end_address);
 
 /**
  * @brief     set the row address
@@ -891,7 +847,7 @@ uint8_t ST7789_set_column_address(uint16_t start_address, uint16_t end_address);
  *            - 5 start_address >= end_address
  * @note      start_address <= 319 && end_address <= 319 && start_address >= start_address
  */
-uint8_t ST7789_set_row_address(uint16_t start_address, uint16_t end_address);
+uint8_t ST7789_SetRowAddress(uint16_t start_address, uint16_t end_address);
 
 /**
  * @brief     memory write
@@ -905,7 +861,7 @@ uint8_t ST7789_set_row_address(uint16_t start_address, uint16_t end_address);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_memory_write(uint8_t *data, uint16_t len);
+uint8_t ST7789_MemoryWrite(uint8_t *data, uint16_t len);
 
 /**
  * @brief     set partial areas
@@ -919,7 +875,7 @@ uint8_t ST7789_memory_write(uint8_t *data, uint16_t len);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_partial_areas(uint16_t start_row, uint16_t end_row);
+uint8_t ST7789_SetPartialAreas(uint16_t start_row, uint16_t end_row);
 
 /**
  * @brief     set vertical scrolling
@@ -934,7 +890,7 @@ uint8_t ST7789_set_partial_areas(uint16_t start_row, uint16_t end_row);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_vertical_scrolling(uint16_t top_fixed_area,
+uint8_t ST7789_SetVerticalScrolling(uint16_t top_fixed_area,
                                       uint16_t scrolling_area, uint16_t bottom_fixed_area);
 
 /**
@@ -947,7 +903,7 @@ uint8_t ST7789_set_vertical_scrolling(uint16_t top_fixed_area,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_tearing_effect_line_off();
+uint8_t ST7789_TearingEffectLineOff();
 
 /**
  * @brief     tearing effect line on
@@ -960,7 +916,7 @@ uint8_t ST7789_tearing_effect_line_off();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_tearing_effect_line_on(ST7789_tearing_effect_t effect);
+uint8_t ST7789_TearingEffectLineOn(ST7789_tearing_effect_t effect);
 
 /**
  * @brief     set memory data access control
@@ -973,7 +929,7 @@ uint8_t ST7789_tearing_effect_line_on(ST7789_tearing_effect_t effect);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_memory_data_access_control(uint8_t order);
+uint8_t ST7789_SetMemoryDataAccessControl(uint8_t order);
 
 /**
  * @brief     set the vertical scroll start address
@@ -987,7 +943,7 @@ uint8_t ST7789_set_memory_data_access_control(uint8_t order);
  *            - 4 address is invalid
  * @note      none
  */
-uint8_t ST7789_set_vertical_scroll_start_address(uint16_t start_address);
+uint8_t ST7789_SetVerticalScrollStartAddress(uint16_t start_address);
 
 /**
  * @brief     idle mode off
@@ -999,7 +955,7 @@ uint8_t ST7789_set_vertical_scroll_start_address(uint16_t start_address);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_idle_mode_off();
+uint8_t ST7789_IdleModeOff();
 
 /**
  * @brief     idle mode on
@@ -1011,7 +967,7 @@ uint8_t ST7789_idle_mode_off();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_idle_mode_on();
+uint8_t ST7789_IdleModeOn();
 
 /**
  * @brief     set interface pixel format
@@ -1025,7 +981,7 @@ uint8_t ST7789_idle_mode_on();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_interface_pixel_format(ST7789_rgb_interface_color_format_t rgb,
+uint8_t ST7789_SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
                                           ST7789_control_interface_color_format_t control);
 
 /**
@@ -1040,7 +996,7 @@ uint8_t ST7789_set_interface_pixel_format(ST7789_rgb_interface_color_format_t rg
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_memory_continue_write(uint8_t *data, uint16_t len);
+uint8_t ST7789_MemoryContinueWrite(uint8_t *data, uint16_t len);
 
 /**
  * @brief     set tear scanline
@@ -1053,7 +1009,7 @@ uint8_t ST7789_memory_continue_write(uint8_t *data, uint16_t len);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_tear_scanline(uint16_t l);
+uint8_t ST7789_SetTearScanline(uint16_t l);
 
 /**
  * @brief     set display brightness
@@ -1066,7 +1022,7 @@ uint8_t ST7789_set_tear_scanline(uint16_t l);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_display_brightness(uint8_t brightness);
+uint8_t ST7789_SetDisplayBrightness(uint8_t brightness);
 
 /**
  * @brief     set display control
@@ -1081,7 +1037,7 @@ uint8_t ST7789_set_display_brightness(uint8_t brightness);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_display_control(ST7789_bool_t brightness_control_block,
+uint8_t ST7789_SetDisplayControl(ST7789_bool_t brightness_control_block,
                                    ST7789_bool_t display_dimming, ST7789_bool_t backlight_control);
 
 /**
@@ -1097,7 +1053,7 @@ uint8_t ST7789_set_display_control(ST7789_bool_t brightness_control_block,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_brightness_control_and_color_enhancement(ST7789_bool_t color_enhancement,
+uint8_t ST7789_SetBrightnessControlAndColorEnhancement(ST7789_bool_t color_enhancement,
                                                             ST7789_color_enhancement_mode_t mode, ST7789_color_enhancement_level_t level);
 
 /**
@@ -1111,7 +1067,7 @@ uint8_t ST7789_set_brightness_control_and_color_enhancement(ST7789_bool_t color_
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_cabc_minimum_brightness(uint8_t brightness);
+uint8_t ST7789_SetCabcMinimumBrightness(uint8_t brightness);
 
 /**
  * @}
@@ -1140,12 +1096,12 @@ uint8_t ST7789_set_cabc_minimum_brightness(uint8_t brightness);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_ram_control(ST7789_ram_access_t ram_mode,
-    ST7789_display_mode_t display_mode,
-    ST7789_frame_type_t frame_type,
-    ST7789_data_mode_t data_mode,
-    ST7789_rgb_bus_width_t bus_width,
-    ST7789_pixel_type_t pixel_type);
+uint8_t ST7789_SetRamControl(ST7789_ram_access_t ram_mode,
+                               ST7789_display_mode_t display_mode,
+                               ST7789_frame_type_t frame_type,
+                               ST7789_data_mode_t data_mode,
+                               ST7789_rgb_bus_width_t bus_width,
+                               ST7789_pixel_type_t pixel_type);
 
 /**
  * @brief     set rgb interface control
@@ -1168,14 +1124,14 @@ uint8_t ST7789_set_ram_control(ST7789_ram_access_t ram_mode,
  * @note      0x02 <= vbp <= 0x7F
  *            0x02 <= hbp <= 0x1F
  */
-uint8_t ST7789_set_rgb_interface_control(ST7789_direct_rgb_mode_t rgb_mode,
-    ST7789_rgb_if_enable_mode_t rgb_if_mode,
-    ST7789_pin_level_t vspl,
-    ST7789_pin_level_t hspl,
-    ST7789_pin_level_t dpl,
-    ST7789_pin_level_t epl,
-    uint8_t vbp,
-    uint8_t hbp);
+uint8_t ST7789_SetRgbInterfaceControl(ST7789_direct_rgb_mode_t rgb_mode,
+                                         ST7789_rgb_if_enable_mode_t rgb_if_mode,
+                                         ST7789_pin_level_t vspl,
+                                         ST7789_pin_level_t hspl,
+                                         ST7789_pin_level_t dpl,
+                                         ST7789_pin_level_t epl,
+                                         uint8_t vbp,
+                                         uint8_t hbp);
 
 /**
  * @brief     set porch
@@ -1205,13 +1161,13 @@ uint8_t ST7789_set_rgb_interface_control(ST7789_direct_rgb_mode_t rgb_mode,
  *            0x01 <= back_porch_partial <= 0xF
  *            0x01 <= front_porch_partial <= 0xF
  */
-uint8_t ST7789_set_porch(uint8_t back_porch_normal,
-    uint8_t front_porch_normal,
-    ST7789_bool_t separate_porch_enable,
-    uint8_t back_porch_idle,
-    uint8_t front_porch_idle,
-    uint8_t back_porch_partial,
-    uint8_t front_porch_partial);
+uint8_t ST7789_SetPorch(uint8_t back_porch_normal,
+                         uint8_t front_porch_normal,
+                         ST7789_bool_t separate_porch_enable,
+                         uint8_t back_porch_idle,
+                         uint8_t front_porch_idle,
+                         uint8_t back_porch_partial,
+                         uint8_t front_porch_partial);
 
 /**
  * @brief     set frame rate control
@@ -1232,12 +1188,12 @@ uint8_t ST7789_set_porch(uint8_t back_porch_normal,
  * @note      0 <= idle_frame_rate <= 0x1F
  *            0 <= partial_frame_rate <= 0x1F
  */
-uint8_t ST7789_set_frame_rate_control(ST7789_bool_t separate_fr_control,
-    ST7789_frame_rate_divided_control_t div_control,
-    ST7789_inversion_idle_mode_t idle_mode,
-    uint8_t idle_frame_rate,
-    ST7789_inversion_partial_mode_t partial_mode,
-    uint8_t partial_frame_rate);
+uint8_t ST7789_SetFrameRateControl(ST7789_bool_t separate_fr_control,
+                                      ST7789_frame_rate_divided_control_t div_control,
+                                      ST7789_inversion_idle_mode_t idle_mode,
+                                      uint8_t idle_frame_rate,
+                                      ST7789_inversion_partial_mode_t partial_mode,
+                                      uint8_t partial_frame_rate);
 
 /**
  * @brief     set partial mode control
@@ -1252,9 +1208,9 @@ uint8_t ST7789_set_frame_rate_control(ST7789_bool_t separate_fr_control,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_partial_mode_control(ST7789_non_display_source_output_level_t level,
-    ST7789_non_display_area_scan_mode_t mode,
-    ST7789_non_display_frame_frequency_t frequency);
+uint8_t ST7789_SetPartialModeControl(ST7789_non_display_source_output_level_t level,
+                                        ST7789_non_display_area_scan_mode_t mode,
+                                        ST7789_non_display_frame_frequency_t frequency);
 
 /**
  * @brief     set gate control
@@ -1268,7 +1224,7 @@ uint8_t ST7789_set_partial_mode_control(ST7789_non_display_source_output_level_t
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_gate_control(ST7789_vghs_t vghs, ST7789_vgls_t vgls);
+uint8_t ST7789_SetGateControl(ST7789_vghs_t vghs, ST7789_vgls_t vgls);
 
 /**
  * @brief     set gate on timing adjustment
@@ -1285,9 +1241,9 @@ uint8_t ST7789_set_gate_control(ST7789_vghs_t vghs, ST7789_vgls_t vgls);
  *            gate_off_timing_adjustment_rgb <= 0xF
  *            gate_off_timing_adjustment <= 0xF
  */
-uint8_t ST7789_set_gate_on_timing_adjustment(uint8_t gate_on_timing_adjustment,
-    uint8_t gate_off_timing_adjustment_rgb,
-    uint8_t gate_off_timing_adjustment);
+uint8_t ST7789_SetGateOnTimingAdjustment(uint8_t gate_on_timing_adjustment,
+                                             uint8_t gate_off_timing_adjustment_rgb,
+                                             uint8_t gate_off_timing_adjustment);
 
 /**
  * @brief     enable or disable digital gamma
@@ -1300,7 +1256,7 @@ uint8_t ST7789_set_gate_on_timing_adjustment(uint8_t gate_on_timing_adjustment,
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_digital_gamma(ST7789_bool_t enable);
+uint8_t ST7789_SetDigitalGamma(ST7789_bool_t enable);
 
 /**
  * @brief     set vcoms
@@ -1314,7 +1270,7 @@ uint8_t ST7789_set_digital_gamma(ST7789_bool_t enable);
  *            - 4 vcoms > 0x3F
  * @note      0 <= vcoms <= 0x3F
  */
-uint8_t ST7789_set_vcoms(uint8_t vcoms);
+uint8_t ST7789_SetVcoms(uint8_t vcoms);
 
 /**
  * @brief      convert the vcom to the register raw data
@@ -1327,7 +1283,7 @@ uint8_t ST7789_set_vcoms(uint8_t vcoms);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vcom_convert_to_register(float v, uint8_t *reg);
+uint8_t ST7789_VcomConvertToRegister(float v, uint8_t *reg);
 
 /**
  * @brief      convert the register raw data to the vcom
@@ -1340,7 +1296,7 @@ uint8_t ST7789_vcom_convert_to_register(float v, uint8_t *reg);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vcom_convert_to_data(uint8_t reg, float *v);
+uint8_t ST7789_VcomConvertToData(uint8_t reg, float *v);
 
 /**
  * @brief     set lcm control
@@ -1359,7 +1315,7 @@ uint8_t ST7789_vcom_convert_to_data(uint8_t reg, float *v);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_lcm_control(
+uint8_t ST7789_SetLcmControl(
     ST7789_bool_t xmy,
     ST7789_bool_t xbgr,
     ST7789_bool_t xinv,
@@ -1379,7 +1335,7 @@ uint8_t ST7789_set_lcm_control(
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_id_code_setting(uint8_t id[3]);
+uint8_t ST7789_SetIdCodeSetting(uint8_t id[3]);
 
 /**
  * @brief     set vdv vrh from
@@ -1392,7 +1348,7 @@ uint8_t ST7789_set_id_code_setting(uint8_t id[3]);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_vdv_vrh_from(ST7789_vdv_vrh_from_t from);
+uint8_t ST7789_SetVdvVrhFrom(ST7789_vdv_vrh_from_t from);
 
 /**
  * @brief     set vrhs
@@ -1406,7 +1362,7 @@ uint8_t ST7789_set_vdv_vrh_from(ST7789_vdv_vrh_from_t from);
  *            - 4 vrhs > 0x27
  * @note      0 <= vrhs <= 0x27
  */
-uint8_t ST7789_set_vrhs(uint8_t vrhs);
+uint8_t ST7789_SetVrhs(uint8_t vrhs);
 
 /**
  * @brief      convert the vrhs to the register raw data
@@ -1419,7 +1375,7 @@ uint8_t ST7789_set_vrhs(uint8_t vrhs);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vrhs_convert_to_register(float v, uint8_t *reg);
+uint8_t ST7789_VrhsConvertToRegister(float v, uint8_t *reg);
 
 /**
  * @brief      convert the register raw data to the vrhs
@@ -1432,7 +1388,7 @@ uint8_t ST7789_vrhs_convert_to_register(float v, uint8_t *reg);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vrhs_convert_to_data(uint8_t reg, float *v);
+uint8_t ST7789_VrhsConvertToData(uint8_t reg, float *v);
 
 /**
  * @brief     set vdv
@@ -1446,7 +1402,7 @@ uint8_t ST7789_vrhs_convert_to_data(uint8_t reg, float *v);
  *            - 4 vdv > 0x3F
  * @note      0 <= vdv <= 0x3F
  */
-uint8_t ST7789_set_vdv(uint8_t vdv);
+uint8_t ST7789_SetVdv(uint8_t vdv);
 
 /**
  * @brief      convert the vdv to the register raw data
@@ -1459,7 +1415,7 @@ uint8_t ST7789_set_vdv(uint8_t vdv);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vdv_convert_to_register(float v, uint8_t *reg);
+uint8_t ST7789_VdvConvertToRegister(float v, uint8_t *reg);
 
 /**
  * @brief      convert the register raw data to the vdv
@@ -1472,7 +1428,7 @@ uint8_t ST7789_vdv_convert_to_register(float v, uint8_t *reg);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vdv_convert_to_data(uint8_t reg, float *v);
+uint8_t ST7789_VdvConvertToData(uint8_t reg, float *v);
 
 /**
  * @brief     set vcoms offset
@@ -1486,7 +1442,7 @@ uint8_t ST7789_vdv_convert_to_data(uint8_t reg, float *v);
  *            - 4 offset > 0x3F
  * @note      0 <= offset <= 0x3F
  */
-uint8_t ST7789_set_vcoms_offset(uint8_t offset);
+uint8_t ST7789_SetVcomsOffset(uint8_t offset);
 
 /**
  * @brief      convert the vcoms offset to the register raw data
@@ -1499,7 +1455,7 @@ uint8_t ST7789_set_vcoms_offset(uint8_t offset);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vcoms_offset_convert_to_register(float v, uint8_t *reg);
+uint8_t ST7789_VcomsOffsetConvertToRegister(float v, uint8_t *reg);
 
 /**
  * @brief      convert the register raw data to the vcoms offset
@@ -1512,7 +1468,7 @@ uint8_t ST7789_vcoms_offset_convert_to_register(float v, uint8_t *reg);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_vcoms_offset_convert_to_data(uint8_t reg, float *v);
+uint8_t ST7789_VcomsOffsetConvertToData(uint8_t reg, float *v);
 
 /**
  * @brief     set frame rate
@@ -1526,7 +1482,7 @@ uint8_t ST7789_vcoms_offset_convert_to_data(uint8_t reg, float *v);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_frame_rate(ST7789_inversion_selection_t selection, ST7789_frame_rate_t rate);
+uint8_t ST7789_SetFrameRate(ST7789_inversion_selection_t selection, ST7789_frame_rate_t rate);
 
 /**
  * @brief     set cabc control
@@ -1542,7 +1498,7 @@ uint8_t ST7789_set_frame_rate(ST7789_inversion_selection_t selection, ST7789_fra
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_cabc_control(
+uint8_t ST7789_SetCabcControl(
     ST7789_bool_t led_on,
     ST7789_bool_t led_pwm_init,
     ST7789_bool_t led_pwm_fix,
@@ -1559,7 +1515,7 @@ uint8_t ST7789_set_cabc_control(
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_pwm_frequency(ST7789_pwm_frequency_t frequency);
+uint8_t ST7789_SetPwmFrequency(ST7789_pwm_frequency_t frequency);
 
 /**
  * @brief     set power control 1
@@ -1574,7 +1530,7 @@ uint8_t ST7789_set_pwm_frequency(ST7789_pwm_frequency_t frequency);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_power_control_1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_t vds);
+uint8_t ST7789_SetPowerControl1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_t vds);
 
 /**
  * @brief     enable vap van signal output
@@ -1586,7 +1542,7 @@ uint8_t ST7789_set_power_control_1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST778
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_enable_vap_van_signal_output();
+uint8_t ST7789_EnableVapVanSignalOutput();
 
 /**
  * @brief     enable or disable command 2
@@ -1599,7 +1555,7 @@ uint8_t ST7789_enable_vap_van_signal_output();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_command_2_enable(ST7789_bool_t enable);
+uint8_t ST7789_SetCommand2Enable(ST7789_bool_t enable);
 
 /**
  * @brief     set positive voltage gamma control
@@ -1612,7 +1568,7 @@ uint8_t ST7789_set_command_2_enable(ST7789_bool_t enable);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_positive_voltage_gamma_control(uint8_t param[14]);
+uint8_t ST7789_SetPositiveVoltageGammaControl(uint8_t param[14]);
 
 /**
  * @brief     set negative voltage gamma control
@@ -1625,7 +1581,7 @@ uint8_t ST7789_set_positive_voltage_gamma_control(uint8_t param[14]);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_negative_voltage_gamma_control(uint8_t param[14]);
+uint8_t ST7789_SetNegativeVoltageGammaControl(uint8_t param[14]);
 
 /**
  * @brief     set red digital gamma look up table
@@ -1638,7 +1594,7 @@ uint8_t ST7789_set_negative_voltage_gamma_control(uint8_t param[14]);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_digital_gamma_look_up_table_red(uint8_t param[64]);
+uint8_t ST7789_SetDigitalGammaLookUpTableRed(uint8_t param[64]);
 
 /**
  * @brief     set blue digital gamma look up table
@@ -1651,7 +1607,7 @@ uint8_t ST7789_set_digital_gamma_look_up_table_red(uint8_t param[64]);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_digital_gamma_look_up_table_blue(uint8_t param[64]);
+uint8_t ST7789_SetDigitalGammaLookUpTableBlue(uint8_t param[64]);
 
 /**
  * @brief     set gate
@@ -1670,11 +1626,7 @@ uint8_t ST7789_set_digital_gamma_look_up_table_blue(uint8_t param[64]);
  * @note      0 <= gate_line_number <= 0x3F
  *            0 <= first_scan_line_number 0x3F
  */
-uint8_t ST7789_set_gate(
-    uint8_t gate_line_number,
-    uint8_t first_scan_line_number,
-    ST7789_gate_scan_mode_t mode,
-    ST7789_gate_scan_direction_t direction);
+uint8_t ST7789_SetGate(uint8_t gate_line_number, uint8_t first_scan_line_number, ST7789_gate_scan_mode_t mode, ST7789_gate_scan_direction_t direction);
 
 /**
  * @brief      convert the gate line to the register raw data
@@ -1687,7 +1639,7 @@ uint8_t ST7789_set_gate(
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_gate_line_convert_to_register(uint16_t l, uint8_t *reg);
+uint8_t ST7789_GateLineConvertToRegister(uint16_t l, uint8_t *reg);
 
 /**
  * @brief      convert the register raw data to the gate line
@@ -1700,7 +1652,7 @@ uint8_t ST7789_gate_line_convert_to_register(uint16_t l, uint8_t *reg);
  *             - 3 handle is not initialized
  * @note       none
  */
-uint8_t ST7789_gate_line_convert_to_data(uint8_t reg, uint16_t *l);
+uint8_t ST7789_GateLineConvertToData(uint8_t reg, uint16_t *l);
 
 /**
  * @brief     set spi2 enable
@@ -1714,7 +1666,7 @@ uint8_t ST7789_gate_line_convert_to_data(uint8_t reg, uint16_t *l);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_spi2_enable(ST7789_bool_t date_lane, ST7789_bool_t command_table_2);
+uint8_t ST7789_SetSpi2Enable(ST7789_bool_t date_lane, ST7789_bool_t command_table_2);
 
 /**
  * @brief     set power control 2
@@ -1728,7 +1680,7 @@ uint8_t ST7789_set_spi2_enable(ST7789_bool_t date_lane, ST7789_bool_t command_ta
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_power_control_2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck);
+uint8_t ST7789_SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck);
 
 /**
  * @brief     set equalize time control
@@ -1746,10 +1698,7 @@ uint8_t ST7789_set_power_control_2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_
  *            - 6 gate_equalize_time > 0xF
  * @note      0 <= source_equalize_time <= 0x1F
  */
-uint8_t ST7789_set_equalize_time_control(
-    uint8_t source_equalize_time,
-    uint8_t source_pre_drive_time,
-    uint8_t gate_equalize_time);
+uint8_t ST7789_SetEqualizeTimeControl(uint8_t source_equalize_time, uint8_t source_pre_drive_time, uint8_t gate_equalize_time);
 
 /**
  * @brief     set program mode control
@@ -1761,7 +1710,7 @@ uint8_t ST7789_set_equalize_time_control(
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_program_mode_control();
+uint8_t ST7789_SetProgramModeControl();
 
 /**
  * @brief     enable or disable program mode
@@ -1774,7 +1723,7 @@ uint8_t ST7789_set_program_mode_control();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_program_mode_enable(ST7789_bool_t enable);
+uint8_t ST7789_SetProgramModeEnable(ST7789_bool_t enable);
 
 /**
  * @brief     set nvm setting
@@ -1788,7 +1737,7 @@ uint8_t ST7789_set_program_mode_enable(ST7789_bool_t enable);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_nvm_setting(uint8_t addr, uint8_t data);
+uint8_t ST7789_SetNvmSetting(uint8_t addr, uint8_t data);
 
 /**
  * @brief     set program action
@@ -1800,7 +1749,7 @@ uint8_t ST7789_set_nvm_setting(uint8_t addr, uint8_t data);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_set_program_action();
+uint8_t ST7789_SetProgramAction();
 
 /**
  * @}
@@ -1824,7 +1773,7 @@ uint8_t ST7789_set_program_action();
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_write_cmd(uint8_t cmd);
+uint8_t ST7789_WriteCmd(uint8_t cmd);
 
 /**
  * @brief     write the data
@@ -1837,6 +1786,6 @@ uint8_t ST7789_write_cmd(uint8_t cmd);
  *            - 3 handle is not initialized
  * @note      none
  */
-uint8_t ST7789_write_data(uint8_t data);
+uint8_t ST7789_WriteData(uint8_t data);
 
 #endif

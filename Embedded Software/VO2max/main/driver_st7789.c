@@ -104,9 +104,56 @@ static uint8_t buffer[ST7789_BUFFER_SIZE];
 
 static uint8_t WriteByte(uint8_t data, uint32_t cmd);
 static uint8_t WriteBytes(uint8_t *data, uint16_t len, uint32_t cmd);
-static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color);
+static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, bool negative);
 static uint8_t DrawPoint(uint16_t x, uint16_t y, uint32_t color);
 static void SpiPreTransferCallback(spi_transaction_t *t);
+
+/**
+ * @brief     initialize the chip
+ * @param[in] *handle pointer to an st7789 handle structure
+ * @return    status code
+ *            - 0 success
+ *            - 1 spi initialization failed
+ *            - 2 handle is NULL
+ *            - 3 linked functions is NULL
+ *            - 4 reset failed
+ *            - 5 command && data init failed
+ * @note      none
+ */
+uint8_t ST7789_Initialize(spi_host_device_t host)
+{
+    spi_device_interface_config_t devcfg = {
+        .command_bits = 0,
+        .address_bits = 0,
+        .dummy_bits = 0,
+        .clock_speed_hz = SPI_CLOCK_FREQUENCY_HZ, // Clock out at 10 MHz
+        .mode = 0,                          // SPI mode 0
+        .spics_io_num = GPIO_PIN_NUM_CS,    // CS pin
+        .queue_size = 7,                    // We want to be able to queue 7 transactions at a time
+        .pre_cb = SpiPreTransferCallback    // Specify pre-transfer callback to handle D/C line
+    };
+
+    gpio_config_t gpiosConf = {.intr_type = GPIO_INTR_DISABLE,
+                               .mode = GPIO_MODE_OUTPUT,
+                               .pin_bit_mask = (1 << GPIO_PIN_NUM_DC) | (1 << GPIO_PIN_NUM_RST) | (1 << GPIO_PIN_NUM_BCKL),
+                               .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                               .pull_up_en = GPIO_PULLUP_DISABLE};
+
+    gpio_config(&gpiosConf);
+
+    gpio_set_level(GPIO_PIN_NUM_BCKL, 1);
+
+    gpio_set_level(GPIO_PIN_NUM_RST, 0);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    gpio_set_level(GPIO_PIN_NUM_RST, 1);
+
+    vTaskDelay(pdMS_TO_TICKS(120)); /* over 120 ms */
+
+    // Attach the LCD to the SPI bus
+    ESP_ERROR_CHECK(spi_bus_add_device(host, &devcfg, &spiDeviceHandle));
+
+    return 0; /* success return 0 */
+}
 
 /**
  * @brief     nop
@@ -2495,53 +2542,6 @@ uint8_t ST7789_SetProgramAction()
 }
 
 /**
- * @brief     initialize the chip
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 spi initialization failed
- *            - 2 handle is NULL
- *            - 3 linked functions is NULL
- *            - 4 reset failed
- *            - 5 command && data init failed
- * @note      none
- */
-uint8_t ST7789_Initialize(spi_host_device_t host)
-{
-    spi_device_interface_config_t devcfg = {
-        .command_bits = 0,
-        .address_bits = 0,
-        .dummy_bits = 0,
-        .clock_speed_hz = 10 * 1000 * 1000, // Clock out at 10 MHz
-        .mode = 0,                          // SPI mode 0
-        .spics_io_num = GPIO_PIN_NUM_CS,    // CS pin
-        .queue_size = 7,                    // We want to be able to queue 7 transactions at a time
-        .pre_cb = SpiPreTransferCallback    // Specify pre-transfer callback to handle D/C line
-    };
-
-    gpio_config_t gpiosConf = {.intr_type = GPIO_INTR_DISABLE,
-                               .mode = GPIO_MODE_OUTPUT,
-                               .pin_bit_mask = (1 << GPIO_PIN_NUM_DC) | (1 << GPIO_PIN_NUM_RST) | (1 << GPIO_PIN_NUM_BCKL),
-                               .pull_down_en = GPIO_PULLDOWN_DISABLE,
-                               .pull_up_en = GPIO_PULLUP_DISABLE};
-
-    gpio_config(&gpiosConf);
-
-    gpio_set_level(GPIO_PIN_NUM_BCKL, 1);
-
-    gpio_set_level(GPIO_PIN_NUM_RST, 0);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(GPIO_PIN_NUM_RST, 1);
-
-    vTaskDelay(pdMS_TO_TICKS(120)); /* over 120 ms */
-
-    // Attach the LCD to the SPI bus
-    ESP_ERROR_CHECK(spi_bus_add_device(host, &devcfg, &spiDeviceHandle));
-
-    return 0; /* success return 0 */
-}
-
-/**
  * @brief     close the chip
  * @param[in] *handle pointer to an st7789 handle structure
  * @return    status code
@@ -2957,7 +2957,7 @@ uint8_t ST7789_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, ui
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t ST7789_WriteString(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font)
+uint8_t ST7789_WriteString(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font, bool negative)
 {
     if ((x >= SCREEN_WIDTH) || (y >= SCREEN_HEIGHT)) /* check x, y */
     {
@@ -2977,7 +2977,7 @@ uint8_t ST7789_WriteString(uint16_t x, uint16_t y, char *str, uint16_t len, uint
         {
             y = x = 0; /* reset to 0 */
         }
-        if (ShowChar(x, y, *str, font, color) != 0) /* show a char */
+        if (ShowChar(x, y, *str, font, color, negative) != 0) /* show a char */
         {
             return 1; /* return error */
         }
@@ -3209,7 +3209,7 @@ static uint8_t DrawPoint(uint16_t x, uint16_t y, uint32_t color)
  *            - 1 show char failed
  * @note      none
  */
-static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color)
+static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, bool negative)
 {
     uint8_t temp, t, t1;
     uint16_t y0 = y;
@@ -3236,7 +3236,14 @@ static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint3
         }
         for (t1 = 0; t1 < 8; t1++) /* write one line */
         {
-            if ((temp & 0x80) != 0) /* if 1 */
+            if (((temp & 0x80) != 0) && (false == negative))/* if 1 */
+            {
+                if (DrawPoint(x, y, color) != 0) /* draw point */
+                {
+                    return 1; /* return error */
+                }
+            }
+            else if(true == negative)
             {
                 if (DrawPoint(x, y, color) != 0) /* draw point */
                 {

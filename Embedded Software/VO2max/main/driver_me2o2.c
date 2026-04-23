@@ -1,22 +1,42 @@
+/************************************
+ * INCLUDES
+ ************************************/
+
 #include "driver_me2o2.h"
 #include "esp_log.h"
 
+/************************************
+ * PRIVATE MACROS AND DEFINES
+ ************************************/
+
 #define ME202_I2C_FREQUENCY 400000
 
-/* Oxygen register address */
+/* ME2-O2 register address */
 #define OXYGEN_DATA_REGISTER 0x03 // Oxygen data register
 #define USER_SET_REGISTER 0x08    // user set key value
 #define ACTUAL_SET_REGISTER 0x09  // actual set key value
 #define GET_KEY_REGISTER 0x0A     // get key value
 #define VERSION_REGISTER 0x0F
 
-static const char *TAG = "M2O2";
+/************************************
+ * PRIVATE VARIABLES
+ ************************************/
+
+static const char *TAG = "[M2-O2]";
 
 static i2c_master_dev_handle_t devHandle;
 
+/************************************
+ * PRIVATE FUNCTION PROTOTYPES
+ ************************************/
+
 static void WriteRegister(uint8_t reg, uint8_t data);
 static void ReadRegister(uint8_t reg, uint8_t *readBuffer, uint8_t readSize);
-static float ReadKey();
+static float ReadKey(void);
+
+/************************************
+ * PUBLIC FUNCTION DEFINITIONS
+ ************************************/
 
 void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle)
 {
@@ -45,7 +65,7 @@ void ME2O2_Calibrate(float vol)
 }
 
 /* Reading oxygen concentration */
-float ME2O2_ReadOxygen()
+float ME2O2_ReadOxygen(void)
 {
     uint8_t readBuffer[3];
     float key;
@@ -56,6 +76,10 @@ float ME2O2_ReadOxygen()
 
     return key * ((float)readBuffer[0] + ((float)readBuffer[1] / 10.0) + ((float)readBuffer[2] / 100.0));
 }
+
+/************************************
+ * PRIVATE FUNCTION DEFINITIONS
+ ************************************/
 
 /* Write data to the i2c register  */
 static void WriteRegister(uint8_t reg, uint8_t data)
@@ -73,20 +97,7 @@ static void ReadRegister(uint8_t reg, uint8_t *readBuffer, uint8_t readSize)
     i2c_master_transmit_receive(devHandle, &reg, sizeof(reg), readBuffer, readSize, -1);
 }
 
-/* Get the average data */
-static float ComputeAverage(float *array, uint8_t length)
-{
-    float sum = 0.0f;
-
-    for (uint8_t i = 0; i < length; i++)
-    {
-        sum += array[i];
-    }
-
-    return sum / (float)length;
-}
-
-static float ReadKey()
+static float ReadKey(void)
 {
     uint8_t value = 0;
     float key;

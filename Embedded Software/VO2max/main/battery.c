@@ -1,10 +1,16 @@
+/************************************
+ * INCLUDES
+ ************************************/
+
 #include "battery.h"
 #include "esp_adc/adc_oneshot.h"
 #include "soc/adc_channel.h"
 #include "esp_log.h"
 #include "esp_adc/adc_cali.h"
 
-static const char *TAG = "BATTERY";
+/************************************
+ * PRIVATE MACROS AND DEFINES
+ ************************************/
 
 #define ADC_CHANNEL_VBAT ADC1_GPIO33_CHANNEL
 
@@ -15,8 +21,18 @@ static const char *TAG = "BATTERY";
 #define VOLTAGE_DIVIDER_RATIO_INV (1.0f + VOLTAGE_DIVIDER_VBAT_R6 / VOLTAGE_DIVIDER_VBAT_R7)
 
 #define ADC_VOLTAGE_TO_BATTERY_VOLTAGE(x) (float)x * ADC_ATTENUATION_INV * VOLTAGE_DIVIDER_RATIO_INV / 1000.0f
+
+/************************************
+ * PRIVATE VARIABLES
+ ************************************/
+
+static const char *TAG = "[BATTERY]";
 static adc_oneshot_unit_handle_t adcHandle;
 static adc_cali_handle_t adcCalibration;
+
+/************************************
+ * PUBLIC FUNCTION DEFINITIONS
+ ************************************/
 
 void BATTERY_Initialize()
 {
@@ -42,3 +58,9 @@ float BATTERY_MeasureSoc()
     ESP_LOGI(TAG, "Battery voltage = %f V", batteryVoltage);
     return batteryVoltage * 71.42f - 214.25f;
 }
+
+/************************************
+ * PRIVATE FUNCTION DEFINITIONS
+ ************************************/
+
+ 

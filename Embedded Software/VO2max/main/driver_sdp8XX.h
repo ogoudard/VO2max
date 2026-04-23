@@ -22,7 +22,7 @@ typedef enum
 void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e productNumber);
 bool SDP8XX_ReadProductIdentifier(uint32_t *productNumber,
                                   uint64_t *serialNumber);
-void SDP8XX_SoftwareReset();
+void SDP8XX_SoftwareReset(void);
 void SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging(void);
 void SDP8XX_StartContinuousMeasurementWithMassFlowTComp(void);
 void SDP8XX_StartContinuousMeasurementWithDiffPressureTCompAndAveraging(void);

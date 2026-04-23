@@ -1,8 +1,16 @@
+/************************************
+ * INCLUDES
+ ************************************/
+
+#include <stdlib.h>
+
 #include "driver_SDP8XX.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 
-#include <stdlib.h>
+/************************************
+ * PRIVATE MACROS AND DEFINES
+ ************************************/
 
 #define SDP8XX_I2C_FREQUENCY 400000
 
@@ -19,16 +27,28 @@
 #define CMD_READ_PRODUCT_ID_FIRST 0x367C
 #define CMD_READ_PRODUCT_ID_SECOND 0xE102
 
-static const char *TAG = "SDP8XX";
+/************************************
+ * PRIVATE VARIABLES
+ ************************************/
+
+static const char *TAG = "[SDP8XX]";
 
 static i2c_master_dev_handle_t devHandle;
 static i2c_master_dev_handle_t generalCallHandle;
+
+/************************************
+ * PRIVATE FUNCTION PROTOTYPES
+ ************************************/
 
 static float ConvertTemperatureRawToCelsius(int16_t temperature_raw);
 static void ReadCommand(uint8_t *readBuffer, uint8_t readSize);
 static void WriteCommand(uint16_t command);
 static void WriteReadCommand(uint16_t command, uint8_t *readBuffer, uint8_t readSize);
 static uint8_t ComputeCrc8(const uint8_t *data, uint8_t len);
+
+/************************************
+ * PUBLIC FUNCTION DEFINITIONS
+ ************************************/
 
 void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e productNumber)
 {
@@ -318,6 +338,10 @@ bool SDP8XX_ReadMeasurements(float *differentialPressure,
 
     return ret;
 }
+
+/************************************
+ * PRIVATE FUNCTION DEFINITIONS
+ ************************************/
 
 static float ConvertTemperatureRawToCelsius(int16_t temperature_raw)
 {

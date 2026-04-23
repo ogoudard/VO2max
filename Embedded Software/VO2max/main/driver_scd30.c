@@ -1,7 +1,15 @@
+/************************************
+ * INCLUDES
+ ************************************/
+
 #include "driver_scd30.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+/************************************
+ * PRIVATE MACROS AND DEFINES
+ ************************************/
 
 #define SCD30_I2C_ADDRESS 0x61
 #define SCD30_I2C_FREQUENCY 400000
@@ -21,15 +29,26 @@
 
 #define SCD30_POLYNOMIAL 0x31 // P(x) = x^8 + x^5 + x^4 + 1 = 100110001
 
-static const char *TAG = "SCD30";
+/************************************
+ * PRIVATE VARIABLES
+ ************************************/
+
+static const char *TAG = "[SCD30]";
 
 static i2c_master_dev_handle_t devHandle;
 
-static uint8_t ComputeCrc8(uint8_t *data, uint8_t len);
+/************************************
+ * PRIVATE FUNCTION PROTOTYPES
+ ************************************/
 
+static uint8_t ComputeCrc8(uint8_t *data, uint8_t len);
 static void WriteCommand(uint16_t command);
 static void WriteCommandWithArgument(uint16_t command, uint16_t argument);
 static uint16_t WriteReadCommand(uint16_t address, uint8_t *readBuffer, uint8_t readSize);
+
+/************************************
+ * PUBLIC FUNCTION DEFINITIONS
+ ************************************/
 
 void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
 {
@@ -174,6 +193,10 @@ bool SCD30_GetMeasures(float *co2, float *temperature, float *humidity)
 
     return ret;
 }
+
+/************************************
+ * PRIVATE FUNCTION DEFINITIONS
+ ************************************/
 
 static void WriteCommand(uint16_t command)
 {

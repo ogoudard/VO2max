@@ -70,8 +70,8 @@ An early version without protection resulted in:
 
 ## Assembly Preview
 
-<img width="650" height="744" alt="WhatsApp Image 2026-04-08 at 15 16 31" src="https://github.com/user-attachments/assets/21562305-cd32-4f0a-9d6b-119ff516613f" />
 <img width="1002" height="786" alt="WhatsApp Image 2026-04-07 at 15 55 25" src="https://github.com/user-attachments/assets/c74c30ef-65ad-4344-8c3b-32b321b31ebc" />
+<img width="650" height="744" alt="WhatsApp Image 2026-04-08 at 15 16 31" src="https://github.com/user-attachments/assets/21562305-cd32-4f0a-9d6b-119ff516613f" />
 <img width="795" height="784" alt="fullsetup" src="https://github.com/user-attachments/assets/0cb6f345-f12f-4b2e-8f51-2fa018ec02e3" />
 <img width="1124" height="1326" alt="WhatsApp Image 2026-04-23 at 15 51 55" src="https://github.com/user-attachments/assets/5811434e-7def-4cd3-b50a-7737972d84ea" />
 

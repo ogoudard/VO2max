@@ -5,7 +5,7 @@ This project describes a simple 3-liter calibration pump used to calibrate airfl
 ## Overview
 
 The pump is built using:
-- PVC tube (Ø 100 mm) length > 3.0E6 */(pi * r^2)
+- PVC tube (Ø 100 mm) length > 3.0E6 */(pi * InsideRadius^2)
 - Pipe (Ø 8 mm) lenght match PVC tube
 - 3D printed parts (piston and end caps)
 

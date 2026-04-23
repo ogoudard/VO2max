@@ -32,7 +32,7 @@ The copper pipe is just a rod to push the piston
 The pump allows you to:
 - Generate a known volume (3L)
 - Control flow rate manually
-- Calibrate the relationship:
+- Calibrate the relationship: Q = k * sqrt(ΔP)
   
 ## Final Rendering
 

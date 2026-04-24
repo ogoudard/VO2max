@@ -41,7 +41,7 @@ static float ReadKey(void);
 void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle)
 {
     uint8_t readBuffer;
-     
+
     i2c_device_config_t devCfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = ME2O2_I2C_ADDRESS,
@@ -54,7 +54,6 @@ void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle)
 
     ESP_LOGI(TAG, "Version = %d\n", readBuffer);
 }
-
 
 /* Set Key value */
 void ME2O2_Calibrate(float vol)
@@ -78,7 +77,7 @@ bool ME2O2_ReadOxygen(float *oxygen)
 
     value = key * ((float)readBuffer[0] + ((float)readBuffer[1] / 10.0) + ((float)readBuffer[2] / 100.0));
 
-    if(value != NAN)
+    if (value != NAN)
     {
         *oxygen = value;
         ret = true;

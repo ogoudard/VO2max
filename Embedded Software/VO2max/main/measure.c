@@ -144,29 +144,30 @@ void MEASURE_FlowTask(void *pvParameters)
                     ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
                     exhale = false;
-#if LOG_CYCLE_EXHALED_VOLUME
-                    ESP_LOGI(tagFlow, "#4,%.3f,%d", 0.0f, timestamp);
-#endif
                 }
 
                 diffPressure = 0.0f;
-                cycleExhaledVolume = 0.0f;
                 flow = 0.0f;
 
-                xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
                 xQueueOverwrite(g_flowQueue, (float *)&flow);
             }
             else if (diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
             {
                 if (exhale == false)
                 {
+                    exhale = true;
 #if LOG_TOTAL_EXHALED_VOLUME
                     ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
-                    exhale = true;
+                    cycleExhaledVolume = 0.0f;
+
+#if LOG_CYCLE_EXHALED_VOLUME
+                    ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
+#endif
+                    xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
                 }
 
-                flow = 4.9855f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
+                flow = 12.618f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
                 cycleExhaledVolume += (float)deltaT * (flow + lastFlow) / 120000.0f; // Trapezoidal rule
                 xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME

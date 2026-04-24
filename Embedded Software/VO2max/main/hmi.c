@@ -59,6 +59,8 @@ static PushButtonState_e GetPushButton1State(void);
 static PushButtonState_e GetPushButton2State(void);
 static void LiveValuesScreenEntry(void);
 static void LiveValuesScreenAction(void);
+static void SpirometerScreenAction(void);
+static void SpirometerScreenEntry(void);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -137,13 +139,15 @@ void HMI_Task(void *pvParameters)
     MENU_AddSubmenu(&mainMenu, &liveValuesMenu);
 
     MENU_AddAction(&liveValuesMenu, LiveValuesScreenEntry, LiveValuesScreenAction, NULL);
-
-    sprintf(version, "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
+    MENU_AddAction(&spirometerMenu, SpirometerScreenEntry, SpirometerScreenAction, NULL);
 
     LCD_Initialize();
 
     LCD_String(0, 25, "VO2max", strlen("VO2max"), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+
+    sprintf(version, "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
     LCD_String(0, 50, version, strlen(version), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+
     LCD_String(0, 75, "Initializing...", strlen("Initializing..."), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
 
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -169,9 +173,9 @@ void HMI_Task(void *pvParameters)
                 {
                     selectedMenu--;
                 }
-            }
 
-            DisplayMenu(currentMenu, selectedMenu);
+                DisplayMenu(currentMenu, selectedMenu);
+            }
         }
         else if (pushButton1State == BUTTON_LONG_PRESS)
         {
@@ -202,9 +206,9 @@ void HMI_Task(void *pvParameters)
                 {
                     selectedMenu++;
                 }
-            }
 
-            DisplayMenu(currentMenu, selectedMenu);
+                DisplayMenu(currentMenu, selectedMenu);
+            }
         }
         else if (pushButton2State == BUTTON_LONG_PRESS)
         {
@@ -413,5 +417,32 @@ static void LiveValuesScreenAction(void)
     {
         sprintf(string, "%.0f", humidity);
         LCD_String(80, 112, string, strlen(string), LCD_COLOR_BLACK, LCD_COLOR_WHITE, ST7789_FONT_24);
+    }
+}
+
+static void SpirometerScreenEntry(void)
+{
+    LCD_Clear();
+
+    LCD_String(60, 24, "Spirometer", strlen("Spirometer"), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+    LCD_String(0, 72, "Vol (cyc) =     L", 17, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+    LCD_String(0, 96, "Vol (tot) =     L", 17, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+}
+
+static void SpirometerScreenAction(void)
+{
+    float cycleExhaledVolume;
+    float totalExhaledVolume;
+    char string[30];
+
+    if (pdPASS == xQueueReceive(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
+    {
+        sprintf(string, "%.1f", cycleExhaledVolume);
+        LCD_String(120, 72, string, strlen(string), LCD_COLOR_BLACK, LCD_COLOR_WHITE, ST7789_FONT_24);
+    }
+    if (pdPASS == xQueueReceive(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume, (TickType_t)0))
+    {
+        sprintf(string, "%.1f", totalExhaledVolume);
+        LCD_String(120, 96, string, strlen(string), LCD_COLOR_BLACK, LCD_COLOR_WHITE, ST7789_FONT_24);
     }
 }

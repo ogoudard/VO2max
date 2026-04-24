@@ -10,7 +10,6 @@
 #include "esp_log.h"
 #include "battery.h"
 #include "esp_timer.h"
-#include "menu.h"
 #include "hmi.h"
 #include "measure.h"
 
@@ -38,4 +37,3 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
-

@@ -9,6 +9,8 @@
 #define SCREEN_HEIGHT 240
 #define SCREEN_WIDTH 135
 
+#define LCD_NO_BG_COLOR 0xFFFFFFFF
+
 /**
  * @defgroup ST7789_driver st7789 driver function
  * @brief    st7789 driver modules
@@ -637,7 +639,7 @@ uint8_t ST7789_DrawPoint(uint16_t x, uint16_t y, uint32_t color);
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t ST7789_WriteString(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font, bool negative);
+uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font);
 
 /**
  * @brief     fill the rect
@@ -891,7 +893,7 @@ uint8_t ST7789_SetPartialAreas(uint16_t start_row, uint16_t end_row);
  * @note      none
  */
 uint8_t ST7789_SetVerticalScrolling(uint16_t top_fixed_area,
-                                      uint16_t scrolling_area, uint16_t bottom_fixed_area);
+                                    uint16_t scrolling_area, uint16_t bottom_fixed_area);
 
 /**
  * @brief     tearing effect line off
@@ -982,7 +984,7 @@ uint8_t ST7789_IdleModeOn();
  * @note      none
  */
 uint8_t ST7789_SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
-                                          ST7789_control_interface_color_format_t control);
+                                       ST7789_control_interface_color_format_t control);
 
 /**
  * @brief     memory continue write
@@ -1038,7 +1040,7 @@ uint8_t ST7789_SetDisplayBrightness(uint8_t brightness);
  * @note      none
  */
 uint8_t ST7789_SetDisplayControl(ST7789_bool_t brightness_control_block,
-                                   ST7789_bool_t display_dimming, ST7789_bool_t backlight_control);
+                                 ST7789_bool_t display_dimming, ST7789_bool_t backlight_control);
 
 /**
  * @brief     set brightness control and color enhancement
@@ -1054,7 +1056,7 @@ uint8_t ST7789_SetDisplayControl(ST7789_bool_t brightness_control_block,
  * @note      none
  */
 uint8_t ST7789_SetBrightnessControlAndColorEnhancement(ST7789_bool_t color_enhancement,
-                                                            ST7789_color_enhancement_mode_t mode, ST7789_color_enhancement_level_t level);
+                                                       ST7789_color_enhancement_mode_t mode, ST7789_color_enhancement_level_t level);
 
 /**
  * @brief     set cabc minimum brightness
@@ -1097,11 +1099,11 @@ uint8_t ST7789_SetCabcMinimumBrightness(uint8_t brightness);
  * @note      none
  */
 uint8_t ST7789_SetRamControl(ST7789_ram_access_t ram_mode,
-                               ST7789_display_mode_t display_mode,
-                               ST7789_frame_type_t frame_type,
-                               ST7789_data_mode_t data_mode,
-                               ST7789_rgb_bus_width_t bus_width,
-                               ST7789_pixel_type_t pixel_type);
+                             ST7789_display_mode_t display_mode,
+                             ST7789_frame_type_t frame_type,
+                             ST7789_data_mode_t data_mode,
+                             ST7789_rgb_bus_width_t bus_width,
+                             ST7789_pixel_type_t pixel_type);
 
 /**
  * @brief     set rgb interface control
@@ -1125,13 +1127,13 @@ uint8_t ST7789_SetRamControl(ST7789_ram_access_t ram_mode,
  *            0x02 <= hbp <= 0x1F
  */
 uint8_t ST7789_SetRgbInterfaceControl(ST7789_direct_rgb_mode_t rgb_mode,
-                                         ST7789_rgb_if_enable_mode_t rgb_if_mode,
-                                         ST7789_pin_level_t vspl,
-                                         ST7789_pin_level_t hspl,
-                                         ST7789_pin_level_t dpl,
-                                         ST7789_pin_level_t epl,
-                                         uint8_t vbp,
-                                         uint8_t hbp);
+                                      ST7789_rgb_if_enable_mode_t rgb_if_mode,
+                                      ST7789_pin_level_t vspl,
+                                      ST7789_pin_level_t hspl,
+                                      ST7789_pin_level_t dpl,
+                                      ST7789_pin_level_t epl,
+                                      uint8_t vbp,
+                                      uint8_t hbp);
 
 /**
  * @brief     set porch
@@ -1162,12 +1164,12 @@ uint8_t ST7789_SetRgbInterfaceControl(ST7789_direct_rgb_mode_t rgb_mode,
  *            0x01 <= front_porch_partial <= 0xF
  */
 uint8_t ST7789_SetPorch(uint8_t back_porch_normal,
-                         uint8_t front_porch_normal,
-                         ST7789_bool_t separate_porch_enable,
-                         uint8_t back_porch_idle,
-                         uint8_t front_porch_idle,
-                         uint8_t back_porch_partial,
-                         uint8_t front_porch_partial);
+                        uint8_t front_porch_normal,
+                        ST7789_bool_t separate_porch_enable,
+                        uint8_t back_porch_idle,
+                        uint8_t front_porch_idle,
+                        uint8_t back_porch_partial,
+                        uint8_t front_porch_partial);
 
 /**
  * @brief     set frame rate control
@@ -1189,11 +1191,11 @@ uint8_t ST7789_SetPorch(uint8_t back_porch_normal,
  *            0 <= partial_frame_rate <= 0x1F
  */
 uint8_t ST7789_SetFrameRateControl(ST7789_bool_t separate_fr_control,
-                                      ST7789_frame_rate_divided_control_t div_control,
-                                      ST7789_inversion_idle_mode_t idle_mode,
-                                      uint8_t idle_frame_rate,
-                                      ST7789_inversion_partial_mode_t partial_mode,
-                                      uint8_t partial_frame_rate);
+                                   ST7789_frame_rate_divided_control_t div_control,
+                                   ST7789_inversion_idle_mode_t idle_mode,
+                                   uint8_t idle_frame_rate,
+                                   ST7789_inversion_partial_mode_t partial_mode,
+                                   uint8_t partial_frame_rate);
 
 /**
  * @brief     set partial mode control
@@ -1209,8 +1211,8 @@ uint8_t ST7789_SetFrameRateControl(ST7789_bool_t separate_fr_control,
  * @note      none
  */
 uint8_t ST7789_SetPartialModeControl(ST7789_non_display_source_output_level_t level,
-                                        ST7789_non_display_area_scan_mode_t mode,
-                                        ST7789_non_display_frame_frequency_t frequency);
+                                     ST7789_non_display_area_scan_mode_t mode,
+                                     ST7789_non_display_frame_frequency_t frequency);
 
 /**
  * @brief     set gate control
@@ -1242,8 +1244,8 @@ uint8_t ST7789_SetGateControl(ST7789_vghs_t vghs, ST7789_vgls_t vgls);
  *            gate_off_timing_adjustment <= 0xF
  */
 uint8_t ST7789_SetGateOnTimingAdjustment(uint8_t gate_on_timing_adjustment,
-                                             uint8_t gate_off_timing_adjustment_rgb,
-                                             uint8_t gate_off_timing_adjustment);
+                                         uint8_t gate_off_timing_adjustment_rgb,
+                                         uint8_t gate_off_timing_adjustment);
 
 /**
  * @brief     enable or disable digital gamma

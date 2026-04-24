@@ -104,7 +104,7 @@ static uint8_t buffer[ST7789_BUFFER_SIZE];
 
 static uint8_t WriteByte(uint8_t data, uint32_t cmd);
 static uint8_t WriteBytes(uint8_t *data, uint16_t len, uint32_t cmd);
-static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, bool negative);
+static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, uint32_t bgColor);
 static uint8_t DrawPoint(uint16_t x, uint16_t y, uint32_t color);
 static void SpiPreTransferCallback(spi_transaction_t *t);
 
@@ -127,10 +127,10 @@ uint8_t ST7789_Initialize(spi_host_device_t host)
         .address_bits = 0,
         .dummy_bits = 0,
         .clock_speed_hz = SPI_CLOCK_FREQUENCY_HZ, // Clock out at 10 MHz
-        .mode = 0,                          // SPI mode 0
-        .spics_io_num = GPIO_PIN_NUM_CS,    // CS pin
-        .queue_size = 7,                    // We want to be able to queue 7 transactions at a time
-        .pre_cb = SpiPreTransferCallback    // Specify pre-transfer callback to handle D/C line
+        .mode = 0,                                // SPI mode 0
+        .spics_io_num = GPIO_PIN_NUM_CS,          // CS pin
+        .queue_size = 7,                          // We want to be able to queue 7 transactions at a time
+        .pre_cb = SpiPreTransferCallback          // Specify pre-transfer callback to handle D/C line
     };
 
     gpio_config_t gpiosConf = {.intr_type = GPIO_INTR_DISABLE,
@@ -2957,27 +2957,11 @@ uint8_t ST7789_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, ui
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t ST7789_WriteString(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font, bool negative)
+uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font)
 {
-    if ((x >= SCREEN_WIDTH) || (y >= SCREEN_HEIGHT)) /* check x, y */
-    {
-        ESP_LOGE(TAG, "ssd1351: x or y is invalid.\n"); /* x or y is invalid */
-
-        return 4; /* return error */
-    }
-
     while ((len != 0) && (*str <= '~') && (*str >= ' ')) /* write all string */
     {
-        if (x >= (SCREEN_HEIGHT - (font / 2))) /* check x point */
-        {
-            x = 0;              /* set x */
-            y += (uint8_t)font; /* set next row */
-        }
-        if (y >= (SCREEN_WIDTH - font)) /* check y pont */
-        {
-            y = x = 0; /* reset to 0 */
-        }
-        if (ShowChar(x, y, *str, font, color, negative) != 0) /* show a char */
+        if (ShowChar(x, y, *str, font, color, bgColor) != 0) /* show a char */
         {
             return 1; /* return error */
         }
@@ -3209,7 +3193,7 @@ static uint8_t DrawPoint(uint16_t x, uint16_t y, uint32_t color)
  *            - 1 show char failed
  * @note      none
  */
-static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, bool negative)
+static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, uint32_t bgColor)
 {
     uint8_t temp, t, t1;
     uint16_t y0 = y;
@@ -3236,16 +3220,16 @@ static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint3
         }
         for (t1 = 0; t1 < 8; t1++) /* write one line */
         {
-            if (((temp & 0x80) != 0) && (false == negative))/* if 1 */
+            if ((temp & 0x80) != 0) /* if 1 */
             {
                 if (DrawPoint(x, y, color) != 0) /* draw point */
                 {
                     return 1; /* return error */
                 }
             }
-            else if(true == negative)
+            else if (bgColor != LCD_NO_BG_COLOR)
             {
-                if (DrawPoint(x, y, color) != 0) /* draw point */
+                if (DrawPoint(x, y, bgColor) != 0) /* draw point */
                 {
                     return 1; /* return error */
                 }

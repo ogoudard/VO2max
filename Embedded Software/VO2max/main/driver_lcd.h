@@ -3,18 +3,17 @@
 
 #include "driver_st7789.h"
 
-/**
- * @defgroup st7789_example_driver st7789 example driver function
- * @brief    st7789 example driver modules
- * @ingroup  st7789_driver
- * @{
- */
+#define LCD_COLOR_BLACK 0x0000
+#define LCD_COLOR_RED 0xF800
+#define LCD_COLOR_GREEN 0x07E0
+#define LCD_COLOR_BLUE 0x001F
+#define LCD_COLOR_WHITE 0xFFFF
 
 /**
  * @brief st7789 basic example default definition
  */
-#define LCD_DEFAULT_GAMMA_CURVE ST7789_GAMMA_CURVE_1                          /**< access */
-#define LCD_DEFAULT_RGB_INTERFACE_COLOR_FORMAT ST7789_RGB_INTERFACE_COLOR_FORMAT_65K           /**< 262K color format */
+#define LCD_DEFAULT_GAMMA_CURVE ST7789_GAMMA_CURVE_1                                            /**< access */
+#define LCD_DEFAULT_RGB_INTERFACE_COLOR_FORMAT ST7789_RGB_INTERFACE_COLOR_FORMAT_65K            /**< 262K color format */
 #define LCD_DEFAULT_CONTROL_INTERFACE_COLOR_FORMAT ST7789_CONTROL_INTERFACE_COLOR_FORMAT_16_BIT /**< 16bit color format */
 #define LCD_DEFAULT_BRIGHTNESS 0xFF                                                             /**< 0xFF brightness */
 #define LCD_DEFAULT_BRIGHTNESS_BLOCK ST7789_BOOL_FALSE                                          /**< disable brightness block */
@@ -158,7 +157,7 @@ uint8_t LCD_DisplayOff(void);
  *            - 1 draw string failed
  * @note      none
  */
-uint8_t LCD_String(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font, bool negative);
+uint8_t LCD_String(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font);
 
 /**
  * @brief     basic example write a point

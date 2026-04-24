@@ -28,7 +28,6 @@
 
 static const char *TAG = "[BATTERY]";
 static adc_oneshot_unit_handle_t adcHandle;
-static adc_cali_handle_t adcCalibration;
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -47,8 +46,6 @@ void BATTERY_Initialize()
 float BATTERY_MeasureSoc()
 {
     int adcReading;
-    float batterySoc;
-    int adcVoltagemV;
     float batteryVoltage;
 
     adc_oneshot_read(adcHandle, ADC_CHANNEL_VBAT, &adcReading);
@@ -62,5 +59,3 @@ float BATTERY_MeasureSoc()
 /************************************
  * PRIVATE FUNCTION DEFINITIONS
  ************************************/
-
- 

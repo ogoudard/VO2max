@@ -574,10 +574,10 @@ uint8_t LCD_DisplayOff(void)
  *            - 1 draw string failed
  * @note      none
  */
-uint8_t LCD_String(uint16_t x, uint16_t y, char *str, uint16_t len, uint32_t color, ST7789_font_t font, bool negative)
+uint8_t LCD_String(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font)
 {
     /* write string */
-    if (ST7789_WriteString(x, y, str, len, color, font, negative) != 0)
+    if (ST7789_WriteString(x, y, str, len, color, bgColor, font) != 0)
     {
         return 1;
     }

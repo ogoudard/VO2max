@@ -31,11 +31,11 @@
 #define DIFFERENTIAL_PRESSURE_THRESHOLD 0.2f
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
-#define LOG_MASS_FLOW 0
+#define LOG_FLOW 0
 #define LOG_O2 0
 #define LOG_CO2 0
-#define LOG_EXHALED_VOLUME_CYCLE 0
-#define LOG_EXHALED_VOLUME_TOTAL 0
+#define LOG_CYCLE_EXHALED_VOLUME 0
+#define LOG_TOTAL_EXHALED_VOLUME 0
 
 /************************************
  * PRIVATE VARIABLES
@@ -45,6 +45,19 @@ static i2c_master_bus_handle_t i2cHandle;
 static TaskHandle_t differentialPressureTaskHandle;
 static TaskHandle_t o2TaskHandle;
 static TaskHandle_t co2TaskHandle;
+
+/************************************
+ * PUBLIC VARIABLES
+ ************************************/
+
+/* Queues for intertask communication */
+QueueHandle_t g_flowQueue;
+QueueHandle_t g_o2Queue;
+QueueHandle_t g_co2Queue;
+QueueHandle_t g_temperatureQueue;
+QueueHandle_t g_humidityQueue;
+QueueHandle_t g_totalExhaledVolumeQueue;
+QueueHandle_t g_cycleExhaledVolumeQueue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -68,28 +81,36 @@ void MEASURE_Initialize()
     ESP_LOGI(measureTag, "Initializing measure...");
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2cMasterConfig, &i2cHandle));
 
-    xTaskCreate(MEASURE_MassFlowTask, "Differential Pressure Task", 4096, NULL, 0, &differentialPressureTaskHandle);
+    g_flowQueue = xQueueCreate(1, sizeof(float));
+    g_o2Queue = xQueueCreate(1, sizeof(float));
+    g_co2Queue = xQueueCreate(1, sizeof(float));
+    g_cycleExhaledVolumeQueue = xQueueCreate(1, sizeof(float));
+    g_totalExhaledVolumeQueue = xQueueCreate(1, sizeof(float));
+    g_humidityQueue = xQueueCreate(1, sizeof(float));
+    g_temperatureQueue = xQueueCreate(1, sizeof(float));
+
+    xTaskCreate(MEASURE_FlowTask, "Differential Pressure Task", 4096, NULL, 0, &differentialPressureTaskHandle);
     xTaskCreate(MEASURE_O2Task, "O2 Task", 4096, NULL, 0, &o2TaskHandle);
     xTaskCreate(MEASURE_CO2Task, "CO2 Task", 4096, NULL, 0, &co2TaskHandle);
     ESP_LOGI(measureTag, "measure ready");
 }
-void MEASURE_MassFlowTask(void *pvParameters)
+void MEASURE_FlowTask(void *pvParameters)
 {
-    const char *tagMassFlow = "[Mass Flow Task]";
+    const char *tagFlow = "[Flow Task]";
     int64_t timestamp;
     float diffPressure;
-    float massFlow = 0.0f;
-    float exhaledVolumeCycle = 0.0f;
-    float exhaledVolumeTotal = 0.0f;
+    float flow = 0.0f;
+    float cycleExhaledVolume = 0.0f;
+    float totalExhaledVolume = 0.0f;
     int64_t lastTimestamp;
     int64_t deltaT;
-    float lastMassFlow = 0.0F;
+    float lastFlow = 0.0F;
     int16_t scalingFactor;
     int16_t diffPressureRaw;
     uint16_t i = 0;
     bool exhale = false;
 
-    ESP_LOGI(tagMassFlow, "Task started");
+    ESP_LOGI(tagFlow, "Task started");
 
     SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL);
 
@@ -98,7 +119,7 @@ void MEASURE_MassFlowTask(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(10)); // Wait for first measure
 
     SDP8XX_ReadScalingFactor(&scalingFactor);
-    ESP_LOGI(tagMassFlow, "Scaling factor = %d", scalingFactor);
+    ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
 
     lastTimestamp = esp_timer_get_time();
 
@@ -116,42 +137,51 @@ void MEASURE_MassFlowTask(void *pvParameters)
             {
                 if (exhale == true)
                 {
-                    exhaledVolumeTotal += exhaledVolumeCycle;
-#if LOG_EXHALED_VOLUME_TOTAL
-                    ESP_LOGI(tagMassFlow, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
+                    totalExhaledVolume += cycleExhaledVolume;
+                    xQueueOverwrite(g_totalExhaledVolumeQueue, (float *)&totalExhaledVolume);
+
+#if LOG_TOTAL_EXHALED_VOLUME
+                    ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
                     exhale = false;
-#if LOG_EXHALED_VOLUME_CYCLE
-                    ESP_LOGI(tagMassFlow, "#4,%.3f,%d", 0.0f, timestamp);
+#if LOG_CYCLE_EXHALED_VOLUME
+                    ESP_LOGI(tagFlow, "#4,%.3f,%d", 0.0f, timestamp);
 #endif
                 }
+
                 diffPressure = 0.0f;
-                exhaledVolumeCycle = 0.0f;
-                massFlow = 0.0f;
+                cycleExhaledVolume = 0.0f;
+                flow = 0.0f;
+
+                xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
+                xQueueOverwrite(g_flowQueue, (float *)&flow);
             }
             else if (diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
             {
                 if (exhale == false)
                 {
-#if LOG_EXHALED_VOLUME_TOTAL
-                    ESP_LOGI(tagMassFlow, "#5,%.3f,%d", exhaledVolumeTotal, timestamp);
+#if LOG_TOTAL_EXHALED_VOLUME
+                    ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
                     exhale = true;
                 }
 
-                massFlow = 4.9855f * sqrt(diffPressure);                                     // Bernoulli equation Q=k⋅sqrt(ΔP)
-                exhaledVolumeCycle += (float)deltaT * (massFlow + lastMassFlow) / 120000.0f; // Trapezoidal rule
-#if LOG_EXHALED_VOLUME_CYCLE
-                ESP_LOGI(tagMassFlow, "#4,%.3f,%d", exhaledVolumeCycle, timestamp);
+                flow = 4.9855f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
+                cycleExhaledVolume += (float)deltaT * (flow + lastFlow) / 120000.0f; // Trapezoidal rule
+                xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
+#if LOG_CYCLE_EXHALED_VOLUME
+                ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
 #endif
             }
 
-            lastMassFlow = massFlow;
+            lastFlow = flow;
+
+            xQueueOverwrite(g_flowQueue, (void *)&flow);
 
             if ((i % 5) == 0)
             {
-#if LOG_MASS_FLOW
-                ESP_LOGI(tagMassFlow, "#1,%.3f,%d", massFlow, timestamp);
+#if LOG_FLOW
+                ESP_LOGI(tagFlow, "#1,%.3f,%d", flow, timestamp);
 #endif
             }
 
@@ -172,7 +202,6 @@ void MEASURE_MassFlowTask(void *pvParameters)
 void MEASURE_O2Task(void *pvParameters)
 {
     const char *tagO2 = "[O2 Task]";
-    int64_t timestamp;
     float o2;
 
     ESP_LOGI(tagO2, "Task started");
@@ -182,12 +211,15 @@ void MEASURE_O2Task(void *pvParameters)
 
     while (1)
     {
-        timestamp = esp_timer_get_time() / 1000;
-        o2 = ME2O2_ReadOxygen();
-
+        if (ME2O2_ReadOxygen(&o2))
+        {
+            xQueueOverwrite(g_o2Queue, (void *)&o2);
 #if LOG_O2
-        ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
+            int64_t timestamp = esp_timer_get_time() / 1000;
+            ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
 #endif
+        }
+
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
     }
 }
@@ -195,9 +227,8 @@ void MEASURE_O2Task(void *pvParameters)
 void MEASURE_CO2Task(void *pvParameters)
 {
     const char *tagCO2 = "[CO2 Task]";
-    int64_t timestamp;
     float co2;
-    float temperatureScd30;
+    float temperature;
     float humidity;
 
     ESP_LOGI(tagCO2, "Task started");
@@ -208,10 +239,13 @@ void MEASURE_CO2Task(void *pvParameters)
 
     while (1)
     {
-        timestamp = esp_timer_get_time() / 1000;
-        if (SCD30_GetMeasures(&co2, &temperatureScd30, &humidity))
+        if (SCD30_GetMeasures(&co2, &temperature, &humidity))
         {
+            xQueueOverwrite(g_co2Queue, (void *)&co2);
+            xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
+            xQueueOverwrite(g_humidityQueue, (void *)&humidity);
 #if LOG_CO2
+            int64_t timestamp = esp_timer_get_time() / 1000;
             ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
 #endif
         }

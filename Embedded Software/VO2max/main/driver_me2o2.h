@@ -10,6 +10,6 @@
 
 void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle);
 void ME2O2_Calibrate(float vol);
-float ME2O2_ReadOxygen(void);
+bool ME2O2_ReadOxygen(float *oxygen);
 
 #endif /* __DRIVER_ME2O2_H__ */

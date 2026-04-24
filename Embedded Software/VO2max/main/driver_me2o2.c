@@ -65,16 +65,26 @@ void ME2O2_Calibrate(float vol)
 }
 
 /* Reading oxygen concentration */
-float ME2O2_ReadOxygen(void)
+bool ME2O2_ReadOxygen(float *oxygen)
 {
     uint8_t readBuffer[3];
     float key;
+    bool ret = false;
+    float value;
 
     key = ReadKey();
 
     ReadRegister(OXYGEN_DATA_REGISTER, readBuffer, sizeof(readBuffer));
 
-    return key * ((float)readBuffer[0] + ((float)readBuffer[1] / 10.0) + ((float)readBuffer[2] / 100.0));
+    value = key * ((float)readBuffer[0] + ((float)readBuffer[1] / 10.0) + ((float)readBuffer[2] / 100.0));
+
+    if(value != NAN)
+    {
+        *oxygen = value;
+        ret = true;
+    }
+
+    return ret;
 }
 
 /************************************

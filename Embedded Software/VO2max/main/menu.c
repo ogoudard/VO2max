@@ -19,10 +19,19 @@
 
 void MENU_Create(Menu_t *menu, const char *name)
 {
+    strncpy(menu->name, name, MAX_MENU_NAME_SIZE);
+
     menu->action = NULL;
     menu->parent = NULL;
     menu->childrenCount = 0;
-    strncpy(menu->name, name, MAX_MENU_NAME_SIZE);
+    menu->onEntry = NULL;
+    menu->action = NULL;
+    menu->onExit = NULL;
+
+    for(uint8_t i = 0; i < MAX_MENU_SIZE; i++)
+    {
+        menu->children[i] = NULL;
+    }
 }
 
 void MENU_AddSubmenu(Menu_t *menu, Menu_t *submenu)
@@ -35,7 +44,9 @@ void MENU_AddSubmenu(Menu_t *menu, Menu_t *submenu)
     }
 }
 
-void MENU_AddAction(Menu_t *menu, MenuAction_t action)
+void MENU_AddAction(Menu_t *menu, MenuAction_t onEntry, MenuAction_t action, MenuAction_t onExit)
 {
+    menu->onEntry = onEntry;
     menu->action = action;
+    menu->onExit = onExit;
 }

@@ -8,7 +8,6 @@
 #include "driver_lcd.h"
 #include "menu.h"
 #include "driver/gpio.h"
-#include "freertos/FreeRTOS.h"
 #include "version.h"
 #include "esp_timer.h"
 #include "esp_log.h"
@@ -18,6 +17,9 @@
  * PRIVATE MACROS AND DEFINES
  ************************************/
 
+#define HMI_TASK_STACK_SIZE 8192
+#define HMI_TASK_PERIOD_MS 100
+
 #define SPI_HOST SPI2_HOST
 
 #define GPIO_PIN_NUM_SPI_MISO 25
@@ -26,6 +28,8 @@
 
 #define GPIO_PIN_NUM_BUTTON_1 35
 #define GPIO_PIN_NUM_BUTTON_2 0
+
+#define INITIALIZATION_TIMEOUT_MS 3000
 
 #define SHORT_LONG_PRESS_THRESHOLD_US 300000
 
@@ -48,12 +52,20 @@ typedef enum
  * PRIVATE VARIABLES
  ************************************/
 
-static TaskHandle_t hmiTaskHandle;
+static const char *hmiTaskTag = "[HMI Task]";
+
+/************************************
+ * PUBLIC VARIABLES
+ ************************************/
+
+TaskHandle_t g_hmiTaskHandle = NULL;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
  ************************************/
 
+static void HmiTask(void *pvParameters);
+static void NormalOperation(Menu_t *menu);
 static void DisplayMenu(Menu_t *menu, uint8_t selected);
 static PushButtonState_e GetPushButton1State(void);
 static PushButtonState_e GetPushButton2State(void);
@@ -96,16 +108,17 @@ void HMI_Initialize()
     ESP_LOGI(hmiTag, "Initialize SPI bus for LCD display");
     ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST, &busConfig, SPI_DMA_CH1));
 
-    xTaskCreate(HMI_Task, "HMI Task", 4096, NULL, 0, &hmiTaskHandle);
+    xTaskCreate(HmiTask, "HMI Task", HMI_TASK_STACK_SIZE, NULL, 0, &g_hmiTaskHandle);
 }
 
-void HMI_Task(void *pvParameters)
+/************************************
+ * PRIVATE FUNCTION DEFINITIONS
+ ************************************/
+
+static void HmiTask(void *pvParameters)
 {
-    const char *hmiTaskTag = "[HMI Task]";
     char version[20];
-    PushButtonState_e pushButton1State;
-    PushButtonState_e pushButton2State;
-    uint8_t selectedMenu = 0;
+    BaseType_t waitNotification = pdTRUE;
     Menu_t mainMenu;
     Menu_t calibrationMenu;
     Menu_t vo2maxMenu;
@@ -115,7 +128,6 @@ void HMI_Task(void *pvParameters)
     Menu_t o2CalibrationMenu;
     Menu_t co2CalibrationMenu;
     Menu_t flowCalibrationMenu;
-    Menu_t *currentMenu;
 
     ESP_LOGI(hmiTaskTag, "HMI initialization...");
 
@@ -150,9 +162,39 @@ void HMI_Task(void *pvParameters)
 
     LCD_String(0, 75, "Initializing...", strlen("Initializing..."), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
 
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    waitNotification &= xSemaphoreTake(g_flowInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
+    waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
+    waitNotification &= xSemaphoreTake(g_co2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
+    //waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
 
-    currentMenu = &mainMenu;
+    if (pdFALSE == waitNotification)
+    {
+        LCD_String(70, 115, "ERROR!", strlen("ERROR!"), LCD_COLOR_RED, LCD_NO_BG_COLOR, ST7789_FONT_24);
+
+        vTaskSuspend(g_hmiTaskHandle);
+
+        while(1)
+        {
+            vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+        }
+    }
+    else
+    {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        LCD_String(70, 115, "Success!", strlen("Success!"), LCD_COLOR_GREEN, LCD_NO_BG_COLOR, ST7789_FONT_24);
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        
+        NormalOperation(&mainMenu);
+    }
+}
+
+static void NormalOperation(Menu_t *menu)
+{
+    Menu_t *currentMenu = menu;
+    PushButtonState_e pushButton1State;
+    PushButtonState_e pushButton2State;
+    uint8_t selectedMenu = 0;
+
     DisplayMenu(currentMenu, selectedMenu);
 
     ESP_LOGI(hmiTaskTag, "HMI ready");
@@ -234,13 +276,9 @@ void HMI_Task(void *pvParameters)
             currentMenu->action();
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
     }
 }
-
-/************************************
- * PRIVATE FUNCTION DEFINITIONS
- ************************************/
 
 static void DisplayMenu(Menu_t *menu, uint8_t selected)
 {

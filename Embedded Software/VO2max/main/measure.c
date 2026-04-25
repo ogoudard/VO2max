@@ -13,10 +13,16 @@
 #include "driver_scd30.h"
 #include "driver_me2o2.h"
 #include "driver_bmp280.h"
+#include "hmi.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
  ************************************/
+
+#define O2_TASK_STACK_SIZE 8192
+#define CO2_TASK_STACK_SIZE 8192
+#define FLOW_TASK_STACK_SIZE 8192
+#define PRESSURE_TASK_STACK_SIZE 8192
 
 #define I2C_BUS_NUM I2C_NUM_0
 
@@ -59,6 +65,11 @@ static TaskHandle_t pressureTaskHandle;
 /************************************
  * PUBLIC VARIABLES
  ************************************/
+
+SemaphoreHandle_t g_flowInitializationSemaphore;
+SemaphoreHandle_t g_o2InitializationSemaphore;
+SemaphoreHandle_t g_co2InitializationSemaphore;
+SemaphoreHandle_t g_pressureInitializationSemaphore;
 
 /* Queues for intertask communication */
 QueueHandle_t g_flowQueue;
@@ -105,11 +116,15 @@ void MEASURE_Initialize()
     g_temperatureQueue = xQueueCreate(1, sizeof(float));
     g_pressureQueue = xQueueCreate(1, sizeof(float));
 
-    xTaskCreate(FlowTask, "Flow Task", 4096, NULL, 0, &flowTaskHandle);
-    xTaskCreate(O2Task, "O2 Task", 4096, NULL, 0, &o2TaskHandle);
-    xTaskCreate(CO2Task, "CO2 Task", 4096, NULL, 0, &co2TaskHandle);
-    // xTaskCreate(PressureTask, "Pressure Task", 4096, NULL, 0, &pressureTaskHandle);
-    ESP_LOGI(measureTag, "measure ready");
+    g_flowInitializationSemaphore = xSemaphoreCreateBinary();
+    g_o2InitializationSemaphore = xSemaphoreCreateBinary();
+    g_co2InitializationSemaphore = xSemaphoreCreateBinary();
+    g_pressureInitializationSemaphore = xSemaphoreCreateBinary();
+
+    xTaskCreate(FlowTask, "Flow Task", FLOW_TASK_STACK_SIZE, NULL, 0, &flowTaskHandle);
+    xTaskCreate(O2Task, "O2 Task", O2_TASK_STACK_SIZE, NULL, 0, &o2TaskHandle);
+    xTaskCreate(CO2Task, "CO2 Task", CO2_TASK_STACK_SIZE, NULL, 0, &co2TaskHandle);
+    //xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, 0, &pressureTaskHandle);
 }
 
 /************************************
@@ -156,6 +171,8 @@ static void FlowTask(void *pvParameters)
         ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
 
         lastTimestamp = esp_timer_get_time();
+
+        xSemaphoreGive(g_flowInitializationSemaphore);
 
         while (1)
         {
@@ -244,7 +261,7 @@ static void O2Task(void *pvParameters)
 
     ESP_LOGI(tagO2, "Initialize M2-02 dioxygen sensor");
 
-    if(!ME2O2_Initialize(i2cHandle, ME2O2_I2C_ADDRESS))
+    if (!ME2O2_Initialize(i2cHandle, ME2O2_I2C_ADDRESS))
     {
         ESP_LOGE(tagO2, "ME2-O2 initialization failed, suspending task");
 
@@ -258,15 +275,17 @@ static void O2Task(void *pvParameters)
     {
         ME2O2_Calibrate(INITIAL_O2_CONCENTRATION_PERCENT);
 
+        xSemaphoreGive(g_o2InitializationSemaphore);
+
         while (1)
         {
             if (ME2O2_ReadOxygen(&o2))
             {
                 xQueueOverwrite(g_o2Queue, (void *)&o2);
-    #if LOG_O2
+#if LOG_O2
                 int64_t timestamp = esp_timer_get_time() / 1000;
                 ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
-    #endif
+#endif
             }
 
             vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
@@ -300,6 +319,8 @@ static void CO2Task(void *pvParameters)
     {
         SCD30_SetMeasurementInterval(2);
         SCD30_StartPeriodicMeasurment();
+
+        xSemaphoreGive(g_co2InitializationSemaphore);
 
         while (1)
         {
@@ -353,6 +374,8 @@ static void PressureTask(void *pvParameters)
         BMP280_SetTemperatureOversampling(BMP280_OVERSAMPLING_16X);
         BMP280_SetStandbyTime(BMP280_T_STANDBY_4S);
         BMP280_SetOperationMode(BMP280_MODE_NORMAL);
+
+        xSemaphoreGive(g_pressureInitializationSemaphore);
 
         while (1)
         {

@@ -28,9 +28,10 @@ void app_main(void)
     batterySoc = BATTERY_MeasureSoc();
     ESP_LOGI(TAG, "Battery SOC = %.0f %%", batterySoc);
 
-    MEASURE_Initialize();
-
     HMI_Initialize();
+
+
+    MEASURE_Initialize();
 
     while (1)
     {

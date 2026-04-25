@@ -10,7 +10,7 @@ bool SCD30_GetDataReadyStatus(bool *dataReady);
 void SCD30_SetAutoSelfCalibration(bool enable);
 void SCD30_SetMeasurementInterval(uint16_t interval);
 void SCD30_StartPeriodicMeasurment(void);
-void SCD30_StartPeriodicMeasurmentWithPressureCompensation(uint16_t pressure);
+void SCD30_StartPeriodicMeasurmentWithPressureCompensasstion(uint16_t pressure);
 void SCD30_StopMeasurement(void);
 void SCD30_SetTemperatureOffset(uint16_t offset);
 bool SCD30_GetMeasures(float *co2, float *temperature, float *humidity);

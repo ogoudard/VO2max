@@ -53,8 +53,9 @@ static uint16_t WriteReadCommand(uint16_t command, uint8_t *readBuffer, uint8_t 
  * PUBLIC FUNCTION DEFINITIONS
  ************************************/
 
-void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
+bool SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
 {
+    bool ret = false;
     uint8_t versionMajor;
     uint8_t versionMinor;
 
@@ -71,8 +72,16 @@ void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
 
     if (SCD30_ReadFirmwareVersion(&versionMajor, &versionMinor))
     {
-        ESP_LOGI(TAG, "Firmware version %d.%d", versionMajor, versionMinor);
+        ESP_LOGI(TAG, "Firmware version: %d.%d", versionMajor, versionMinor);
+        ESP_LOGI(TAG, "Initialization successfull");
+        ret = true;
     }
+    else
+    {
+        ESP_LOGE(TAG, "Initialization failed");
+    }
+
+    return ret;
 }
 
 bool SCD30_ReadFirmwareVersion(uint8_t *major, uint8_t *minor)

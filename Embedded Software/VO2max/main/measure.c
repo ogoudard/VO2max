@@ -108,7 +108,7 @@ void MEASURE_Initialize()
     xTaskCreate(FlowTask, "Flow Task", 4096, NULL, 0, &flowTaskHandle);
     xTaskCreate(O2Task, "O2 Task", 4096, NULL, 0, &o2TaskHandle);
     xTaskCreate(CO2Task, "CO2 Task", 4096, NULL, 0, &co2TaskHandle);
-    //xTaskCreate(PressureTask, "Pressure Task", 4096, NULL, 0, &pressureTaskHandle);
+    // xTaskCreate(PressureTask, "Pressure Task", 4096, NULL, 0, &pressureTaskHandle);
     ESP_LOGI(measureTag, "measure ready");
 }
 
@@ -138,11 +138,13 @@ static void FlowTask(void *pvParameters)
 
     if (!SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL))
     {
-        ESP_LOGE(tagFlow, "SDP810 initialization failed, task won't make measurements");
+        ESP_LOGE(tagFlow, "SDP810 initialization failed, suspending task");
+
+        vTaskSuspend(flowTaskHandle);
 
         while (1)
         {
-        };
+        }
     }
     else
     {
@@ -241,21 +243,34 @@ static void O2Task(void *pvParameters)
     ESP_LOGI(tagO2, "Task started");
 
     ESP_LOGI(tagO2, "Initialize M2-02 dioxygen sensor");
-    ME2O2_Initialize(i2cHandle, ME2O2_I2C_ADDRESS);
-    ME2O2_Calibrate(INITIAL_O2_CONCENTRATION_PERCENT);
 
-    while (1)
+    if(!ME2O2_Initialize(i2cHandle, ME2O2_I2C_ADDRESS))
     {
-        if (ME2O2_ReadOxygen(&o2))
-        {
-            xQueueOverwrite(g_o2Queue, (void *)&o2);
-#if LOG_O2
-            int64_t timestamp = esp_timer_get_time() / 1000;
-            ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
-#endif
-        }
+        ESP_LOGE(tagO2, "ME2-O2 initialization failed, suspending task");
 
-        vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
+        vTaskSuspend(o2TaskHandle);
+
+        while (1)
+        {
+        }
+    }
+    else
+    {
+        ME2O2_Calibrate(INITIAL_O2_CONCENTRATION_PERCENT);
+
+        while (1)
+        {
+            if (ME2O2_ReadOxygen(&o2))
+            {
+                xQueueOverwrite(g_o2Queue, (void *)&o2);
+    #if LOG_O2
+                int64_t timestamp = esp_timer_get_time() / 1000;
+                ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
+    #endif
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
+        }
     }
 }
 
@@ -269,32 +284,46 @@ static void CO2Task(void *pvParameters)
     ESP_LOGI(tagCO2, "Task started");
 
     ESP_LOGI(tagCO2, "Initialize SCD30 carbon dioxide sensor");
-    SCD30_Initialize(i2cHandle);
-    SCD30_SetMeasurementInterval(2);
-    SCD30_StartPeriodicMeasurment();
 
-    while (1)
+    if (!SCD30_Initialize(i2cHandle))
     {
-        bool dataReady;
+        ESP_LOGE(tagCO2, "SCD30 initialization failed, suspending task");
 
-        if (SCD30_GetDataReadyStatus(&dataReady))
+        vTaskSuspend(co2TaskHandle);
+
+        while (1)
         {
-            if (true == dataReady)
+            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
+        };
+    }
+    else
+    {
+        SCD30_SetMeasurementInterval(2);
+        SCD30_StartPeriodicMeasurment();
+
+        while (1)
+        {
+            bool dataReady;
+
+            if (SCD30_GetDataReadyStatus(&dataReady))
             {
-                if (SCD30_GetMeasures(&co2, &temperature, &humidity))
+                if (true == dataReady)
                 {
-                    xQueueOverwrite(g_co2Queue, (void *)&co2);
-                    xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-                    xQueueOverwrite(g_humidityQueue, (void *)&humidity);
+                    if (SCD30_GetMeasures(&co2, &temperature, &humidity))
+                    {
+                        xQueueOverwrite(g_co2Queue, (void *)&co2);
+                        xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
+                        xQueueOverwrite(g_humidityQueue, (void *)&humidity);
 #if LOG_CO2
-                    int64_t timestamp = esp_timer_get_time() / 1000;
-                    ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
+                        int64_t timestamp = esp_timer_get_time() / 1000;
+                        ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
 #endif
+                    }
                 }
             }
-        }
 
-        vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
+            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
+        }
     }
 }
 
@@ -308,10 +337,13 @@ static void PressureTask(void *pvParameters)
 
     if (!BMP280_Initialize(i2cHandle, BMP280_I2C_ADDRESS))
     {
-        ESP_LOGE(pressureTag, "BMP280 initialization failed, task won't make measurement");
+        ESP_LOGE(pressureTag, "BMP280 initialization failed, suspending task");
+
+        vTaskSuspend(pressureTaskHandle);
 
         while (1)
         {
+            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
         };
     }
     else

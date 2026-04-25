@@ -2,7 +2,7 @@
 #define __VERSION_H__
 
 #define VO2MAX_VERSION_MAJOR 1
-#define VO2MAX_VERSION_MINOR 6
+#define VO2MAX_VERSION_MINOR 7
 #define VO2MAX_VERSION_PATCH 0
 
 #endif

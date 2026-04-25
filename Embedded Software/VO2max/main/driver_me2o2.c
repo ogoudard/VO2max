@@ -38,9 +38,10 @@ static float ReadKey(void);
  * PUBLIC FUNCTION DEFINITIONS
  ************************************/
 
-void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address)
+bool ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address)
 {
-    uint8_t readBuffer;
+    uint8_t version;
+    bool ret = false;
 
     i2c_device_config_t devCfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -50,9 +51,21 @@ void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address)
 
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devCfg, &devHandle));
 
-    ReadRegister(VERSION_REGISTER, &readBuffer, sizeof(readBuffer));
+    ReadRegister(VERSION_REGISTER, &version, sizeof(version));
 
-    ESP_LOGI(TAG, "Version = %d\n", readBuffer);
+    if ((version == 0xFF) || (version == 0x01))
+    {
+        ESP_LOGI(TAG, "Version: 0x%X", version);
+        ESP_LOGI(TAG, "Initialization successfull");
+        ret = true;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Invalid version read from device");
+        ESP_LOGE(TAG, "Initialization failed");
+    }
+
+    return ret;
 }
 
 /* Set Key value */

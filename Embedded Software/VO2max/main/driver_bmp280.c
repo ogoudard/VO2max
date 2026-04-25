@@ -92,7 +92,7 @@ bool BMP280_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address)
 
 	ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devCfg, &devHandle));
 
-	if(CheckChipId())
+	if (CheckChipId())
 	{
 		BMP280_Reset();
 

@@ -3,7 +3,7 @@
 
 #include "driver/i2c_master.h"
 
-void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle);
+bool SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle);
 void SCD30_SoftwareReset(void);
 bool SCD30_ReadFirmwareVersion(uint8_t *major, uint8_t *minor);
 bool SCD30_GetDataReadyStatus(bool *dataReady);

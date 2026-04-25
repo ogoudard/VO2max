@@ -88,8 +88,8 @@ bool SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e 
 
     if (SDP8XX_ReadProductIdentifier(&readProductNumber, &serialNumber))
     {
-        ESP_LOGI(TAG, "Product number = 0x%X", readProductNumber);
-        ESP_LOGI(TAG, "Serial number = 0x%" PRIX64 "", serialNumber);
+        ESP_LOGI(TAG, "Product number: 0x%X", readProductNumber);
+        ESP_LOGI(TAG, "Serial number: 0x%" PRIX64 "", serialNumber);
 
         if (readProductNumber != productNumber)
         {

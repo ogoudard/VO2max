@@ -31,6 +31,8 @@
 #define DIFFERENTIAL_PRESSURE_THRESHOLD 0.2f
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
+#define INITIAL_O2_CONCENTRATION_PERCENT 20.9f
+
 #define LOG_FLOW 0
 #define LOG_O2 0
 #define LOG_CO2 0
@@ -111,6 +113,8 @@ void MEASURE_FlowTask(void *pvParameters)
     bool exhale = false;
 
     ESP_LOGI(tagFlow, "Task started");
+
+    ESP_LOGI(tagFlow, "Initialize SDP810 differential pressur sensor");
 
     SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL);
 
@@ -207,8 +211,9 @@ void MEASURE_O2Task(void *pvParameters)
 
     ESP_LOGI(tagO2, "Task started");
 
+    ESP_LOGI(tagO2, "Initialize M2-02 dioxygen sensor");
     ME2O2_Initialize(i2cHandle);
-    ME2O2_Calibrate(20.9);
+    ME2O2_Calibrate(INITIAL_O2_CONCENTRATION_PERCENT);
 
     while (1)
     {
@@ -234,21 +239,30 @@ void MEASURE_CO2Task(void *pvParameters)
 
     ESP_LOGI(tagCO2, "Task started");
 
+    ESP_LOGI(tagCO2, "Initialize SCD30 carbon dioxide sensor");
     SCD30_Initialize(i2cHandle);
     SCD30_SetMeasurementInterval(2);
     SCD30_StartPeriodicMeasurment();
 
     while (1)
     {
-        if (SCD30_GetMeasures(&co2, &temperature, &humidity))
+        bool dataReady;
+        
+        if (SCD30_GetDataReadyStatus(&dataReady))
         {
-            xQueueOverwrite(g_co2Queue, (void *)&co2);
-            xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-            xQueueOverwrite(g_humidityQueue, (void *)&humidity);
+            if (true == dataReady)
+            {
+                if (SCD30_GetMeasures(&co2, &temperature, &humidity))
+                {
+                    xQueueOverwrite(g_co2Queue, (void *)&co2);
+                    xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
+                    xQueueOverwrite(g_humidityQueue, (void *)&humidity);
 #if LOG_CO2
-            int64_t timestamp = esp_timer_get_time() / 1000;
-            ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
+                    int64_t timestamp = esp_timer_get_time() / 1000;
+                    ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
 #endif
+                }
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));

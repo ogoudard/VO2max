@@ -381,7 +381,7 @@ static void LiveValuesScreenEntry(void)
     LCD_String(0, 40, "CO2  =         ppm", 18, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
     LCD_String(0, 64, "Flow =       L/min", 18, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
     LCD_String(0, 88, "T    =           C", 18, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
-    LCD_String(0, 112, "H    =          %", 18, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+    LCD_String(0, 112, "H    =           %", 18, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
 }
 
 static void LiveValuesScreenAction(void)

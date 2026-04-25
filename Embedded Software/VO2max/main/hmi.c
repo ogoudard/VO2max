@@ -66,7 +66,8 @@ TaskHandle_t g_hmiTaskHandle = NULL;
 
 static void HmiTask(void *pvParameters);
 static void NormalOperation(Menu_t *menu);
-static void DisplayMenu(Menu_t *menu, uint8_t selected);
+static void DisplayMenu(Menu_t *menu, uint8_t page);
+static void DisplaySelected(uint8_t selected);
 static PushButtonState_e GetPushButton1State(void);
 static PushButtonState_e GetPushButton2State(void);
 static void LiveValuesScreenEntry(void);
@@ -165,15 +166,15 @@ static void HmiTask(void *pvParameters)
     waitNotification &= xSemaphoreTake(g_flowInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_co2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
-    //waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
+    // waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
 
     if (pdFALSE == waitNotification)
     {
-        LCD_String(70, 115, "ERROR!", strlen("ERROR!"), LCD_COLOR_RED, LCD_NO_BG_COLOR, ST7789_FONT_24);
+        LCD_String(70, 110, "Error!", strlen("ERROR!"), LCD_COLOR_RED, LCD_NO_BG_COLOR, ST7789_FONT_24);
 
         vTaskSuspend(g_hmiTaskHandle);
 
-        while(1)
+        while (1)
         {
             vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
         }
@@ -181,9 +182,9 @@ static void HmiTask(void *pvParameters)
     else
     {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        LCD_String(70, 115, "Success!", strlen("Success!"), LCD_COLOR_GREEN, LCD_NO_BG_COLOR, ST7789_FONT_24);
+        LCD_String(60, 110, "Success!", strlen("Success!"), LCD_COLOR_GREEN, LCD_NO_BG_COLOR, ST7789_FONT_24);
         vTaskDelay(pdMS_TO_TICKS(3000));
-        
+
         NormalOperation(&mainMenu);
     }
 }
@@ -194,8 +195,11 @@ static void NormalOperation(Menu_t *menu)
     PushButtonState_e pushButton1State;
     PushButtonState_e pushButton2State;
     uint8_t selectedMenu = 0;
+    uint8_t page = 0;
+    uint8_t lastPage = 0;
 
-    DisplayMenu(currentMenu, selectedMenu);
+    DisplayMenu(currentMenu, page);
+    DisplaySelected(selectedMenu);
 
     ESP_LOGI(hmiTaskTag, "HMI ready");
 
@@ -216,7 +220,15 @@ static void NormalOperation(Menu_t *menu)
                     selectedMenu--;
                 }
 
-                DisplayMenu(currentMenu, selectedMenu);
+                page = selectedMenu / 4;
+
+                if(page != lastPage)
+                {
+                    DisplayMenu(currentMenu, page);
+                    lastPage = page;
+                }
+
+                DisplaySelected(selectedMenu);
             }
         }
         else if (pushButton1State == BUTTON_LONG_PRESS)
@@ -230,7 +242,10 @@ static void NormalOperation(Menu_t *menu)
 
                 currentMenu = currentMenu->parent;
                 selectedMenu = 0;
-                DisplayMenu(currentMenu, selectedMenu);
+                page = 0;
+                lastPage = 0;
+                DisplayMenu(currentMenu, page);
+                DisplaySelected(selectedMenu);
             }
         }
 
@@ -249,7 +264,15 @@ static void NormalOperation(Menu_t *menu)
                     selectedMenu++;
                 }
 
-                DisplayMenu(currentMenu, selectedMenu);
+                page = selectedMenu / 4;
+
+                if(page != lastPage)
+                {
+                    DisplayMenu(currentMenu, page);
+                    lastPage = page;
+                }
+
+                DisplaySelected(selectedMenu);
             }
         }
         else if (pushButton2State == BUTTON_LONG_PRESS)
@@ -266,7 +289,10 @@ static void NormalOperation(Menu_t *menu)
                 if (currentMenu->childrenCount > 0)
                 {
                     selectedMenu = 0;
-                    DisplayMenu(currentMenu, selectedMenu);
+                    page = 0;
+                    lastPage = 0;
+                    DisplayMenu(currentMenu, page);
+                    DisplaySelected(selectedMenu);
                 }
             }
         }
@@ -280,69 +306,52 @@ static void NormalOperation(Menu_t *menu)
     }
 }
 
-static void DisplayMenu(Menu_t *menu, uint8_t selected)
+static void DisplayMenu(Menu_t *menu, uint8_t page)
 {
-    static Menu_t *lastMenu = NULL;
     uint8_t yPos = 0;
-    static uint8_t startIndex = 0;
     uint8_t endIndex;
-    bool updateList;
 
-    if (menu->childrenCount == 0)
+    if (menu->childrenCount > 0)
     {
-        if (menu != lastMenu)
+        LCD_Clear();
+
+        LCD_String((SCREEN_HEIGHT - 16 * strlen(menu->name)) / 2, 16, menu->name, strlen(menu->name), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+
+        yPos = 0;
+
+        endIndex = page * 4 + 4;
+        
+        if(endIndex > menu->childrenCount)
         {
-            LCD_Clear();
-            LCD_String((SCREEN_HEIGHT - 16 * strlen(menu->name)) / 2, 16, menu->name, strlen(menu->name), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+            endIndex = menu->childrenCount;
+        }
+
+        for (uint8_t i = page * 4; i < endIndex; i++)
+        {
+            LCD_String(MENU_LIST_X_START, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, menu->children[i]->name, strlen(menu->children[i]->name), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+            yPos++;
         }
     }
-    else
+}
+
+static void DisplaySelected(uint8_t selected)
+{
+    uint8_t yPos = 0;
+    uint8_t selectedPos = selected % 4;
+
+    for (uint8_t i = 0; i < 4; i++)
     {
-        updateList = (startIndex != (4 * (selected / 4)));
-
-        startIndex = 4 * (selected / 4);
-        endIndex = ((startIndex + 3) < (menu->childrenCount - 1)) ? (startIndex + 3) : (menu->childrenCount - 1);
-
-        if ((menu != lastMenu) || (updateList == true))
+        if (i != selectedPos)
         {
-            LCD_Clear();
-
-            LCD_String((SCREEN_HEIGHT - 16 * strlen(menu->name)) / 2, 16, menu->name, strlen(menu->name), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
-
-            yPos = 0;
-
-            for (uint8_t i = startIndex; i <= endIndex; i++)
-            {
-                if (i == selected)
-                {
-                    LCD_String(0, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, ">", 1, LCD_COLOR_RED, LCD_NO_BG_COLOR, ST7789_FONT_24);
-                }
-
-                LCD_String(MENU_LIST_X_START, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, menu->children[i]->name, strlen(menu->children[i]->name), LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
-                yPos++;
-            }
+            LCD_String(0, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, " ", 1, LCD_COLOR_WHITE, LCD_COLOR_WHITE, ST7789_FONT_24);
         }
         else
         {
-            yPos = 0;
-
-            for (uint8_t i = startIndex; i <= endIndex; i++)
-            {
-                if (i != selected)
-                {
-                    LCD_String(0, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, " ", 1, LCD_COLOR_WHITE, LCD_COLOR_WHITE, ST7789_FONT_24);
-                }
-                else
-                {
-                    LCD_String(0, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, ">", 1, LCD_COLOR_RED, LCD_NO_BG_COLOR, ST7789_FONT_24);
-                }
-
-                yPos++;
-            }
+            LCD_String(0, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, ">", 1, LCD_COLOR_RED, LCD_NO_BG_COLOR, ST7789_FONT_24);
         }
-    }
 
-    lastMenu = menu;
+        yPos++;
+    }
 }
 
 static PushButtonState_e GetPushButton1State(void)

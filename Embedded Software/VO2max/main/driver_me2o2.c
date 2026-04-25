@@ -38,13 +38,13 @@ static float ReadKey(void);
  * PUBLIC FUNCTION DEFINITIONS
  ************************************/
 
-void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle)
+void ME2O2_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address)
 {
     uint8_t readBuffer;
 
     i2c_device_config_t devCfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = ME2O2_I2C_ADDRESS,
+        .device_address = address,
         .scl_speed_hz = ME202_I2C_FREQUENCY,
     };
 

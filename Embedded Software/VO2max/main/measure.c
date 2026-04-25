@@ -12,6 +12,7 @@
 #include "driver_sdp8XX.h"
 #include "driver_scd30.h"
 #include "driver_me2o2.h"
+#include "driver_bmp280.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -22,9 +23,14 @@
 #define GPIO_PIN_NUM_I2C_SDA 21
 #define GPIO_PIN_NUM_I2C_SCL 22
 
-#define MEASURE_PERIOD_PRESSURE_MS 10
+#define ME2O2_I2C_ADDRESS ME2O2_I2C_ADDRESS_0x73
+
+#define BMP280_I2C_ADDRESS BMP280_I2C_ADDRESS_0x76
+
+#define MEASURE_PERIOD_FLOW_MS 10
 #define MEASURE_PERIOD_O2_MS 2000
-#define MEASURE_PERIOD_CO2_MS 2010
+#define MEASURE_PERIOD_CO2_MS 3000
+#define MEASURE_PERIOD_PRESSURE_MS 5000
 
 #define PRESSURE_SENSOR_MODEL SDP8XX_SDP810_500PA
 
@@ -44,9 +50,11 @@
  ************************************/
 
 static i2c_master_bus_handle_t i2cHandle;
-static TaskHandle_t differentialPressureTaskHandle;
+
+static TaskHandle_t flowTaskHandle;
 static TaskHandle_t o2TaskHandle;
 static TaskHandle_t co2TaskHandle;
+static TaskHandle_t pressureTaskHandle;
 
 /************************************
  * PUBLIC VARIABLES
@@ -58,12 +66,17 @@ QueueHandle_t g_o2Queue;
 QueueHandle_t g_co2Queue;
 QueueHandle_t g_temperatureQueue;
 QueueHandle_t g_humidityQueue;
+QueueHandle_t g_pressureQueue;
 QueueHandle_t g_totalExhaledVolumeQueue;
 QueueHandle_t g_cycleExhaledVolumeQueue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
  ************************************/
+static void FlowTask(void *pvParameters);
+static void O2Task(void *pvParameters);
+static void CO2Task(void *pvParameters);
+static void PressureTask(void *pvParameters);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -90,13 +103,20 @@ void MEASURE_Initialize()
     g_totalExhaledVolumeQueue = xQueueCreate(1, sizeof(float));
     g_humidityQueue = xQueueCreate(1, sizeof(float));
     g_temperatureQueue = xQueueCreate(1, sizeof(float));
+    g_pressureQueue = xQueueCreate(1, sizeof(float));
 
-    xTaskCreate(MEASURE_FlowTask, "Differential Pressure Task", 4096, NULL, 0, &differentialPressureTaskHandle);
-    xTaskCreate(MEASURE_O2Task, "O2 Task", 4096, NULL, 0, &o2TaskHandle);
-    xTaskCreate(MEASURE_CO2Task, "CO2 Task", 4096, NULL, 0, &co2TaskHandle);
+    xTaskCreate(FlowTask, "Flow Task", 4096, NULL, 0, &flowTaskHandle);
+    xTaskCreate(O2Task, "O2 Task", 4096, NULL, 0, &o2TaskHandle);
+    xTaskCreate(CO2Task, "CO2 Task", 4096, NULL, 0, &co2TaskHandle);
+    //xTaskCreate(PressureTask, "Pressure Task", 4096, NULL, 0, &pressureTaskHandle);
     ESP_LOGI(measureTag, "measure ready");
 }
-void MEASURE_FlowTask(void *pvParameters)
+
+/************************************
+ * PRIVATE FUNCTION DEFINITIONS
+ ************************************/
+
+static void FlowTask(void *pvParameters)
 {
     const char *tagFlow = "[Flow Task]";
     int64_t timestamp;
@@ -116,95 +136,104 @@ void MEASURE_FlowTask(void *pvParameters)
 
     ESP_LOGI(tagFlow, "Initialize SDP810 differential pressur sensor");
 
-    SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL);
-
-    SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging();
-
-    vTaskDelay(pdMS_TO_TICKS(10)); // Wait for first measure
-
-    SDP8XX_ReadScalingFactor(&scalingFactor);
-    ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
-
-    lastTimestamp = esp_timer_get_time();
-
-    while (1)
+    if (!SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL))
     {
-        timestamp = esp_timer_get_time() / 1000;
+        ESP_LOGE(tagFlow, "SDP810 initialization failed, task won't make measurements");
 
-        if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
+        while (1)
         {
-            diffPressure = (float)diffPressureRaw / (float)scalingFactor;
-            deltaT = timestamp - lastTimestamp;
-            lastTimestamp = timestamp;
+        };
+    }
+    else
+    {
+        SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging();
 
-            if (diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
+        vTaskDelay(pdMS_TO_TICKS(10)); // Wait for first measure
+
+        SDP8XX_ReadScalingFactor(&scalingFactor);
+        ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
+
+        lastTimestamp = esp_timer_get_time();
+
+        while (1)
+        {
+            timestamp = esp_timer_get_time() / 1000;
+
+            if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
             {
-                if (exhale == true)
+                diffPressure = (float)diffPressureRaw / (float)scalingFactor;
+                deltaT = timestamp - lastTimestamp;
+                lastTimestamp = timestamp;
+
+                if (diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
                 {
-                    totalExhaledVolume += cycleExhaledVolume;
-                    xQueueOverwrite(g_totalExhaledVolumeQueue, (float *)&totalExhaledVolume);
+                    if (exhale == true)
+                    {
+                        totalExhaledVolume += cycleExhaledVolume;
+                        xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 
 #if LOG_TOTAL_EXHALED_VOLUME
-                    ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
+                        ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
-                    exhale = false;
+                        exhale = false;
+                    }
+
+                    diffPressure = 0.0f;
+                    flow = 0.0f;
+
+                    xQueueOverwrite(g_flowQueue, (void *)&flow);
                 }
-
-                diffPressure = 0.0f;
-                flow = 0.0f;
-
-                xQueueOverwrite(g_flowQueue, (float *)&flow);
-            }
-            else if (diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
-            {
-                if (exhale == false)
+                else if (diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
                 {
-                    exhale = true;
+                    if (exhale == false)
+                    {
+                        exhale = true;
 #if LOG_TOTAL_EXHALED_VOLUME
-                    ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
+                        ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
-                    cycleExhaledVolume = 0.0f;
+                        cycleExhaledVolume = 0.0f;
 
+#if LOG_CYCLE_EXHALED_VOLUME
+                        ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
+#endif
+                        xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
+                    }
+
+                    flow = 12.618f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
+                    cycleExhaledVolume += (float)deltaT * (flow + lastFlow) / 120000.0f; // Trapezoidal rule
+                    xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
                     ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
 #endif
-                    xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
                 }
 
-                flow = 12.618f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
-                cycleExhaledVolume += (float)deltaT * (flow + lastFlow) / 120000.0f; // Trapezoidal rule
-                xQueueOverwrite(g_cycleExhaledVolumeQueue, (float *)&cycleExhaledVolume);
-#if LOG_CYCLE_EXHALED_VOLUME
-                ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
-#endif
-            }
+                lastFlow = flow;
 
-            lastFlow = flow;
+                xQueueOverwrite(g_flowQueue, (void *)&flow);
 
-            xQueueOverwrite(g_flowQueue, (void *)&flow);
-
-            if ((i % 5) == 0)
-            {
+                if ((i % 5) == 0)
+                {
 #if LOG_FLOW
-                ESP_LOGI(tagFlow, "#1,%.3f,%d", flow, timestamp);
+                    ESP_LOGI(tagFlow, "#1,%.3f,%d", flow, timestamp);
 #endif
+                }
+
+                if (i < 1000)
+                {
+                    i++;
+                }
+                else
+                {
+                    i = 0;
+                }
             }
 
-            if (i < 1000)
-            {
-                i++;
-            }
-            else
-            {
-                i = 0;
-            }
+            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_FLOW_MS));
         }
-
-        vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
     }
 }
 
-void MEASURE_O2Task(void *pvParameters)
+static void O2Task(void *pvParameters)
 {
     const char *tagO2 = "[O2 Task]";
     float o2;
@@ -212,7 +241,7 @@ void MEASURE_O2Task(void *pvParameters)
     ESP_LOGI(tagO2, "Task started");
 
     ESP_LOGI(tagO2, "Initialize M2-02 dioxygen sensor");
-    ME2O2_Initialize(i2cHandle);
+    ME2O2_Initialize(i2cHandle, ME2O2_I2C_ADDRESS);
     ME2O2_Calibrate(INITIAL_O2_CONCENTRATION_PERCENT);
 
     while (1)
@@ -230,7 +259,7 @@ void MEASURE_O2Task(void *pvParameters)
     }
 }
 
-void MEASURE_CO2Task(void *pvParameters)
+static void CO2Task(void *pvParameters)
 {
     const char *tagCO2 = "[CO2 Task]";
     float co2;
@@ -247,7 +276,7 @@ void MEASURE_CO2Task(void *pvParameters)
     while (1)
     {
         bool dataReady;
-        
+
         if (SCD30_GetDataReadyStatus(&dataReady))
         {
             if (true == dataReady)
@@ -266,5 +295,41 @@ void MEASURE_CO2Task(void *pvParameters)
         }
 
         vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
+    }
+}
+
+static void PressureTask(void *pvParameters)
+{
+    const char *pressureTag = "[Pressure Task]";
+
+    ESP_LOGI(pressureTag, "Task started");
+
+    ESP_LOGI(pressureTag, "Initializing pressure and altitude sensor BMP280");
+
+    if (!BMP280_Initialize(i2cHandle, BMP280_I2C_ADDRESS))
+    {
+        ESP_LOGE(pressureTag, "BMP280 initialization failed, task won't make measurement");
+
+        while (1)
+        {
+        };
+    }
+    else
+    {
+        BMP280_SetFilterTimeConstant(BMP280_FILTER_16X);
+        BMP280_SetPressureOversampling(BMP280_OVERSAMPLING_16X);
+        BMP280_SetTemperatureOversampling(BMP280_OVERSAMPLING_16X);
+        BMP280_SetStandbyTime(BMP280_T_STANDBY_4S);
+        BMP280_SetOperationMode(BMP280_MODE_NORMAL);
+
+        while (1)
+        {
+            uint32_t pressure;
+
+            pressure = BMP280_GetPressure();
+            ESP_LOGI(pressureTag, "Pressure = %.2f hPa", (float)pressure / 100.0f);
+            xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
+        }
     }
 }

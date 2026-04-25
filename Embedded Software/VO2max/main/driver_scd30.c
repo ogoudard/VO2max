@@ -11,6 +11,8 @@
  * PRIVATE MACROS AND DEFINES
  ************************************/
 
+#define SCD30_RESET_DELAY_MS 100
+
 #define SCD30_I2C_ADDRESS 0x61
 #define SCD30_I2C_FREQUENCY 400000
 
@@ -67,8 +69,6 @@ void SCD30_Initialize(i2c_master_bus_handle_t i2cBusHandle)
     ESP_LOGI(TAG, "Software reset...");
     SCD30_SoftwareReset();
 
-    vTaskDelay(pdMS_TO_TICKS(100));
-
     if (SCD30_ReadFirmwareVersion(&versionMajor, &versionMinor))
     {
         ESP_LOGI(TAG, "Firmware version %d.%d", versionMajor, versionMinor);
@@ -104,6 +104,7 @@ bool SCD30_ReadFirmwareVersion(uint8_t *major, uint8_t *minor)
 void SCD30_SoftwareReset(void)
 {
     WriteCommand(SCD30_CMD_SOFTWARE_RESET);
+    vTaskDelay(pdMS_TO_TICKS(SCD30_RESET_DELAY_MS));
 }
 
 void SCD30_SetTemperatureOffset(uint16_t offset)

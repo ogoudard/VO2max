@@ -13,8 +13,5 @@ extern QueueHandle_t g_totalExhaledVolumeQueue;
 extern QueueHandle_t g_cycleExhaledVolumeQueue;
 
 void MEASURE_Initialize(void);
-void MEASURE_FlowTask(void *pvParameters);
-void MEASURE_O2Task(void *pvParameters);
-void MEASURE_CO2Task(void *pvParameters);
 
 #endif

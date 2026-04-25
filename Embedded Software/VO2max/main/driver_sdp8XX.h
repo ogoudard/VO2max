@@ -19,7 +19,7 @@ typedef enum
     SDP8XX_SDP810_125PA = 0x03020B01
 } SdpProductNumber_e;
 
-void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e productNumber);
+bool SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e productNumber);
 bool SDP8XX_ReadProductIdentifier(uint32_t *productNumber,
                                   uint64_t *serialNumber);
 void SDP8XX_SoftwareReset(void);

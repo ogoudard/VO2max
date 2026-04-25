@@ -50,10 +50,11 @@ static uint8_t ComputeCrc8(const uint8_t *data, uint8_t len);
  * PUBLIC FUNCTION DEFINITIONS
  ************************************/
 
-void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e productNumber)
+bool SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e productNumber)
 {
     uint64_t serialNumber;
     uint32_t readProductNumber;
+    bool ret = true;
 
     i2c_device_config_t devConfig = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -75,6 +76,7 @@ void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e 
         break;
     default:
         ESP_LOGE(TAG, "Invalid product number selected");
+        ret = false;
     }
 
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devConfig, &devHandle));
@@ -91,7 +93,9 @@ void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e 
 
         if (readProductNumber != productNumber)
         {
-            ESP_LOGE(TAG, "Product number set does not match product number read from device");
+            ESP_LOGE(TAG, "Product number set (0x%X) does not match product number read from device (0x%X)", productNumber, readProductNumber);
+            ESP_LOGE(TAG, "Initialization failed");
+            ret = false;
         }
         else
         {
@@ -101,7 +105,11 @@ void SDP8XX_Initialize(i2c_master_bus_handle_t i2cBusHandle, SdpProductNumber_e 
     else
     {
         ESP_LOGE(TAG, "Could not read product identifiers");
+        ESP_LOGE(TAG, "Initialization failed");
+        ret = false;
     }
+
+    return ret;
 }
 
 void SDP8XX_SoftwareReset()

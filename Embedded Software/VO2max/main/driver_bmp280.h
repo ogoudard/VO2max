@@ -1,10 +1,96 @@
 #ifndef __BMP280_H__
 #define __BMP280_H__
 
-#include "bmp280_definitions.h"
-#include "bmp280_config.h"
-#include "bmp280_error.h"
 #include <stdint.h>
+
+#include "driver/i2c_master.h"
+
+#define BMP280_I2C_ADDRESS_0x76 0x76
+#define BMP280_I2C_ADDRESS_0x77 0x77
+
+/**
+ * @brief Oversampling rates for temperature and pressure
+ */
+typedef enum
+{
+    BMP280_OVERSAMPLING_0X = 0X00,
+    BMP280_OVERSAMPLING_1X = 0X01,
+    BMP280_OVERSAMPLING_2X = 0X02,
+    BMP280_OVERSAMPLING_4X = 0X03,
+    BMP280_OVERSAMPLING_8X = 0X04,
+    BMP280_OVERSAMPLING_16X = 0X05
+} BMP280_Oversampling_t;
+
+/**
+ * @brief Standby time period to be used in NORMAL mode
+ *
+ */
+typedef enum
+{
+    BMP280_T_STANDBY_500US = 0X00,
+    BMP280_T_STANDBY_62500US,
+    BMP280_T_STANDBY_125MS,
+    BMP280_T_STANDBY_250MS,
+    BMP280_T_STANDBY_500MS,
+    BMP280_T_STANDBY_1S,
+    BMP280_T_STANDBY_2S,
+    BMP280_T_STANDBY_4S
+} BMP280_StandbyTime_t;
+
+/**
+ * @brief Possible operation modes of BMP280
+ *
+ */
+typedef enum
+{
+    BMP280_MODE_SLEEP = 0x00,
+    BMP280_MODE_FORCED = 0x01,
+    BMP280_MODE_NORMAL = 0x03
+} BMP280_OperationMode_t;
+
+/**
+ * @brief Possible values for filter coefficient
+ *
+ */
+typedef enum
+{
+    BMP280_FILTER_OFF = 0X00,
+    BMP280_FILTER_2X,
+    BMP280_FILTER_4X,
+    BMP280_FILTER_8X,
+    BMP280_FILTER_16X
+} BMP280_FilterTimeConstant_t;
+
+/**
+ * @brief Struct of calibration parameters unique to each BMP280 sensor
+ *
+ */
+typedef struct
+{
+    uint16_t T1;
+    int16_t T2;
+    int16_t T3;
+    uint16_t P1;
+    int16_t P2;
+    int16_t P3;
+    int16_t P4;
+    int16_t P5;
+    int16_t P6;
+    int16_t P7;
+    int16_t P8;
+    int16_t P9;
+} BMP280_CalibrationParameters_t;
+
+/**
+ * @brief Structure needed in case of using bmp280_get_all() function
+ *
+ */
+typedef struct
+{
+    float temperature;
+    uint32_t pressure;
+    float altitude;
+} BMP280_SensorsData_t;
 
 /**
  * @brief BMP280 initializer
@@ -18,28 +104,7 @@
  * @param i2c_address: I2C address in case of I2C interface.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_init(
-	bmp280_handle_t *handle,
-	bmp280_hardware_interface_t hw_interface,
-	bmp280_i2c_address_t i2c_address);
-
-/**
- * @brief BMP280 deinitializer
- *
- * @param handle: Pointer to the BMP280 instance handle structure.
- * @return 0 or ERROR_OK on success, other values on errors.
- */
-bmp280_error_code_t bmp280_deinit(bmp280_handle_t *handle);
-
-/**
- * @brief BMP280 chip ID checker
- *
- * Checks chip ID to see if it really is a BMP280 module with correct wiring and address.
- *
- * @param handle: Pointer to the BMP280 instance handle structure.
- * @return 0 or ERROR_OK on success, other values on errors.
- */
-bmp280_error_code_t bmp280_check_id(bmp280_handle_t *bmp280_handle);
+bool BMP280_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address);
 
 /**
  * @brief BMP280 soft reset
@@ -49,7 +114,7 @@ bmp280_error_code_t bmp280_check_id(bmp280_handle_t *bmp280_handle);
  * @param handle: Pointer to the BMP280 instance handle structure.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_reset(bmp280_handle_t *handle);
+void BMP280_Reset(void);
 
 /**
  * @brief BMP280 set mode
@@ -60,9 +125,7 @@ bmp280_error_code_t bmp280_reset(bmp280_handle_t *handle);
  * @param operationMode: The mode of operation: NORMAL_MODE, SLEEP_MODE, FORCED_MODE
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_set_mode(
-	bmp280_handle_t *handle,
-	bmp280_operation_mode_t operationMode);
+void BMP280_SetOperationMode(BMP280_OperationMode_t operationMode);
 
 /**
  * @brief BMP280 set pressure oversampling
@@ -73,9 +136,7 @@ bmp280_error_code_t bmp280_set_mode(
  * @param osValue: Pressure oversampling value
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_set_pressure_oversampling(
-	bmp280_handle_t *handle,
-	bmp280_over_sampling_t osValue);
+void BMP280_SetPressureOversampling(BMP280_Oversampling_t osValue);
 
 /**
  * @brief BMP280 set temperature oversampling
@@ -86,9 +147,7 @@ bmp280_error_code_t bmp280_set_pressure_oversampling(
  * @param osValue: Temperature oversampling value
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_set_temperature_oversampling(
-	bmp280_handle_t *handle,
-	bmp280_over_sampling_t osValue);
+void BMP280_SetTemperatureOversampling(BMP280_Oversampling_t osValue);
 
 /**
  * @brief BMP280 set standby time
@@ -99,9 +158,7 @@ bmp280_error_code_t bmp280_set_temperature_oversampling(
  * @param standbyTime: standby time value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_set_standby_time(
-	bmp280_handle_t *handle,
-	bmp280_standby_time_t standbyTime);
+void BMP280_SetStandbyTime(BMP280_StandbyTime_t standbyTime);
 
 /**
  * @brief BMP280 set filter coefficient
@@ -112,9 +169,7 @@ bmp280_error_code_t bmp280_set_standby_time(
  * @param filterCoefficient: Filter coefficient value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_set_filter_coefficient(
-	bmp280_handle_t *handle,
-	bmp280_iir_filter_t filterCoefficient);
+void BMP280_SetFilterTimeConstant(BMP280_FilterTimeConstant_t filterTimeConstant);
 
 /**
  * @brief BMP280 get temperature
@@ -125,9 +180,7 @@ bmp280_error_code_t bmp280_set_filter_coefficient(
  * @param temperature: Pointer to temperature value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_temperature(
-	bmp280_handle_t *handle,
-	float *temperature);
+float BMP280_GetTemperature(void);
 
 /**
  * @brief BMP280 get pressure
@@ -138,11 +191,7 @@ bmp280_error_code_t bmp280_get_temperature(
  * @param pressure: Pointer to pressure value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_pressure(
-	bmp280_handle_t *handle,
-	uint32_t *pressure);
-
-#if BMP280_INCLUDE_ALTITUDE
+uint32_t BMP280_GetPressure(void);
 
 /**
  * @brief BMP280 calculate altitude
@@ -154,10 +203,7 @@ bmp280_error_code_t bmp280_get_pressure(
  * @param barometricPressure: Barometric pressure read from sensor
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_calculate_altitude_quick(
-	bmp280_handle_t *handle,
-	float *alt,
-	uint32_t barometricPressure);
+void BMP280_CalculateAltitudeQuick(float *alt, uint32_t barometricPressure);
 
 /**
  * @brief BMP280 calculate altitude
@@ -170,28 +216,7 @@ bmp280_error_code_t bmp280_calculate_altitude_quick(
  * @param ambientTemperatureInC: Temperature in Centigrade
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_calculate_altitude_hypsometric(
-	bmp280_handle_t *handle,
-	float *alt,
-	uint32_t barometricPressure,
-	float ambientTemperatureInC);
-#endif
-
-#if BMP280_INCLUDE_ADDITIONAL_GETTERS
-
-/**
- * @brief BMP280 get temperature and pressure (optional: altitude)
- *
- * Returns a complete set of sensor readings and altitude calculation (quick)
- *
- * @param handle: Pointer to the BMP280 instance handle structure.
- * @param alt: Pointer to altitude value.
- * @param data: An structure of temperature, pressure and (optional) altitude
- * @return 0 or ERROR_OK on success, other values on errors.
- */
-bmp280_error_code_t bmp280_get_all(
-	bmp280_handle_t *handle,
-	bmp280_sensors_data_t *data);
+void BMP280_CalculateAltitudeHypsometric(float *alt, uint32_t barometricPressure, float ambientTemperatureInC);
 
 /**
  * @brief BMP280 get mode of operation
@@ -202,9 +227,7 @@ bmp280_error_code_t bmp280_get_all(
  * @param mode: Pointer to mode of operation value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_mode(
-	bmp280_handle_t *handle,
-	bmp280_operation_mode_t *mode);
+void BMP280_GetOperationMode(BMP280_OperationMode_t *mode);
 
 /**
  * @brief BMP280 get temperature oversampling
@@ -215,9 +238,7 @@ bmp280_error_code_t bmp280_get_mode(
  * @param tempOS: Pointer to temperature oversampling value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_temperature_oversampling(
-	bmp280_handle_t *handle,
-	bmp280_over_sampling_t *tempOS);
+BMP280_Oversampling_t BMP280_GetTemperatureOversampling(void);
 
 /**
  * @brief BMP280 get pressure oversampling
@@ -228,9 +249,7 @@ bmp280_error_code_t bmp280_get_temperature_oversampling(
  * @param pressureOS: Pointer to pressure oversampling value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_pressure_oversampling(
-	bmp280_handle_t *handle,
-	bmp280_over_sampling_t *pressureOS);
+BMP280_Oversampling_t BMP280_GetPressureOversampling(void);
 
 /**
  * @brief BMP280 get standby time
@@ -241,9 +260,7 @@ bmp280_error_code_t bmp280_get_pressure_oversampling(
  * @param standby_time: Pointer to standby time value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_standby_time(
-	bmp280_handle_t *handle,
-	bmp280_standby_time_t *standby_time);
+BMP280_StandbyTime_t BMP280_GetStandbyTime(void);
 
 /**
  * @brief BMP280 get filter coefficient
@@ -254,8 +271,6 @@ bmp280_error_code_t bmp280_get_standby_time(
  * @param filter_coeff: Pointer to filter coefficient value.
  * @return 0 or ERROR_OK on success, other values on errors.
  */
-bmp280_error_code_t bmp280_get_filter_coefficient(
-	bmp280_handle_t *handle,
-	bmp280_iir_filter_t *filter_coeff);
+BMP280_FilterTimeConstant_t BMP280_GetFilterTimeConstant(void);
 
 #endif

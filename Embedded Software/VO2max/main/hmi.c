@@ -19,6 +19,7 @@
 
 #define HMI_TASK_STACK_SIZE 8192
 #define HMI_TASK_PERIOD_MS 100
+#define HMI_TASK_PRIORITY 0
 
 #define SPI_HOST SPI2_HOST
 
@@ -109,7 +110,7 @@ void HMI_Initialize()
     ESP_LOGI(hmiTag, "Initialize SPI bus for LCD display");
     ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST, &busConfig, SPI_DMA_CH1));
 
-    xTaskCreate(HmiTask, "HMI Task", HMI_TASK_STACK_SIZE, NULL, 0, &g_hmiTaskHandle);
+    xTaskCreate(HmiTask, "HMI Task", HMI_TASK_STACK_SIZE, NULL, HMI_TASK_PRIORITY, &g_hmiTaskHandle);
 }
 
 /************************************
@@ -222,7 +223,7 @@ static void NormalOperation(Menu_t *menu)
 
                 page = selectedMenu / 4;
 
-                if(page != lastPage)
+                if (page != lastPage)
                 {
                     DisplayMenu(currentMenu, page);
                     lastPage = page;
@@ -266,7 +267,7 @@ static void NormalOperation(Menu_t *menu)
 
                 page = selectedMenu / 4;
 
-                if(page != lastPage)
+                if (page != lastPage)
                 {
                     DisplayMenu(currentMenu, page);
                     lastPage = page;
@@ -320,8 +321,8 @@ static void DisplayMenu(Menu_t *menu, uint8_t page)
         yPos = 0;
 
         endIndex = page * 4 + 4;
-        
-        if(endIndex > menu->childrenCount)
+
+        if (endIndex > menu->childrenCount)
         {
             endIndex = menu->childrenCount;
         }

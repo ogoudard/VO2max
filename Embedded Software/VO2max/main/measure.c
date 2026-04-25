@@ -14,14 +14,21 @@
 #include "driver_me2o2.h"
 #include "driver_bmp280.h"
 #include "hmi.h"
+#include "driver/gpio.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
  ************************************/
 
 #define O2_TASK_STACK_SIZE 8192
+#define O2_TASK_PRIORITY 2
+
 #define CO2_TASK_STACK_SIZE 8192
+#define CO2_TASK_PRIORITY 1
+
 #define FLOW_TASK_STACK_SIZE 8192
+#define FLOW_TASK_PRIORITY 5
+
 #define PRESSURE_TASK_STACK_SIZE 8192
 
 #define I2C_BUS_NUM I2C_NUM_0
@@ -104,6 +111,15 @@ void MEASURE_Initialize()
     };
     const char *measureTag = "[MEASURE]";
 
+    gpio_config_t gpioConfig = {
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pin_bit_mask = 1 << 27};
+
+    gpio_config(&gpioConfig);
+
     ESP_LOGI(measureTag, "Initializing measure...");
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2cMasterConfig, &i2cHandle));
 
@@ -121,10 +137,10 @@ void MEASURE_Initialize()
     g_co2InitializationSemaphore = xSemaphoreCreateBinary();
     g_pressureInitializationSemaphore = xSemaphoreCreateBinary();
 
-    xTaskCreate(FlowTask, "Flow Task", FLOW_TASK_STACK_SIZE, NULL, 0, &flowTaskHandle);
-    xTaskCreate(O2Task, "O2 Task", O2_TASK_STACK_SIZE, NULL, 0, &o2TaskHandle);
-    xTaskCreate(CO2Task, "CO2 Task", CO2_TASK_STACK_SIZE, NULL, 0, &co2TaskHandle);
-    //xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, 0, &pressureTaskHandle);
+    xTaskCreate(FlowTask, "Flow Task", FLOW_TASK_STACK_SIZE, NULL, FLOW_TASK_PRIORITY, &flowTaskHandle);
+    xTaskCreate(O2Task, "O2 Task", O2_TASK_STACK_SIZE, NULL, O2_TASK_PRIORITY, &o2TaskHandle);
+    xTaskCreate(CO2Task, "CO2 Task", CO2_TASK_STACK_SIZE, NULL, CO2_TASK_PRIORITY, &co2TaskHandle);
+    // xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, 0, &pressureTaskHandle);
 }
 
 /************************************
@@ -229,12 +245,10 @@ static void FlowTask(void *pvParameters)
                 lastFlow = flow;
 
                 xQueueOverwrite(g_flowQueue, (void *)&flow);
-
+#if LOG_FLOW
                 if ((i % 5) == 0)
                 {
-#if LOG_FLOW
                     ESP_LOGI(tagFlow, "#1,%.3f,%d", flow, timestamp);
-#endif
                 }
 
                 if (i < 1000)
@@ -245,6 +259,7 @@ static void FlowTask(void *pvParameters)
                 {
                     i = 0;
                 }
+#endif
             }
 
             vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_FLOW_MS));

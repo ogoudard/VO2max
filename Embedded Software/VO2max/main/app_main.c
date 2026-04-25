@@ -30,8 +30,9 @@ void app_main(void)
 
     HMI_Initialize();
 
-
     MEASURE_Initialize();
+
+    vTaskSuspend(xTaskGetCurrentTaskHandle());
 
     while (1)
     {

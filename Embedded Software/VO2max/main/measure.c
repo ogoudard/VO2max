@@ -13,7 +13,6 @@
 #include "driver_scd30.h"
 #include "driver_me2o2.h"
 #include "driver_bmp280.h"
-#include "hmi.h"
 #include "driver/gpio.h"
 
 /************************************
@@ -22,14 +21,19 @@
 
 #define O2_TASK_STACK_SIZE 8192
 #define O2_TASK_PRIORITY 2
+#define O2_TASK_PERIOD_MS 2000
 
 #define CO2_TASK_STACK_SIZE 8192
 #define CO2_TASK_PRIORITY 1
+#define CO2_TASK_PERIOD_MS 3000
 
 #define FLOW_TASK_STACK_SIZE 8192
 #define FLOW_TASK_PRIORITY 5
+#define FLOW_TASK_PERIOD_MS 10
 
 #define PRESSURE_TASK_STACK_SIZE 8192
+#define PRESSURE_TASK_PRIORITY 6
+#define PRESSURE_TASK_PERIOD_MS 5000
 
 #define I2C_BUS_NUM I2C_NUM_0
 
@@ -39,11 +43,6 @@
 #define ME2O2_I2C_ADDRESS ME2O2_I2C_ADDRESS_0x73
 
 #define BMP280_I2C_ADDRESS BMP280_I2C_ADDRESS_0x76
-
-#define MEASURE_PERIOD_FLOW_MS 10
-#define MEASURE_PERIOD_O2_MS 2000
-#define MEASURE_PERIOD_CO2_MS 3000
-#define MEASURE_PERIOD_PRESSURE_MS 5000
 
 #define PRESSURE_SENSOR_MODEL SDP8XX_SDP810_500PA
 
@@ -155,12 +154,14 @@ static void FlowTask(void *pvParameters)
     float flow = 0.0f;
     float cycleExhaledVolume = 0.0f;
     float totalExhaledVolume = 0.0f;
-    int64_t lastTimestamp;
+    int64_t previousTimestamp;
     int64_t deltaT;
-    float lastFlow = 0.0F;
+    float previousFlow = 0.0F;
     int16_t scalingFactor;
     int16_t diffPressureRaw;
+#if LOG_FLOW
     uint16_t i = 0;
+#endif
     bool exhale = false;
 
     ESP_LOGI(tagFlow, "Task started");
@@ -175,6 +176,7 @@ static void FlowTask(void *pvParameters)
 
         while (1)
         {
+            vTaskDelay(pdMS_TO_TICKS(FLOW_TASK_PERIOD_MS));
         }
     }
     else
@@ -186,7 +188,7 @@ static void FlowTask(void *pvParameters)
         SDP8XX_ReadScalingFactor(&scalingFactor);
         ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
 
-        lastTimestamp = esp_timer_get_time();
+        previousTimestamp = esp_timer_get_time();
 
         xSemaphoreGive(g_flowInitializationSemaphore);
 
@@ -197,8 +199,8 @@ static void FlowTask(void *pvParameters)
             if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
             {
                 diffPressure = (float)diffPressureRaw / (float)scalingFactor;
-                deltaT = timestamp - lastTimestamp;
-                lastTimestamp = timestamp;
+                deltaT = timestamp - previousTimestamp;
+                previousTimestamp = timestamp;
 
                 if (diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
                 {
@@ -235,14 +237,14 @@ static void FlowTask(void *pvParameters)
                     }
 
                     flow = 12.618f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
-                    cycleExhaledVolume += (float)deltaT * (flow + lastFlow) / 120000.0f; // Trapezoidal rule
+                    cycleExhaledVolume += (float)deltaT * (flow + previousFlow) / 120000.0f; // Trapezoidal rule
                     xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
                     ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
 #endif
                 }
 
-                lastFlow = flow;
+                previousFlow = flow;
 
                 xQueueOverwrite(g_flowQueue, (void *)&flow);
 #if LOG_FLOW
@@ -262,7 +264,7 @@ static void FlowTask(void *pvParameters)
 #endif
             }
 
-            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_FLOW_MS));
+            vTaskDelay(pdMS_TO_TICKS(FLOW_TASK_PERIOD_MS));
         }
     }
 }
@@ -284,6 +286,7 @@ static void O2Task(void *pvParameters)
 
         while (1)
         {
+            vTaskDelay(pdMS_TO_TICKS(O2_TASK_PERIOD_MS));
         }
     }
     else
@@ -303,7 +306,7 @@ static void O2Task(void *pvParameters)
 #endif
             }
 
-            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_O2_MS));
+            vTaskDelay(pdMS_TO_TICKS(O2_TASK_PERIOD_MS));
         }
     }
 }
@@ -327,7 +330,7 @@ static void CO2Task(void *pvParameters)
 
         while (1)
         {
-            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
+            vTaskDelay(pdMS_TO_TICKS(CO2_TASK_PERIOD_MS));
         };
     }
     else
@@ -358,7 +361,7 @@ static void CO2Task(void *pvParameters)
                 }
             }
 
-            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_CO2_MS));
+            vTaskDelay(pdMS_TO_TICKS(CO2_TASK_PERIOD_MS));
         }
     }
 }
@@ -379,7 +382,7 @@ static void PressureTask(void *pvParameters)
 
         while (1)
         {
-            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
+            vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
         };
     }
     else
@@ -399,7 +402,7 @@ static void PressureTask(void *pvParameters)
             pressure = BMP280_GetPressure();
             ESP_LOGI(pressureTag, "Pressure = %.2f hPa", (float)pressure / 100.0f);
             xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-            vTaskDelay(pdMS_TO_TICKS(MEASURE_PERIOD_PRESSURE_MS));
+            vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
         }
     }
 }

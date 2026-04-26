@@ -639,7 +639,9 @@ uint8_t ST7789_DrawPoint(uint16_t x, uint16_t y, uint32_t color);
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font);
+uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, ST7789_font_t font);
+
+void ST7789_ClearString(uint16_t x, uint16_t y, uint8_t length, uint32_t color, ST7789_font_t font);
 
 /**
  * @brief     fill the rect

@@ -14,13 +14,11 @@ typedef struct Menu
     struct Menu *parent;
     struct Menu *children[MAX_MENU_SIZE];
     uint8_t childrenCount;
-    MenuAction_t onEntry;
     MenuAction_t action;
-    MenuAction_t onExit;
 } Menu_t;
 
 void MENU_Create(Menu_t *menu, const char *name);
 void MENU_AddSubmenu(Menu_t *menu, Menu_t *submenu);
-void MENU_AddAction(Menu_t *menu, MenuAction_t onEntry, MenuAction_t action, MenuAction_t onExit);
+void MENU_AddAction(Menu_t *menu, MenuAction_t action);
 
 #endif

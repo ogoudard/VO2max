@@ -157,7 +157,9 @@ uint8_t LCD_DisplayOff(void);
  *            - 1 draw string failed
  * @note      none
  */
-uint8_t LCD_String(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font);
+uint8_t LCD_String(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, ST7789_font_t font);
+
+void LCD_ClearString(uint16_t x, uint16_t y, uint16_t len, uint32_t color, ST7789_font_t font);
 
 /**
  * @brief     basic example write a point

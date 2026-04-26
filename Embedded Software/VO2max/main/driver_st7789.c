@@ -104,7 +104,7 @@ static uint8_t buffer[ST7789_BUFFER_SIZE];
 
 static uint8_t WriteByte(uint8_t data, uint32_t cmd);
 static uint8_t WriteBytes(uint8_t *data, uint16_t len, uint32_t cmd);
-static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, uint32_t bgColor);
+static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color);
 static uint8_t DrawPoint(uint16_t x, uint16_t y, uint32_t color);
 static void SpiPreTransferCallback(spi_transaction_t *t);
 
@@ -2674,54 +2674,17 @@ uint8_t ST7789_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16
     uint32_t m;
     uint32_t n;
 
-    if (left > (SCREEN_WIDTH - 1)) /* check left */
-    {
-        ESP_LOGE(TAG, "st7789: left is over column.\n"); /* left is over column */
-
-        return 4; /* return error */
-    }
-    if (right > (SCREEN_WIDTH - 1)) /* check right */
-    {
-        ESP_LOGE(TAG, "st7789: right is over column.\n"); /* right is over column */
-
-        return 5; /* return error */
-    }
-    if (left >= right) /* check left and right */
-    {
-        ESP_LOGE(TAG, "st7789: left >= right.\n"); /* left >= right */
-
-        return 6; /* return error */
-    }
-    if (top > (SCREEN_HEIGHT - 1)) /* check top */
-    {
-        ESP_LOGE(TAG, "st7789: top is over row.\n"); /* top is over row */
-
-        return 7; /* return error */
-    }
-    if (bottom > (SCREEN_HEIGHT - 1)) /* check bottom */
-    {
-        ESP_LOGE(TAG, "st7789: bottom is over row.\n"); /* bottom is over row */
-
-        return 8; /* return error */
-    }
-    if (top >= bottom) /* check top and bottom */
-    {
-        ESP_LOGE(TAG, "st7789: top >= bottom.\n"); /* top >= bottom */
-
-        return 9; /* return error */
-    }
-
     if (WriteByte(ST7789_CMD_CASET, ST7789_CMD) != 0) /* write set column address command */
     {
         ESP_LOGE(TAG, "st7789: write command failed.\n"); /* write command failed */
 
         return 1; /* return error */
     }
-    buf[0] = (left >> 8) & 0xFF;              /* start address msb */
-    buf[1] = (left >> 0) & 0xFF;              /* start address lsb */
-    buf[2] = ((right) >> 8) & 0xFF;           /* end address msb */
-    buf[3] = ((right) >> 0) & 0xFF;           /* end address lsb */
-    if (WriteBytes(buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = ((Y_OFFSET + left) >> 8) & 0xFF;  /* start address msb */
+    buf[1] = ((Y_OFFSET + left) >> 0) & 0xFF;  /* start address lsb */
+    buf[2] = ((Y_OFFSET + right) >> 8) & 0xFF; /* end address msb */
+    buf[3] = ((Y_OFFSET + right) >> 0) & 0xFF; /* end address lsb */
+    if (WriteBytes(buf, 4, ST7789_DATA) != 0)  /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2734,11 +2697,11 @@ uint8_t ST7789_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16
 
         return 1; /* return error */
     }
-    buf[0] = (top >> 8) & 0xFF;               /* start address msb */
-    buf[1] = (top >> 0) & 0xFF;               /* start address lsb */
-    buf[2] = ((bottom) >> 8) & 0xFF;          /* end address msb */
-    buf[3] = ((bottom) >> 0) & 0xFF;          /* end address lsb */
-    if (WriteBytes(buf, 4, ST7789_DATA) != 0) /* write data */
+    buf[0] = ((X_OFFSET + top) >> 8) & 0xFF;    /* start address msb */
+    buf[1] = ((X_OFFSET + top) >> 0) & 0xFF;    /* start address lsb */
+    buf[2] = ((X_OFFSET + bottom) >> 8) & 0xFF; /* end address msb */
+    buf[3] = ((X_OFFSET + bottom) >> 0) & 0xFF; /* end address lsb */
+    if (WriteBytes(buf, 4, ST7789_DATA) != 0)   /* write data */
     {
         ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2763,8 +2726,7 @@ uint8_t ST7789_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16
         ST7789_BUFFER_SIZE; /* the last */
     for (i = 0; i < m; i++)
     {
-        if (WriteBytes(buf,
-                       ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
+        if (WriteBytes(buffer, ST7789_BUFFER_SIZE, ST7789_DATA) != 0) /* write data */
         {
             ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2773,7 +2735,7 @@ uint8_t ST7789_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16
     }
     if (n != 0) /* not end */
     {
-        if (WriteBytes(buf, n, ST7789_DATA) != 0) /* write data */
+        if (WriteBytes(buffer, n, ST7789_DATA) != 0) /* write data */
         {
             ESP_LOGE(TAG, "st7789: write data failed.\n"); /* write data failed */
 
@@ -2957,11 +2919,11 @@ uint8_t ST7789_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, ui
  *            - 4 x or y is invalid
  * @note      x < column && y < row
  */
-uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, uint32_t bgColor, ST7789_font_t font)
+uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, ST7789_font_t font)
 {
     while ((len != 0) && (*str <= '~') && (*str >= ' ')) /* write all string */
     {
-        if (ShowChar(x, y, *str, font, color, bgColor) != 0) /* show a char */
+        if (ShowChar(x, y, *str, font, color) != 0) /* show a char */
         {
             return 1; /* return error */
         }
@@ -2971,6 +2933,22 @@ uint8_t ST7789_WriteString(uint16_t x, uint16_t y, const char *str, uint16_t len
     }
 
     return 0; /* success return 0 */
+}
+
+void ST7789_ClearString(uint16_t x, uint16_t y, uint8_t length, uint32_t color, ST7789_font_t font)
+{
+    switch (font)
+    {
+    case ST7789_FONT_12:
+        ST7789_FillRectangle(x + 6, y - 6, x + 6 * (length + 1), y + 6, color);
+        break;
+    case ST7789_FONT_16:
+        ST7789_FillRectangle(x + 8, y - 8, x + 8 * (length + 1), y + 8, color);
+        break;
+    case ST7789_FONT_24:
+        ST7789_FillRectangle(x + 12, y - 12, x + 12 * (length + 1), y + 12, color);
+        break;
+    }
 }
 
 /**
@@ -3193,7 +3171,7 @@ static uint8_t DrawPoint(uint16_t x, uint16_t y, uint32_t color)
  *            - 1 show char failed
  * @note      none
  */
-static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color, uint32_t bgColor)
+static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color)
 {
     uint8_t temp, t, t1;
     uint16_t y0 = y;
@@ -3227,13 +3205,7 @@ static uint8_t ShowChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint3
                     return 1; /* return error */
                 }
             }
-            else if (bgColor != LCD_NO_BG_COLOR)
-            {
-                if (DrawPoint(x, y, bgColor) != 0) /* draw point */
-                {
-                    return 1; /* return error */
-                }
-            }
+
             temp <<= 1; /* left shift 1 */
             y++;
             if ((y - y0) == size) /* reset size */

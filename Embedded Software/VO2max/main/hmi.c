@@ -478,16 +478,16 @@ static void LiveValuesScreenAction(void)
     float previousHumidity = FLT_MAX;
     float pressure;
     float previousPressure = FLT_MAX;
-    char string[30];
+    char string[10];
 
     LCD_Clear();
 
-    LCD_String(0, 11, "O2   =           %", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 34, "CO2  =         ppm", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 57, "Flow =       L/min", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 80, "T    =           C", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 103, "H    =           %", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 126, "P    =         hPa", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 12, "O2  =            %", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 34, "CO2 =          ppm", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 57, "Q   =        L/min", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 80, "T   =            C", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 103, "H   =            %", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 126, "P   =          hPa", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
@@ -495,19 +495,19 @@ static void LiveValuesScreenAction(void)
         {
             if (o2 != previousO2)
             {
-                snprintf(string, sizeof(string), "%.1f", o2);
-                LCD_ClearString(80, 11, 4, LCD_COLOR_WHITE, ST7789_FONT_24);
-                LCD_String(80, 11, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
+                sprintf(string, "%.1f", o2);
+                LCD_ClearString(70, 12, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+                LCD_String(70, 12, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousO2 = o2;
             }
         }
         if (pdPASS == xQueueReceive(g_co2Queue, (void *)&co2, (TickType_t)0))
         {
-            if(co2 != previousCo2)
+            if (co2 != previousCo2)
             {
-                snprintf(string, sizeof(string), "%5.0f", co2);
-                LCD_ClearString(80, 34, 5, LCD_COLOR_WHITE, ST7789_FONT_24);
-                LCD_String(80, 34, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
+                sprintf(string, "%-5.0f", co2);
+                LCD_ClearString(70, 34, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+                LCD_String(70, 34, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousCo2 = co2;
             }
         }
@@ -515,39 +515,39 @@ static void LiveValuesScreenAction(void)
         {
             if (flow != previousFlow)
             {
-                snprintf(string, sizeof(string), "%3.1f", flow);
-                LCD_ClearString(80, 57, 5, LCD_COLOR_WHITE, ST7789_FONT_24);
-                LCD_String(80, 57, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
+                sprintf(string, "%-5.1f", flow);
+                LCD_ClearString(70, 57, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+                LCD_String(70, 57, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousFlow = flow;
             }
         }
         if (pdPASS == xQueueReceive(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
         {
-            if(temperature != previousTemperature)
+            if (temperature != previousTemperature)
             {
-                snprintf(string, sizeof(string), "%2.1f", temperature);
-                LCD_ClearString(80, 80, 4, LCD_COLOR_WHITE, ST7789_FONT_24);
-                LCD_String(80, 80, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
+                sprintf(string, "%-5.1f", temperature);
+                LCD_ClearString(70, 80, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+                LCD_String(70, 80, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousTemperature = temperature;
             }
         }
         if (pdPASS == xQueueReceive(g_humidityQueue, (void *)&humidity, (TickType_t)0))
         {
-            if(humidity != previousHumidity)
+            if (humidity != previousHumidity)
             {
-                snprintf(string, sizeof(string), "%3.0f", humidity);
-                LCD_ClearString(80, 103, 3, LCD_COLOR_WHITE, ST7789_FONT_24);
-                LCD_String(80, 103, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
+                sprintf(string, "%-5.0f", humidity);
+                LCD_ClearString(70, 103, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+                LCD_String(70, 103, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousHumidity = humidity;
             }
         }
         if (pdPASS == xQueueReceive(g_pressureQueue, (void *)&pressure, (TickType_t)0))
         {
-            if(pressure != previousPressure)
+            if (pressure != previousPressure)
             {
-                snprintf(string, sizeof(string), "%4.1f", pressure);
-                LCD_ClearString(80, 126, 6, LCD_COLOR_WHITE, ST7789_FONT_24);
-                LCD_String(80, 126, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
+                sprintf(string, "%-5.1f", pressure);
+                LCD_ClearString(70, 126, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+                LCD_String(70, 126, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousPressure = pressure;
             }
         }
@@ -565,8 +565,8 @@ static void SpirometerScreenAction(void)
     LCD_Clear();
 
     LCD_String(60, 24, "Spirometer", strlen("Spirometer"), LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 72, "Vol (cyc) =      L", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
-    LCD_String(0, 96, "Vol (tot) =      L", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 72, "VOLcyc =         L", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 96, "VOLtot =         L", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
@@ -582,7 +582,5 @@ static void SpirometerScreenAction(void)
             sprintf(string, "%5.1f", totalExhaledVolume);
             LCD_String(130, 96, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
         }
-
-        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
     }
 }

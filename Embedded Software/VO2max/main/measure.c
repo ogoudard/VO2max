@@ -183,7 +183,7 @@ static void FlowTask(void *pvParameters)
     {
         SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging();
 
-        vTaskDelay(pdMS_TO_TICKS(10)); // Wait for first measure
+        vTaskDelay(pdMS_TO_TICKS(100)); // Wait for first measure
 
         SDP8XX_ReadScalingFactor(&scalingFactor);
         ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
@@ -198,6 +198,7 @@ static void FlowTask(void *pvParameters)
 
             if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
             {
+
                 diffPressure = (float)diffPressureRaw / (float)scalingFactor;
                 deltaT = timestamp - previousTimestamp;
                 previousTimestamp = timestamp;
@@ -236,7 +237,7 @@ static void FlowTask(void *pvParameters)
                         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
                     }
 
-                    flow = 12.618f * sqrt(diffPressure);                                 // Bernoulli equation Q=k⋅sqrt(ΔP)
+                    flow = 12.618f * sqrt(diffPressure);                                     // Bernoulli equation Q=k⋅sqrt(ΔP)
                     cycleExhaledVolume += (float)deltaT * (flow + previousFlow) / 120000.0f; // Trapezoidal rule
                     xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME

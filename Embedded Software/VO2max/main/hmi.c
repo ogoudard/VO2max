@@ -32,7 +32,7 @@
 
 #define INITIALIZATION_TIMEOUT_MS 3000
 
-#define SHORT_LONG_PRESS_THRESHOLD_US 300000
+#define SHORT_LONG_PRESS_THRESHOLD_US 400000
 
 #define MENU_LIST_X_START 20
 #define MENU_LIST_Y_START_POSITION 50
@@ -75,6 +75,8 @@ static void LiveValuesScreenEntry(void);
 static void LiveValuesScreenAction(void);
 static void SpirometerScreenAction(void);
 static void SpirometerScreenEntry(void);
+static void O2CalibrationScreenEntry(void);
+static void O2CalibrationScreenAction(void);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -154,6 +156,7 @@ static void HmiTask(void *pvParameters)
 
     MENU_AddAction(&liveValuesMenu, LiveValuesScreenEntry, LiveValuesScreenAction, NULL);
     MENU_AddAction(&spirometerMenu, SpirometerScreenEntry, SpirometerScreenAction, NULL);
+    MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenEntry, O2CalibrationScreenAction, NULL);
 
     LCD_Initialize();
 
@@ -419,6 +422,33 @@ static PushButtonState_e GetPushButton2State(void)
     lastPushButton2State = pushButton2State;
 
     return ret;
+}
+
+static void O2CalibrationScreenEntry(void)
+{
+    LCD_Clear();
+
+    LCD_String(30, 16, "O2 Calibration", 14, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+    LCD_String(0, 48, "cal =          %", 16, LCD_COLOR_BLACK, LCD_NO_BG_COLOR, ST7789_FONT_24);
+}
+
+static void O2CalibrationScreenAction(void)
+{
+    static float o2Value = 20.9f;
+    char o2String[5];
+
+    if (GetPushButton1State() == BUTTON_SHORT_PRESS)
+    {
+        o2Value += 0.1f;
+        snprintf(o2String, sizeof(o2Value), "%2.1f", o2Value);
+        LCD_String(30, 48, o2String, 3, LCD_COLOR_BLACK, LCD_COLOR_WHITE, ST7789_FONT_24);
+    }
+    else if (GetPushButton2State() == BUTTON_SHORT_PRESS)
+    {
+        o2Value -= 0.1f;
+        snprintf(o2String, sizeof(o2Value), "%2.1f", o2Value);
+        LCD_String(30, 48, o2String, 3, LCD_COLOR_BLACK, LCD_COLOR_WHITE, ST7789_FONT_24);
+    }
 }
 
 static void LiveValuesScreenEntry(void)

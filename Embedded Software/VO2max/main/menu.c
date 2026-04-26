@@ -28,7 +28,7 @@ void MENU_Create(Menu_t *menu, const char *name)
     menu->action = NULL;
     menu->onExit = NULL;
 
-    for(uint8_t i = 0; i < MAX_MENU_SIZE; i++)
+    for (uint8_t i = 0; i < MAX_MENU_SIZE; i++)
     {
         menu->children[i] = NULL;
     }
@@ -36,7 +36,7 @@ void MENU_Create(Menu_t *menu, const char *name)
 
 void MENU_AddSubmenu(Menu_t *menu, Menu_t *submenu)
 {
-    if(menu->childrenCount < (MAX_MENU_SIZE - 1))
+    if (menu->childrenCount < (MAX_MENU_SIZE - 1))
     {
         menu->children[menu->childrenCount] = submenu;
         menu->children[menu->childrenCount]->parent = menu;

@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 #include "measure.h"
+#include "battery.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -67,6 +68,7 @@ TaskHandle_t g_hmiTaskHandle = NULL;
 
 static void HmiTask(void *pvParameters);
 static void NormalOperation();
+static void DisplayBatterySoc(void);
 static void DisplaySelected(uint8_t selected);
 static void DisplayMenuName(Menu_t *menu);
 static void DisplayPage(Menu_t *menu, uint8_t page);
@@ -75,6 +77,7 @@ static PushButtonState_e GetPushButton2State(void);
 static void LiveValuesScreenAction(void);
 static void SpirometerScreenAction(void);
 static void O2CalibrationScreenAction(void);
+static void PressureCalibrationScreenAction(void);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -119,7 +122,7 @@ void HMI_Initialize()
 
 static void HmiTask(void *pvParameters)
 {
-    char version[20];
+    char versionString[20];
     BaseType_t waitNotification = pdTRUE;
 
     ESP_LOGI(hmiTaskTag, "HMI initialization...");
@@ -128,8 +131,8 @@ static void HmiTask(void *pvParameters)
 
     LCD_String(0, 25, "VO2max", strlen("VO2max"), LCD_COLOR_BLACK, ST7789_FONT_24);
 
-    sprintf(version, "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
-    LCD_String(0, 50, version, strlen(version), LCD_COLOR_BLACK, ST7789_FONT_24);
+    snprintf(versionString, sizeof(versionString), "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
+    LCD_String(0, 50, versionString, strlen(versionString), LCD_COLOR_BLACK, ST7789_FONT_24);
 
     LCD_String(0, 75, "Initializing...", strlen("Initializing..."), LCD_COLOR_BLACK, ST7789_FONT_24);
 
@@ -226,6 +229,7 @@ static void NormalOperation(void)
     Menu_t o2CalibrationMenu;
     Menu_t co2CalibrationMenu;
     Menu_t flowCalibrationMenu;
+    Menu_t pressureCalibrationMenu;
     Menu_t *currentMenu;
     Menu_t *previousMenu;
     uint8_t selected = 0;
@@ -238,6 +242,7 @@ static void NormalOperation(void)
     MENU_Create(&flowCalibrationMenu, "Flow");
     MENU_Create(&o2CalibrationMenu, "O2");
     MENU_Create(&co2CalibrationMenu, "CO2");
+    MENU_Create(&pressureCalibrationMenu, "Pressure");
     MENU_Create(&vo2maxMenu, "VO2max");
     MENU_Create(&spirometerMenu, "Spirometer");
     MENU_Create(&settingsMenu, "Settings");
@@ -247,6 +252,7 @@ static void NormalOperation(void)
     MENU_AddSubmenu(&calibrationMenu, &o2CalibrationMenu);
     MENU_AddSubmenu(&calibrationMenu, &co2CalibrationMenu);
     MENU_AddSubmenu(&calibrationMenu, &flowCalibrationMenu);
+    MENU_AddSubmenu(&calibrationMenu, &pressureCalibrationMenu);
     MENU_AddSubmenu(&mainMenu, &vo2maxMenu);
     MENU_AddSubmenu(&mainMenu, &spirometerMenu);
     MENU_AddSubmenu(&mainMenu, &settingsMenu);
@@ -255,6 +261,7 @@ static void NormalOperation(void)
     MENU_AddAction(&liveValuesMenu, LiveValuesScreenAction);
     MENU_AddAction(&spirometerMenu, SpirometerScreenAction);
     MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
+    MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
 
     currentMenu = &mainMenu;
 
@@ -288,6 +295,7 @@ static void NormalOperation(void)
 
             do
             {
+                DisplayBatterySoc();
                 previousSelected = selected;
                 previousMenu = currentMenu;
                 previousPage = page;
@@ -306,6 +314,33 @@ static void NormalOperation(void)
 
                 vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
             } while (currentMenu == previousMenu);
+        }
+    }
+}
+
+static void DisplayBatterySoc(void)
+{
+    static float previousBatterySoc = -2.0f;
+    float batterySoc;
+
+    if(pdPASS == xQueueReceive(g_batterySocQueue, (void *)&batterySoc, (TickType_t)0))
+    {
+        if(batterySoc != previousBatterySoc)
+        {
+            char batterySocString[7];
+
+            if(batterySoc >= 0.0f)
+            {
+                snprintf(batterySocString, sizeof(batterySocString), "%3.0f%%", batterySoc);
+            }
+            else if(batterySoc == -1.0f)
+            {
+                snprintf(batterySocString, sizeof(batterySocString), "charge");
+            }
+            ESP_LOGI(hmiTaskTag, "%s", batterySocString);
+            LCD_ClearString(170, 20, 7, LCD_COLOR_WHITE, ST7789_FONT_16);
+            LCD_String(170, 20, batterySocString, strlen(batterySocString), LCD_COLOR_BLACK, ST7789_FONT_16);
+            previousBatterySoc = batterySoc;
         }
     }
 }
@@ -464,6 +499,50 @@ static void O2CalibrationScreenAction(void)
     }
 }
 
+static void PressureCalibrationScreenAction(void)
+{
+    PushButtonState_e pushButton1State;
+    PushButtonState_e pushButton2State;
+    static float pressureValue = 1013.0f;
+    char pressureString[8];
+    bool exit = false;
+
+    LCD_Clear();
+
+    LCD_String(50, 12, "Pressure", 8, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(40, 36, "Calibration", 11, LCD_COLOR_BLACK, ST7789_FONT_24);
+    LCD_String(0, 72, "cal =          hPa", 18, LCD_COLOR_BLACK, ST7789_FONT_24);
+    snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
+    LCD_String(80, 72, pressureString, 7, LCD_COLOR_BLACK, ST7789_FONT_24);
+
+    while (false == exit)
+    {
+        pushButton1State = GetPushButton1State();
+        pushButton2State = GetPushButton2State();
+
+        if (BUTTON_SHORT_PRESS == pushButton1State)
+        {
+            pressureValue += 0.25f;
+            snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
+            ST7789_ClearString(80, 72, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+            LCD_String(80, 72, pressureString, 7, LCD_COLOR_BLACK, ST7789_FONT_24);
+        }
+        else if (BUTTON_SHORT_PRESS == pushButton2State)
+        {
+            pressureValue -= 0.25f;
+            snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
+            ST7789_ClearString(80, 72, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
+            LCD_String(80, 72, pressureString, 7, LCD_COLOR_BLACK, ST7789_FONT_24);
+        }
+        else if (BUTTON_LONG_PRESS == pushButton1State)
+        {
+            exit = true;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+}
+
 static void LiveValuesScreenAction(void)
 {
     float flow;
@@ -495,7 +574,7 @@ static void LiveValuesScreenAction(void)
         {
             if (o2 != previousO2)
             {
-                sprintf(string, "%.1f", o2);
+                snprintf(string, sizeof(string), "%.1f", o2);
                 LCD_ClearString(70, 12, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
                 LCD_String(70, 12, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousO2 = o2;
@@ -505,7 +584,7 @@ static void LiveValuesScreenAction(void)
         {
             if (co2 != previousCo2)
             {
-                sprintf(string, "%-5.0f", co2);
+                snprintf(string, sizeof(string), "%-5.0f", co2);
                 LCD_ClearString(70, 34, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
                 LCD_String(70, 34, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousCo2 = co2;
@@ -515,7 +594,7 @@ static void LiveValuesScreenAction(void)
         {
             if (flow != previousFlow)
             {
-                sprintf(string, "%-5.1f", flow);
+                snprintf(string, sizeof(string), "%-5.1f", flow);
                 LCD_ClearString(70, 57, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
                 LCD_String(70, 57, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousFlow = flow;
@@ -525,7 +604,7 @@ static void LiveValuesScreenAction(void)
         {
             if (temperature != previousTemperature)
             {
-                sprintf(string, "%-5.1f", temperature);
+                snprintf(string, sizeof(string), "%-5.1f", temperature);
                 LCD_ClearString(70, 80, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
                 LCD_String(70, 80, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousTemperature = temperature;
@@ -535,7 +614,7 @@ static void LiveValuesScreenAction(void)
         {
             if (humidity != previousHumidity)
             {
-                sprintf(string, "%-5.0f", humidity);
+                snprintf(string, sizeof(string), "%-5.0f", humidity);
                 LCD_ClearString(70, 103, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
                 LCD_String(70, 103, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousHumidity = humidity;
@@ -545,7 +624,7 @@ static void LiveValuesScreenAction(void)
         {
             if (pressure != previousPressure)
             {
-                sprintf(string, "%-5.1f", pressure);
+                snprintf(string, sizeof(string), "%-5.1f", pressure);
                 LCD_ClearString(70, 126, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
                 LCD_String(70, 126, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
                 previousPressure = pressure;
@@ -573,13 +652,13 @@ static void SpirometerScreenAction(void)
         if (pdPASS == xQueueReceive(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
         {
             LCD_ClearString(120, 72, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
-            sprintf(string, "%5.1f", cycleExhaledVolume);
+            snprintf(string, sizeof(string), "%5.1f", cycleExhaledVolume);
             LCD_String(130, 72, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
         }
         if (pdPASS == xQueueReceive(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume, (TickType_t)0))
         {
             LCD_ClearString(120, 96, 7, LCD_COLOR_WHITE, ST7789_FONT_24);
-            sprintf(string, "%5.1f", totalExhaledVolume);
+            snprintf(string, sizeof(string), "%5.1f", totalExhaledVolume);
             LCD_String(130, 96, string, strlen(string), LCD_COLOR_BLACK, ST7789_FONT_24);
         }
     }

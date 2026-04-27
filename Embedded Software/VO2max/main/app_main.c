@@ -12,6 +12,9 @@
 #include "esp_timer.h"
 #include "hmi.h"
 #include "measure.h"
+#include "freertos/queue.h"
+
+#define MAIN_TASK_PERIOD_MS 3000
 
 static const char *TAG = "[MAIN]";
 
@@ -25,17 +28,15 @@ void app_main(void)
     esp_timer_early_init(); // For time tracking
 
     BATTERY_Initialize();
-    batterySoc = BATTERY_MeasureSoc();
-    ESP_LOGI(TAG, "Battery SOC = %.0f %%", batterySoc);
 
     HMI_Initialize();
 
     MEASURE_Initialize();
 
-    vTaskSuspend(xTaskGetCurrentTaskHandle());
-
     while (1)
     {
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        BATTERY_MeasureSoc(&batterySoc);
+
+        vTaskDelay(pdMS_TO_TICKS(MAIN_TASK_PERIOD_MS));
     }
 }

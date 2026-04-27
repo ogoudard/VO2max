@@ -2943,7 +2943,7 @@ void ST7789_ClearString(uint16_t x, uint16_t y, uint8_t length, uint32_t color, 
         ST7789_FillRectangle(x + 6, y - 6, x + 6 * (length + 1), y + 6, color);
         break;
     case ST7789_FONT_16:
-        ST7789_FillRectangle(x + 8, y - 8, x + 8 * (length + 1), y + 8, color);
+        ST7789_FillRectangle(x + 8, y - 9, x + 8 * (length + 1), y + 9, color);
         break;
     case ST7789_FONT_24:
         ST7789_FillRectangle(x + 12, y - 12, x + 12 * (length + 1), y + 12, color);

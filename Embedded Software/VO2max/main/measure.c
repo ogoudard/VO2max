@@ -26,6 +26,7 @@
 #define CO2_TASK_STACK_SIZE 8192
 #define CO2_TASK_PRIORITY 1
 #define CO2_TASK_PERIOD_MS 3000
+#define SCD30_MEASUREMENT_INTERVAL_S 2
 
 #define FLOW_TASK_STACK_SIZE 8192
 #define FLOW_TASK_PRIORITY 5
@@ -336,8 +337,10 @@ static void CO2Task(void *pvParameters)
     }
     else
     {
-        SCD30_SetMeasurementInterval(2);
+        SCD30_SetMeasurementInterval(SCD30_MEASUREMENT_INTERVAL_S);
         SCD30_StartPeriodicMeasurment();
+
+        vTaskDelay(pdMS_TO_TICKS(1500 * SCD30_MEASUREMENT_INTERVAL_S)); // Wait for first measure
 
         xSemaphoreGive(g_co2InitializationSemaphore);
 
@@ -345,9 +348,17 @@ static void CO2Task(void *pvParameters)
         {
             bool dataReady;
 
-            if (SCD30_GetDataReadyStatus(&dataReady))
+            if (false == SCD30_GetDataReadyStatus(&dataReady))
             {
-                if (true == dataReady)
+                ESP_LOGE(tagCO2, "Could not retrieve data status");
+            }
+            else
+            {
+                if (false == dataReady)
+                {
+                    ESP_LOGE(tagCO2, "Data not ready");
+                }
+                else
                 {
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {

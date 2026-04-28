@@ -76,11 +76,11 @@ bool BATTERY_MeasureSoc(int8_t *soc)
         adc_cali_raw_to_voltage(calibrationHandle, adcReading, &adcVoltage);
         batteryVoltage = ADC_VOLTAGE_MV_TO_BATTERY_VOLTAGE_V(adcVoltage);
 
-        if(batteryVoltage > 4.7f) // Usb plugged with power switch OFF
+        if (batteryVoltage > 4.7f) // Usb plugged with power switch OFF
         {
             *soc = BATTERY_SOC_USB_PLUGGED;
         }
-        else if(batteryVoltage > 4.4f) // Usb plugged with power switch ON (charging)
+        else if (batteryVoltage > 4.4f) // Usb plugged with power switch ON (charging)
         {
             *soc = BATTERY_SOC_CHARGING;
         }

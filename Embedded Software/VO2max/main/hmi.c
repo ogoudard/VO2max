@@ -56,6 +56,25 @@ typedef enum
 
 static const char *hmiTaskTag = "[HMI Task]";
 
+static Menu_t mainMenu;
+static Menu_t calibrationMenu;
+static Menu_t vo2maxMenu;
+static Menu_t spirometerMenu;
+static Menu_t settingsMenu;
+static Menu_t liveValuesMenu;
+static Menu_t o2CalibrationMenu;
+static Menu_t co2CalibrationMenu;
+static Menu_t flowCalibrationMenu;
+static Menu_t pressureCalibrationMenu;
+static Menu_t bluetoothSettingsMenu;
+static Menu_t measureSettingsMenu;
+static Menu_t userSettingsMenu;
+static Menu_t bluetoothMacMenu;
+static Menu_t bluetoothNameMenu;
+static Menu_t bluetoothPairMenu;
+static Menu_t weightMenu;
+static Menu_t acquisitionMenu;
+
 /************************************
  * PUBLIC VARIABLES
  ************************************/
@@ -67,7 +86,8 @@ TaskHandle_t g_hmiTaskHandle = NULL;
  ************************************/
 
 static void HmiTask(void *pvParameters);
-static void NormalOperation();
+static void InitializeMenus(void);
+static void NormalOperation(void);
 static void DisplayBatterySoc(void);
 static void DisplaySelected(uint8_t selected);
 static void DisplayMenuName(Menu_t *menu);
@@ -140,6 +160,8 @@ static void HmiTask(void *pvParameters)
     waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_co2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     // waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
+
+    InitializeMenus();
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
@@ -218,50 +240,71 @@ static void MenuNavigate(Menu_t **menu, uint8_t *selected)
     }
 }
 
+static void InitializeMenus(void)
+{
+    // Main menu
+    MENU_Create(&mainMenu, "VO2max");
+    MENU_Create(&vo2maxMenu, "VO2max");
+    MENU_Create(&spirometerMenu, "Spirometer");
+    MENU_Create(&liveValuesMenu, "Live values");
+    MENU_Create(&settingsMenu, "Settings");
+
+    MENU_AddSubmenu(&mainMenu, &vo2maxMenu);
+    MENU_AddSubmenu(&mainMenu, &spirometerMenu);
+    MENU_AddSubmenu(&mainMenu, &liveValuesMenu);
+    MENU_AddSubmenu(&mainMenu, &settingsMenu);
+
+    // Settings menu
+    MENU_Create(&measureSettingsMenu, "Measure");
+    MENU_Create(&bluetoothSettingsMenu, "Bluetooth");
+    MENU_Create(&userSettingsMenu, "User");
+    MENU_AddSubmenu(&settingsMenu, &measureSettingsMenu);
+    MENU_AddSubmenu(&settingsMenu, &bluetoothSettingsMenu);
+    MENU_AddSubmenu(&settingsMenu, &userSettingsMenu);
+
+    // Bluetooth menu
+    MENU_Create(&bluetoothNameMenu, "Name");
+    MENU_Create(&bluetoothMacMenu, "MAC");
+    MENU_Create(&bluetoothPairMenu, "Pair");
+    MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothNameMenu);
+    MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothMacMenu);
+    MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothPairMenu);
+
+    // Measure menu
+    MENU_Create(&calibrationMenu, "Calibration");
+    MENU_Create(&acquisitionMenu, "Acquisition");
+    MENU_AddSubmenu(&measureSettingsMenu, &calibrationMenu);
+    MENU_AddSubmenu(&measureSettingsMenu, &acquisitionMenu);
+
+    // Calibration Menu
+    MENU_Create(&flowCalibrationMenu, "Flow");
+    MENU_Create(&o2CalibrationMenu, "O2");
+    MENU_Create(&co2CalibrationMenu, "CO2");
+    MENU_Create(&pressureCalibrationMenu, "Pressure");
+    MENU_AddSubmenu(&calibrationMenu, &o2CalibrationMenu);
+    MENU_AddSubmenu(&calibrationMenu, &co2CalibrationMenu);
+    MENU_AddSubmenu(&calibrationMenu, &flowCalibrationMenu);
+    MENU_AddSubmenu(&calibrationMenu, &pressureCalibrationMenu);
+
+    // User settings menu
+    MENU_Create(&weightMenu, "Weight");
+    MENU_AddSubmenu(&userSettingsMenu, &weightMenu);
+
+    // Actions
+    MENU_AddAction(&liveValuesMenu, LiveValuesScreenAction);
+    MENU_AddAction(&spirometerMenu, SpirometerScreenAction);
+    MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
+    MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
+}
+
 static void NormalOperation(void)
 {
-    Menu_t mainMenu;
-    Menu_t calibrationMenu;
-    Menu_t vo2maxMenu;
-    Menu_t spirometerMenu;
-    Menu_t settingsMenu;
-    Menu_t liveValuesMenu;
-    Menu_t o2CalibrationMenu;
-    Menu_t co2CalibrationMenu;
-    Menu_t flowCalibrationMenu;
-    Menu_t pressureCalibrationMenu;
     Menu_t *currentMenu;
     Menu_t *previousMenu;
     uint8_t selected = 0;
     uint8_t previousSelected = 0;
     uint8_t previousPage = 0;
     uint8_t page = 0;
-
-    MENU_Create(&mainMenu, "VO2max");
-    MENU_Create(&calibrationMenu, "Calibration");
-    MENU_Create(&flowCalibrationMenu, "Flow");
-    MENU_Create(&o2CalibrationMenu, "O2");
-    MENU_Create(&co2CalibrationMenu, "CO2");
-    MENU_Create(&pressureCalibrationMenu, "Pressure");
-    MENU_Create(&vo2maxMenu, "VO2max");
-    MENU_Create(&spirometerMenu, "Spirometer");
-    MENU_Create(&settingsMenu, "Settings");
-    MENU_Create(&liveValuesMenu, "Live values");
-
-    MENU_AddSubmenu(&mainMenu, &calibrationMenu);
-    MENU_AddSubmenu(&calibrationMenu, &o2CalibrationMenu);
-    MENU_AddSubmenu(&calibrationMenu, &co2CalibrationMenu);
-    MENU_AddSubmenu(&calibrationMenu, &flowCalibrationMenu);
-    MENU_AddSubmenu(&calibrationMenu, &pressureCalibrationMenu);
-    MENU_AddSubmenu(&mainMenu, &vo2maxMenu);
-    MENU_AddSubmenu(&mainMenu, &spirometerMenu);
-    MENU_AddSubmenu(&mainMenu, &settingsMenu);
-    MENU_AddSubmenu(&mainMenu, &liveValuesMenu);
-
-    MENU_AddAction(&liveValuesMenu, LiveValuesScreenAction);
-    MENU_AddAction(&spirometerMenu, SpirometerScreenAction);
-    MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
-    MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
 
     currentMenu = &mainMenu;
 

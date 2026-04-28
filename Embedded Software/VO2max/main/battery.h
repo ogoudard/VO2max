@@ -9,7 +9,6 @@
 #define BATTERY_SOC_USB_PLUGGED -2
 #define BATTERY_SOC_CHARGING -1
 
-
 extern QueueHandle_t g_batterySocQueue;
 
 void BATTERY_Initialize();

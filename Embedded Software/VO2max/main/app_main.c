@@ -13,6 +13,7 @@
 #include "hmi.h"
 #include "measure.h"
 #include "freertos/queue.h"
+#include "bluetooth.h"
 
 #define MAIN_TASK_PERIOD_MS 3000
 
@@ -20,7 +21,7 @@ static const char *TAG = "[MAIN]";
 
 void app_main(void)
 {
-    float batterySoc;
+    int8_t batterySoc;
 
     ESP_LOGI(TAG, "VO2max embedded software version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
     ESP_LOGI(TAG, "Initializing system...");
@@ -32,6 +33,8 @@ void app_main(void)
     HMI_Initialize();
 
     MEASURE_Initialize();
+
+    BLUETOOTH_Initialize();
 
     while (1)
     {

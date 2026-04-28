@@ -56,10 +56,10 @@ void BATTERY_Initialize()
 
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adcHandle, ADC_CHANNEL_VBAT, &channelConfig));
 
-    g_batterySocQueue = xQueueCreate(1, sizeof(float));
+    g_batterySocQueue = xQueueCreate(1, sizeof(int8_t));
 }
 
-bool BATTERY_MeasureSoc(float *soc)
+bool BATTERY_MeasureSoc(int8_t *soc)
 {
     bool ret = false;
     int adcReading;
@@ -76,9 +76,13 @@ bool BATTERY_MeasureSoc(float *soc)
         adc_cali_raw_to_voltage(calibrationHandle, adcReading, &adcVoltage);
         batteryVoltage = ADC_VOLTAGE_MV_TO_BATTERY_VOLTAGE_V(adcVoltage);
 
-        if(batteryVoltage > 4.5f)
+        if(batteryVoltage > 4.7f) // Usb plugged with power switch OFF
         {
-            *soc = -1.0f; // Charging
+            *soc = BATTERY_SOC_USB_PLUGGED;
+        }
+        else if(batteryVoltage > 4.4f) // Usb plugged with power switch ON (charging)
+        {
+            *soc = BATTERY_SOC_CHARGING;
         }
         else
         {

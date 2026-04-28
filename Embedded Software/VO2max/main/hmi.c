@@ -320,24 +320,32 @@ static void NormalOperation(void)
 
 static void DisplayBatterySoc(void)
 {
-    static float previousBatterySoc = -2.0f;
-    float batterySoc;
+    static int8_t previousBatterySoc = -128;
+    int8_t batterySoc;
 
-    if(pdPASS == xQueueReceive(g_batterySocQueue, (void *)&batterySoc, (TickType_t)0))
+    if (pdPASS == xQueueReceive(g_batterySocQueue, (void *)&batterySoc, (TickType_t)0))
     {
-        if(batterySoc != previousBatterySoc)
+        if (batterySoc != previousBatterySoc)
         {
-            char batterySocString[7];
+            char batterySocString[7] = "";
 
-            if(batterySoc >= 0.0f)
+            if (batterySoc >= 0)
             {
-                snprintf(batterySocString, sizeof(batterySocString), "%3.0f%%", batterySoc);
+                snprintf(batterySocString, sizeof(batterySocString), "%3d%%", batterySoc);
             }
-            else if(batterySoc == -1.0f)
+            else if (batterySoc == BATTERY_SOC_CHARGING)
             {
                 snprintf(batterySocString, sizeof(batterySocString), "charge");
             }
-            ESP_LOGI(hmiTaskTag, "%s", batterySocString);
+            else if (batterySoc == BATTERY_SOC_USB_PLUGGED)
+            {
+                snprintf(batterySocString, sizeof(batterySocString), "usb");
+            }
+            else
+            {
+                ESP_LOGE(hmiTaskTag, "Invalid SOC value received: %d", batterySoc);
+            }
+
             LCD_ClearString(170, 20, 7, LCD_COLOR_WHITE, ST7789_FONT_16);
             LCD_String(170, 20, batterySocString, strlen(batterySocString), LCD_COLOR_BLACK, ST7789_FONT_16);
             previousBatterySoc = batterySoc;

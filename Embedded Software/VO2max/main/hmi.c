@@ -149,8 +149,32 @@ static void HmiTask(void *pvParameters)
     ESP_LOGI(hmiTaskTag, "HMI initialization...");
 
     LCD_Initialize();
+    LCD_SetBacklight(true);
+    LCD_SetOrientation(LCD_ORIENTATION_LANDSCAPE_1);
     LCD_DisplayOn();
     LCD_Clear();
+
+    for(uint8_t i = 11; i < 20; i++)
+    {
+        for(uint8_t j = 11; j < 20; j++)
+        {
+            LCD_DrawPoint(i, j, LCD_COLOR_BLACK);
+        }
+    }
+    for (uint16_t i = 10; i < 230; i++)
+    {
+        LCD_DrawPoint(i, 10, LCD_COLOR_BLACK);
+        LCD_DrawPoint(i, 125, LCD_COLOR_BLACK);
+    }
+
+    for (uint16_t i = 10; i < 125; i++)
+    {
+        LCD_DrawPoint(10, i, LCD_COLOR_BLACK);
+        LCD_DrawPoint(230, i, LCD_COLOR_BLACK);
+    }
+    while (1)
+    {
+    };
 
     LCD_DrawString(0, 25, "VO2max", strlen("VO2max"), LCD_COLOR_BLACK, LCD_FONT_24);
 

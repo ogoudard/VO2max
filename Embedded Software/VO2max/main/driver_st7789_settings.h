@@ -8,4 +8,10 @@
 #define GPIO_PIN_NUM_RST 23
 #define GPIO_PIN_NUM_BCKL 4
 
+#define SCREEN_WIDTH 135
+#define SCREEN_HEIGHT 240
+
+#define COL_OFFSET 52
+#define ROW_OFFSET 40
+
 #endif

@@ -19,8 +19,8 @@
 #define TEMPERATURE_MAX 85.0f        /**< chip max operating temperature */
 #define DRIVER_VERSION 1000          /**< driver version */
 
-#define X_OFFSET 52
-#define Y_OFFSET 40
+#define COL_COUNT 240
+#define ROW_COUNT 320
 
 /**
  * @brief command data type definition
@@ -105,6 +105,87 @@ static uint8_t buffer[ST7789_BUFFER_SIZE];
 static uint8_t WriteByte(uint8_t data, uint32_t cmd);
 static uint8_t WriteBytes(uint8_t *data, uint16_t len, uint32_t cmd);
 static void SpiPreTransferCallback(spi_transaction_t *t);
+static void TransformPortrait1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
+static void TransformPortrait2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
+static void TransformLandscape1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
+static void TransformLandscape2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
+static void InitializeController(spi_host_device_t host);
+static void SoftwareReset();
+static void SleepOut();
+static void NormalDisplayModeOn();
+static void SetGamma(uint8_t gamma);
+static void SetColumnAddress(uint16_t start_address, uint16_t end_address);
+static void SetRowAddress(uint16_t start_address, uint16_t end_address);
+static void MemoryWrite(uint8_t *data, uint16_t len);
+static void SetPartialAreas(uint16_t start_row, uint16_t end_row);
+static void SetMemoryDataAccessControl(uint8_t order);
+static void IdleModeOff();
+static void SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
+                                    ST7789_control_interface_color_format_t control);
+static void MemoryContinueWrite(uint8_t *data, uint16_t len);
+static void SetDisplayBrightness(uint8_t brightness);
+static void SetDisplayControl(ST7789_bool_t brightness_control_block,
+                              ST7789_bool_t display_dimming,
+                              ST7789_bool_t backlight_control);
+static void SetBrightnessControlAndColorEnhancement(ST7789_bool_t color_enhancement,
+                                                    ST7789_color_enhancement_mode_t mode,
+                                                    ST7789_color_enhancement_level_t level);
+static void SetCabcMinimumBrightness(uint8_t brightness);
+static void SetRamControl(ST7789_ram_access_t ram_mode,
+                          ST7789_display_mode_t display_mode,
+                          ST7789_frame_type_t frame_type,
+                          ST7789_data_mode_t data_mode,
+                          ST7789_rgb_bus_width_t bus_width,
+                          ST7789_pixel_type_t pixel_type);
+static void SetPorch(uint8_t back_porch_normal,
+                     uint8_t front_porch_normal,
+                     ST7789_bool_t separate_porch_enable,
+                     uint8_t back_porch_idle,
+                     uint8_t front_porch_idle,
+                     uint8_t back_porch_partial,
+                     uint8_t front_porch_partial);
+static void SetFrameRateControl(ST7789_bool_t separate_fr_control,
+                                ST7789_frame_rate_divided_control_t div_control,
+                                ST7789_inversion_idle_mode_t idle_mode,
+                                uint8_t idle_frame_rate,
+                                ST7789_inversion_partial_mode_t partial_mode,
+                                uint8_t partial_frame_rate);
+static void SetPartialModeControl(ST7789_non_display_source_output_level_t level,
+                                  ST7789_non_display_area_scan_mode_t mode,
+                                  ST7789_non_display_frame_frequency_t frequency);
+static void SetGateControl(ST7789_vghs_t vghs, ST7789_vgls_t vgls);
+static void SetDigitalGamma(ST7789_bool_t enable);
+static void SetLcmControl(ST7789_bool_t xmy,
+                          ST7789_bool_t xbgr,
+                          ST7789_bool_t xinv,
+                          ST7789_bool_t xmx,
+                          ST7789_bool_t xmh,
+                          ST7789_bool_t xmv,
+                          ST7789_bool_t xgs);
+static void SetVdvVrhFrom(ST7789_vdv_vrh_from_t from);
+static void SetVrhs(uint8_t vrhs);
+static void VrhsConvertToRegister(float v, uint8_t *reg);
+static void SetVdv(uint8_t vdv);
+static void VdvConvertToRegister(float v, uint8_t *reg);
+static void SetVcomsOffset(uint8_t offset);
+static void VcomsOffsetConvertToRegister(float v, uint8_t *reg);
+static void SetFrameRate(ST7789_inversion_selection_t selection, ST7789_frame_rate_t rate);
+static void SetCabcControl(ST7789_bool_t led_on,
+                           ST7789_bool_t led_pwm_init,
+                           ST7789_bool_t led_pwm_fix,
+                           ST7789_bool_t led_pwm_polarity);
+static void SetPwmFrequency(ST7789_pwm_frequency_t frequency);
+static void SetPowerControl1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_t vds);
+static void SetPositiveVoltageGammaControl(uint8_t param[14]);
+static void SetNegativeVoltageGammaControl(uint8_t param[14]);
+static void SetGate(uint8_t gate_line_number,
+                    uint8_t first_scan_line_number,
+                    ST7789_gate_scan_mode_t mode,
+                    ST7789_gate_scan_direction_t direction);
+static void GateLineConvertToRegister(uint16_t l, uint8_t *reg);
+static void SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck);
+
+static void (*transform)(uint16_t, uint16_t, uint16_t *, uint16_t *) = TransformPortrait1;
 
 /**
  * @brief  basic example init
@@ -120,172 +201,221 @@ void LCD_Initialize(void)
     uint8_t negativeVoltageControl[] = {0xf0, 0x08, 0x0c, 0x0b, 0x09, 0x24, 0x2b, 0x22, 0x43, 0x38, 0x15, 0x16, 0x2f, 0x37};
 
     ESP_LOGI(TAG, "Initialize ST7789...");
-    ST7789_Initialize(SPI2_HOST);
+    InitializeController(SPI2_HOST);
 
     ESP_LOGI(TAG, "Software reset...");
-    ST7789_SoftwareReset();
+    SoftwareReset();
 
     /* sleep out */
     ESP_LOGI(TAG, "Setting sleep mode out");
-    ST7789_SleepOut();
+    SleepOut();
 
     /* idle mode off */
     ESP_LOGI(TAG, "Setting idle mode off");
-    ST7789_IdleModeOff();
+    IdleModeOff();
 
     ESP_LOGI(TAG, "Setting display mode on");
-    ST7789_NormalDisplayModeOn();
+    NormalDisplayModeOn();
 
     ESP_LOGI(TAG, "Setting display inversion on");
-    ST7789_DisplayInversionOn();
+    LCD_DisplayInversionOn();
 
     ESP_LOGI(TAG, "Setting gamma");
-    ST7789_SetGamma(ST7789_GAMMA_CURVE_1);
-
-    ESP_LOGI(TAG, "Setting memory data access control");
-    ST7789_SetMemoryDataAccessControl(ST7789_ORDER_PAGE_TOP_TO_BOTTOM |
-                                      ST7789_ORDER_COLUMN_RIGHT_TO_LEFT |
-                                      ST7789_ORDER_PAGE_COLUMN_REVERSE |
-                                      ST7789_ORDER_LINE_TOP_TO_BOTTOM |
-                                      ST7789_ORDER_COLOR_RGB |
-                                      ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
+    SetGamma(ST7789_GAMMA_CURVE_1);
 
     ESP_LOGI(TAG, "Setting interface pixel format");
-    ST7789_SetInterfacePixelFormat(ST7789_RGB_INTERFACE_COLOR_FORMAT_65K,
-                                   ST7789_CONTROL_INTERFACE_COLOR_FORMAT_16_BIT);
+    SetInterfacePixelFormat(ST7789_RGB_INTERFACE_COLOR_FORMAT_65K,
+                            ST7789_CONTROL_INTERFACE_COLOR_FORMAT_16_BIT);
 
     ESP_LOGI(TAG, "Setting display brightness");
-    ST7789_SetDisplayBrightness(0xFF);
+    SetDisplayBrightness(0xFF);
 
     ESP_LOGI(TAG, "Setting display control");
-    ST7789_SetDisplayControl(ST7789_BOOL_FALSE,
-                             ST7789_BOOL_FALSE,
-                             ST7789_BOOL_FALSE);
+    SetDisplayControl(ST7789_BOOL_FALSE,
+                      ST7789_BOOL_FALSE,
+                      ST7789_BOOL_FALSE);
 
     ESP_LOGI(TAG, "Setting brightness control and color enhancement");
-    ST7789_SetBrightnessControlAndColorEnhancement(ST7789_BOOL_TRUE,
-                                                   ST7789_COLOR_ENHANCEMENT_MODE_USER_INTERFACE,
-                                                   ST7789_COLOR_ENHANCEMENT_LEVEL_HIGH);
+    SetBrightnessControlAndColorEnhancement(ST7789_BOOL_TRUE,
+                                            ST7789_COLOR_ENHANCEMENT_MODE_USER_INTERFACE,
+                                            ST7789_COLOR_ENHANCEMENT_LEVEL_HIGH);
 
     ESP_LOGI(TAG, "Setting cabc minimum bightness");
-    ST7789_SetCabcMinimumBrightness(0x00);
+    SetCabcMinimumBrightness(0x00);
 
     ESP_LOGI(TAG, "Setting RAM control");
-    ST7789_SetRamControl(ST7789_RAM_ACCESS_MCU,
-                         ST7789_DISPLAY_MODE_MCU,
-                         ST7789_FRAME_TYPE_0,
-                         ST7789_DATA_MODE_MSB,
-                         ST7789_RGB_BUS_WIDTH_18_BIT,
-                         ST7789_PIXEL_TYPE_0);
+    SetRamControl(ST7789_RAM_ACCESS_MCU,
+                  ST7789_DISPLAY_MODE_MCU,
+                  ST7789_FRAME_TYPE_0,
+                  ST7789_DATA_MODE_MSB,
+                  ST7789_RGB_BUS_WIDTH_18_BIT,
+                  ST7789_PIXEL_TYPE_0);
 
     ESP_LOGI(TAG, "Setting porch");
-    ST7789_SetPorch(0x0C,
-                    0x0C,
-                    ST7789_BOOL_FALSE,
-                    0x03,
-                    0x03,
-                    0x03,
-                    0x03);
+    SetPorch(0x0C,
+             0x0C,
+             ST7789_BOOL_FALSE,
+             0x03,
+             0x03,
+             0x03,
+             0x03);
 
     ESP_LOGI(TAG, "Setting frame rate control");
-    ST7789_SetFrameRateControl(ST7789_BOOL_FALSE,
-                               ST7789_FRAME_RATE_DIVIDED_CONTROL_DIV_1,
-                               ST7789_INVERSION_IDLE_MODE_DOT,
-                               0x0F,
-                               ST7789_INVERSION_PARTIAL_MODE_DOT,
-                               0x0F);
+    SetFrameRateControl(ST7789_BOOL_FALSE,
+                        ST7789_FRAME_RATE_DIVIDED_CONTROL_DIV_1,
+                        ST7789_INVERSION_IDLE_MODE_DOT,
+                        0x0F,
+                        ST7789_INVERSION_PARTIAL_MODE_DOT,
+                        0x0F);
 
     ESP_LOGI(TAG, "Setting partial mode control");
-    ST7789_SetPartialModeControl(ST7789_NON_DISPLAY_SOURCE_OUTPUT_LEVEL_V63,
-                                 ST7789_NON_DISPLAY_AREA_SCAN_MODE_NORMAL,
-                                 ST7789_NON_DISPLAY_FRAME_FREQUENCY_EVERY);
+    SetPartialModeControl(ST7789_NON_DISPLAY_SOURCE_OUTPUT_LEVEL_V63,
+                          ST7789_NON_DISPLAY_AREA_SCAN_MODE_NORMAL,
+                          ST7789_NON_DISPLAY_FRAME_FREQUENCY_EVERY);
 
     ESP_LOGI(TAG, "Setting gate control");
-    ST7789_SetGateControl(ST7789_VGHS_14P97_V, ST7789_VGLS_NEGATIVE_8P23);
+    SetGateControl(ST7789_VGHS_14P97_V, ST7789_VGLS_NEGATIVE_8P23);
 
     ESP_LOGI(TAG, "Setting digital gamma");
-    ST7789_SetDigitalGamma(ST7789_BOOL_TRUE);
-
+    SetDigitalGamma(ST7789_BOOL_TRUE);
 
     ESP_LOGI(TAG, "Setting lcm control");
-    ST7789_SetLcmControl(ST7789_BOOL_FALSE,
-                         ST7789_BOOL_TRUE,
-                         ST7789_BOOL_FALSE,
-                         ST7789_BOOL_TRUE,
-                         ST7789_BOOL_TRUE,
-                         ST7789_BOOL_FALSE,
-                         ST7789_BOOL_FALSE);
+    SetLcmControl(ST7789_BOOL_FALSE,
+                  ST7789_BOOL_TRUE,
+                  ST7789_BOOL_FALSE,
+                  ST7789_BOOL_TRUE,
+                  ST7789_BOOL_TRUE,
+                  ST7789_BOOL_FALSE,
+                  ST7789_BOOL_FALSE);
 
     ESP_LOGI(TAG, "Setting vdv vrh from");
-    ST7789_SetVdvVrhFrom(ST7789_VDV_VRH_FROM_CMD);
+    SetVdvVrhFrom(ST7789_VDV_VRH_FROM_CMD);
 
     ESP_LOGI(TAG, "Setting vhrs convert to register");
-    ST7789_VrhsConvertToRegister(5.1f, &reg);
+    VrhsConvertToRegister(5.1f, &reg);
 
     ESP_LOGI(TAG, "Setting vhrs");
-    ST7789_SetVrhs(reg);
+    SetVrhs(reg);
 
     ESP_LOGI(TAG, "Setting vdv convert to register");
-    ST7789_VdvConvertToRegister(0.0f, &reg);
+    VdvConvertToRegister(0.0f, &reg);
 
     ESP_LOGI(TAG, "Setting vdv");
-    ST7789_SetVdv(reg);
+    SetVdv(reg);
 
     ESP_LOGI(TAG, "Setting vcoms offset convert to register");
-    ST7789_VcomsOffsetConvertToRegister(0.2f, &reg);
+    VcomsOffsetConvertToRegister(0.2f, &reg);
 
     ESP_LOGI(TAG, "Setting vcoms offset");
-    ST7789_SetVcomsOffset(reg);
+    SetVcomsOffset(reg);
 
     ESP_LOGI(TAG, "Setting frame rate");
-    ST7789_SetFrameRate(ST7789_INVERSION_SELECTION_DOT, ST7789_FRAME_RATE_53_HZ);
+    SetFrameRate(ST7789_INVERSION_SELECTION_DOT, ST7789_FRAME_RATE_53_HZ);
 
     ESP_LOGI(TAG, "Setting cabc control");
-    ST7789_SetCabcControl(ST7789_BOOL_FALSE,
-                          ST7789_BOOL_FALSE,
-                          ST7789_BOOL_FALSE,
-                          ST7789_BOOL_FALSE);
+    SetCabcControl(ST7789_BOOL_FALSE,
+                   ST7789_BOOL_FALSE,
+                   ST7789_BOOL_FALSE,
+                   ST7789_BOOL_FALSE);
 
     ESP_LOGI(TAG, "Setting pwm frequency");
-    ST7789_SetPwmFrequency(ST7789_PWM_FREQUENCY_9P8_KHZ);
+    SetPwmFrequency(ST7789_PWM_FREQUENCY_9P8_KHZ);
 
     ESP_LOGI(TAG, "Setting power control 1");
-    ST7789_SetPowerControl1(ST7789_AVDD_6P8_V,
-                            ST7789_AVCL_NEGTIVE_4P8_V,
-                            ST7789_VDS_2P3_V);
+    SetPowerControl1(ST7789_AVDD_6P8_V,
+                     ST7789_AVCL_NEGTIVE_4P8_V,
+                     ST7789_VDS_2P3_V);
 
     ESP_LOGI(TAG, "Setting positive voltage gamma control");
-    ST7789_SetPositiveVoltageGammaControl(positiveVoltageControl);
+    SetPositiveVoltageGammaControl(positiveVoltageControl);
 
     ESP_LOGI(TAG, "Setting negative voltage gamma control");
-    ST7789_SetNegativeVoltageGammaControl(negativeVoltageControl);
+    SetNegativeVoltageGammaControl(negativeVoltageControl);
 
     ESP_LOGI(TAG, "Setting gate line convert to register");
-    ST7789_GateLineConvertToRegister(320, &reg);
+    GateLineConvertToRegister(320, &reg);
 
     ESP_LOGI(TAG, "Setting gate");
-    ST7789_SetGate(reg,
-                   0x00,
-                   ST7789_GATE_SCAN_MODE_INTERLACE,
-                   ST7789_GATE_SCAN_DIRECTION_0_319);
+    SetGate(reg,
+            0x00,
+            ST7789_GATE_SCAN_MODE_INTERLACE,
+            ST7789_GATE_SCAN_DIRECTION_0_319);
 
     ESP_LOGI(TAG, "Setting power control 2");
-    ST7789_SetPowerControl2(ST7789_SBCLK_DIV_3, ST7789_STP14CK_DIV_6);
+    SetPowerControl2(ST7789_SBCLK_DIV_3, ST7789_STP14CK_DIV_6);
 }
 
-/**
- * @brief     initialize the chip
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 spi initialization failed
- *            - 2 handle is NULL
- *            - 3 linked functions is NULL
- *            - 4 reset failed
- *            - 5 command && data init failed
- * @note      none
- */
-void ST7789_Initialize(spi_host_device_t host)
+void LCD_SetBacklight(bool on)
+{
+    gpio_set_level(GPIO_PIN_NUM_BCKL, (int)on);
+}
+
+void LCD_SetOrientation(LCD_Orientation_e orientation)
+{
+    switch (orientation)
+    {
+    case LCD_ORIENTATION_PORTRAIT_1:
+        transform = TransformPortrait1;
+        SetMemoryDataAccessControl(ST7789_ORDER_PAGE_TOP_TO_BOTTOM |
+                                   ST7789_ORDER_COLUMN_LEFT_TO_RIGHT |
+                                   ST7789_ORDER_PAGE_COLUMN_NORMAL |
+                                   ST7789_ORDER_LINE_TOP_TO_BOTTOM |
+                                   ST7789_ORDER_COLOR_RGB |
+                                   ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
+        break;
+    case LCD_ORIENTATION_PORTRAIT_2:
+        transform = TransformPortrait2;
+        SetMemoryDataAccessControl(ST7789_ORDER_PAGE_BOTTOM_TO_TOP |
+                                   ST7789_ORDER_COLUMN_RIGHT_TO_LEFT |
+                                   ST7789_ORDER_PAGE_COLUMN_NORMAL |
+                                   ST7789_ORDER_LINE_TOP_TO_BOTTOM |
+                                   ST7789_ORDER_COLOR_RGB |
+                                   ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
+        break;
+    case LCD_ORIENTATION_LANDSCAPE_1:
+        transform = TransformLandscape1;
+        SetMemoryDataAccessControl(ST7789_ORDER_PAGE_TOP_TO_BOTTOM|
+                                   ST7789_ORDER_COLUMN_RIGHT_TO_LEFT |
+                                   ST7789_ORDER_PAGE_COLUMN_REVERSE |
+                                   ST7789_ORDER_LINE_TOP_TO_BOTTOM |
+                                   ST7789_ORDER_COLOR_RGB |
+                                   ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
+        break;
+    case LCD_ORIENTATION_LANDSCAPE_2:
+        transform = TransformLandscape2;
+        SetMemoryDataAccessControl(ST7789_ORDER_PAGE_BOTTOM_TO_TOP |
+                                   ST7789_ORDER_COLUMN_LEFT_TO_RIGHT |
+                                   ST7789_ORDER_PAGE_COLUMN_REVERSE |
+                                   ST7789_ORDER_LINE_TOP_TO_BOTTOM |
+                                   ST7789_ORDER_COLOR_RGB |
+                                   ST7789_ORDER_REFRESH_RIGHT_TO_LEFT);
+        break;
+    default:
+        break;
+    }
+}
+
+void LCD_DisplayOff()
+{
+    WriteByte(ST7789_CMD_DISPOFF, ST7789_CMD); /* write display off command */
+}
+
+void LCD_DisplayOn()
+{
+    WriteByte(ST7789_CMD_DISPON, ST7789_CMD); /* write display on command */
+}
+
+void LCD_DisplayInversionOff()
+{
+    WriteByte(ST7789_CMD_INVOFF, ST7789_CMD); /* write display inversion off command */
+}
+
+void LCD_DisplayInversionOn()
+{
+    WriteByte(ST7789_CMD_INVON, ST7789_CMD); /* write display inversion on command */
+}
+
+static void InitializeController(spi_host_device_t host)
 {
     spi_device_interface_config_t devcfg = {
         .command_bits = 0,
@@ -306,8 +436,6 @@ void ST7789_Initialize(spi_host_device_t host)
 
     gpio_config(&gpiosConf);
 
-    gpio_set_level(GPIO_PIN_NUM_BCKL, 1);
-
     gpio_set_level(GPIO_PIN_NUM_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(10));
     gpio_set_level(GPIO_PIN_NUM_RST, 1);
@@ -318,192 +446,32 @@ void ST7789_Initialize(spi_host_device_t host)
     ESP_ERROR_CHECK(spi_bus_add_device(host, &devcfg, &spiDeviceHandle));
 }
 
-/**
- * @brief     nop
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 nop failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_Nop()
-{
-    WriteByte(ST7789_CMD_NOP, ST7789_CMD); /* write nop command */
-}
-
-/**
- * @brief     software reset
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 software reset failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SoftwareReset()
+static void SoftwareReset()
 {
     WriteByte(ST7789_CMD_SWRESET, ST7789_CMD); /* write software reset command */
 
     vTaskDelay(pdMS_TO_TICKS(200));
 }
 
-/**
- * @brief     sleep in
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 sleep in failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SleepIn()
-{
-    WriteByte(ST7789_CMD_SLPIN, ST7789_CMD); /* write sleep in command */
-}
-
-/**
- * @brief     sleep out
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 sleep out failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SleepOut()
+static void SleepOut()
 {
     WriteByte(ST7789_CMD_SLPOUT, ST7789_CMD); /* write sleep out command */
 
     vTaskDelay(pdMS_TO_TICKS(200));
 }
 
-/**
- * @brief     partial display mode on
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 partial display mode on failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_PartialDisplayModeOn()
-{
-    WriteByte(ST7789_CMD_PTLON, ST7789_CMD); /* write partial display mode on command */
-}
-
-/**
- * @brief     normal display mode on
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 normal display mode on failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_NormalDisplayModeOn()
+static void NormalDisplayModeOn()
 {
     WriteByte(ST7789_CMD_NORON, ST7789_CMD); /* write normal display mode on command */
 }
 
-/**
- * @brief     display inversion off
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 display inversion off failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_DisplayInversionOff()
-{
-    WriteByte(ST7789_CMD_INVOFF, ST7789_CMD); /* write display inversion off command */
-}
-
-/**
- * @brief     display inversion on
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 display inversion on failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_DisplayInversionOn()
-{
-    WriteByte(ST7789_CMD_INVON, ST7789_CMD); /* write display inversion on command */
-}
-
-/**
- * @brief     set gamma
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] gamma set gamma
- * @return    status code
- *            - 0 success
- *            - 1 set gamma failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetGamma(uint8_t gamma)
+static void SetGamma(uint8_t gamma)
 {
     WriteByte(ST7789_CMD_GAMSET, ST7789_CMD); /* write set gamma command */
     WriteByte(gamma & 0x0F, ST7789_DATA);     /* write gamma data */
 }
 
-/**
- * @brief     display off
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 display off failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void LCD_DisplayOff()
-{
-    WriteByte(ST7789_CMD_DISPOFF, ST7789_CMD); /* write display off command */
-}
-
-/**
- * @brief     display on
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 display on failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void LCD_DisplayOn()
-{
-    WriteByte(ST7789_CMD_DISPON, ST7789_CMD); /* write display on command */
-}
-
-/**
- * @brief     set the column address
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] start_address start address
- * @param[in] end_address end address
- * @return    status code
- *            - 0 success
- *            - 1 set column address failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 address is invalid
- *            - 5 start_address >= end_address
- * @note      start_address <= 319 && end_address <= 319 && start_address >= start_address
- */
-void ST7789_SetColumnAddress(uint16_t start_address, uint16_t end_address)
+static void SetColumnAddress(uint16_t start_address, uint16_t end_address)
 {
     uint8_t buf[4];
 
@@ -515,21 +483,7 @@ void ST7789_SetColumnAddress(uint16_t start_address, uint16_t end_address)
     WriteBytes(buf, 4, ST7789_DATA);         /* write data */
 }
 
-/**
- * @brief     set the row address
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] start_address start address
- * @param[in] end_address end address
- * @return    status code
- *            - 0 success
- *            - 1 set row address failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 address is invalid
- *            - 5 start_address >= end_address
- * @note      start_address <= 319 && end_address <= 319 && start_address >= start_address
- */
-void ST7789_SetRowAddress(uint16_t start_address, uint16_t end_address)
+static void SetRowAddress(uint16_t start_address, uint16_t end_address)
 {
     uint8_t buf[4];
 
@@ -541,37 +495,13 @@ void ST7789_SetRowAddress(uint16_t start_address, uint16_t end_address)
     WriteBytes(buf, 4, ST7789_DATA);         /* write data */
 }
 
-/**
- * @brief     memory write
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *data pointer to a data buffer
- * @param[in] len data length
- * @return    status code
- *            - 0 success
- *            - 1 memory write failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_MemoryWrite(uint8_t *data, uint16_t len)
+static void MemoryWrite(uint8_t *data, uint16_t len)
 {
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
     WriteBytes(data, len, ST7789_DATA);      /* write data */
 }
 
-/**
- * @brief     set partial areas
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] start_row start row
- * @param[in] end_row end row
- * @return    status code
- *            - 0 success
- *            - 1 set partial areas failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetPartialAreas(uint16_t start_row, uint16_t end_row)
+static void SetPartialAreas(uint16_t start_row, uint16_t end_row)
 {
     uint8_t buf[4];
 
@@ -583,148 +513,18 @@ void ST7789_SetPartialAreas(uint16_t start_row, uint16_t end_row)
     WriteBytes(buf, 4, ST7789_DATA);         /* write data */
 }
 
-/**
- * @brief     set vertical scrolling
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] top_fixed_area top fixed area line
- * @param[in] scrolling_area scrolling area line
- * @param[in] bottom_fixed_area bottom fixed area line
- * @return    status code
- *            - 0 success
- *            - 1 set vertical scrolling failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetVerticalScrolling(uint16_t top_fixed_area,
-                                 uint16_t scrolling_area, uint16_t bottom_fixed_area)
-{
-    uint8_t buf[6];
-
-    WriteByte(ST7789_CMD_VSCRDEF, ST7789_CMD); /* write set vertical scrolling definition command */
-    buf[0] = (top_fixed_area >> 8) & 0xFF;     /* top fixed area msb */
-    buf[1] = (top_fixed_area >> 0) & 0xFF;     /* top fixed area lsb */
-    buf[2] = (scrolling_area >> 8) & 0xFF;     /* scrolling area msb */
-    buf[3] = (scrolling_area >> 0) & 0xFF;     /* scrolling area lsb */
-    buf[4] = (bottom_fixed_area >> 8) & 0xFF;  /* bottom fixed area msb */
-    buf[5] = (bottom_fixed_area >> 0) & 0xFF;  /* bottom fixed area lsb */
-    WriteBytes(buf, 6, ST7789_DATA);           /* write data */
-}
-
-/**
- * @brief     tearing effect line off
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 tearing effect line off failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_TearingEffectLineOff()
-{
-    WriteByte(ST7789_CMD_TEOFF, ST7789_CMD); /* write tearing effect line off command */
-}
-
-/**
- * @brief     tearing effect line on
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] effect tearing effect
- * @return    status code
- *            - 0 success
- *            - 1 tearing effect line on failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_TearingEffectLineOn(ST7789_tearing_effect_t effect)
-{
-    WriteByte(ST7789_CMD_TEON, ST7789_CMD); /* write tearing effect line off command */
-    WriteByte(effect, ST7789_DATA);         /* write data */
-}
-
-/**
- * @brief     set memory data access control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] order memory data access control order
- * @return    status code
- *            - 0 success
- *            - 1 set memory data access control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetMemoryDataAccessControl(uint8_t order)
+static void SetMemoryDataAccessControl(uint8_t order)
 {
     WriteByte(ST7789_CMD_MADCTL, ST7789_CMD); /* write set memory data access control command */
     WriteByte(order, ST7789_DATA);            /* write data */
 }
 
-/**
- * @brief     set the vertical scroll start address
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] start_address start address
- * @return    status code
- *            - 0 success
- *            - 1 set vertical scroll start address failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 address is invalid
- * @note      none
- */
-void ST7789_SetVerticalScrollStartAddress(uint16_t start_address)
-{
-    uint8_t buf[2];
-
-    WriteByte(ST7789_CMD_VSCRSADD, ST7789_CMD); /* write vertical scrolling start address command */
-    buf[0] = (start_address >> 8) & 0xFF;       /* start address msb */
-    buf[1] = (start_address >> 0) & 0xFF;       /* start address lsb */
-    WriteBytes(buf, 2, ST7789_DATA);            /* write data */
-}
-
-/**
- * @brief     idle mode off
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 idle mode off failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_IdleModeOff()
+static void IdleModeOff()
 {
     WriteByte(ST7789_CMD_IDMOFF, ST7789_CMD); /* write idle mode off command */
 }
 
-/**
- * @brief     idle mode on
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 idle mode on failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_IdleModeOn()
-{
-    WriteByte(ST7789_CMD_IDMON, ST7789_CMD); /* write idle mode on command */
-}
-
-/**
- * @brief     set interface pixel format
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] rgb rgb interface color format
- * @param[in] control control interface color format
- * @return    status code
- *            - 0 success
- *            - 1 set interface pixel format failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
+static void SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
                                     ST7789_control_interface_color_format_t control)
 {
     uint8_t data;
@@ -735,78 +535,22 @@ void ST7789_SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
     WriteByte(data, ST7789_DATA);       /* write data */
 }
 
-/**
- * @brief     memory continue write
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *data pointer to a data buffer
- * @param[in] len data length
- * @return    status code
- *            - 0 success
- *            - 1 memory continue write failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_MemoryContinueWrite(uint8_t *data, uint16_t len)
+static void MemoryContinueWrite(uint8_t *data, uint16_t len)
 {
     WriteByte(ST7789_CMD_RAMWRC, ST7789_CMD); /* write memory write continue command */
     WriteBytes(data, len, ST7789_DATA);       /* write data */
 }
 
-/**
- * @brief     set tear scanline
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] l tear line
- * @return    status code
- *            - 0 success
- *            - 1 set tear scanline failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetTearScanline(uint16_t l)
-{
-    uint8_t buf[2];
-
-    WriteByte(ST7789_CMD_TESCAN, ST7789_CMD); /* write set tear scanline command */
-    buf[0] = (l >> 8) & 0xFF;                 /* start line msb */
-    buf[1] = (l >> 0) & 0xFF;                 /* start line lsb */
-    WriteBytes(buf, 2, ST7789_DATA);          /* write data */
-}
-
-/**
- * @brief     set display brightness
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] brightness display brightness
- * @return    status code
- *            - 0 success
- *            - 1 set display brightness failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetDisplayBrightness(uint8_t brightness)
+static void SetDisplayBrightness(uint8_t brightness)
 {
     WriteByte(ST7789_CMD_WRDISBV, ST7789_CMD); /* write display brightness command */
 
     WriteByte(brightness, ST7789_DATA); /* write brightness */
 }
 
-/**
- * @brief     set display control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] brightness_control_block bool value
- * @param[in] display_dimming bool value
- * @param[in] backlight_control bool value
- * @return    status code
- *            - 0 success
- *            - 1 set display control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetDisplayControl(ST7789_bool_t brightness_control_block,
-                              ST7789_bool_t display_dimming, ST7789_bool_t backlight_control)
+static void SetDisplayControl(ST7789_bool_t brightness_control_block,
+                              ST7789_bool_t display_dimming,
+                              ST7789_bool_t backlight_control)
 {
     uint8_t data;
 
@@ -816,20 +560,7 @@ void ST7789_SetDisplayControl(ST7789_bool_t brightness_control_block,
     WriteByte(data, ST7789_DATA);                                                               /* write control */
 }
 
-/**
- * @brief     set brightness control and color enhancement
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] color_enhancement bool value
- * @param[in] mode color enhancement mode
- * @param[in] level color enhancement level
- * @return    status code
- *            - 0 success
- *            - 1 set brightness control and color enhancement failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetBrightnessControlAndColorEnhancement(ST7789_bool_t color_enhancement,
+static void SetBrightnessControlAndColorEnhancement(ST7789_bool_t color_enhancement,
                                                     ST7789_color_enhancement_mode_t mode, ST7789_color_enhancement_level_t level)
 {
     uint8_t data;
@@ -840,47 +571,19 @@ void ST7789_SetBrightnessControlAndColorEnhancement(ST7789_bool_t color_enhancem
     WriteByte(data, ST7789_DATA);                                 /* write control */
 }
 
-/**
- * @brief     set cabc minimum brightness
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] brightness display brightness
- * @return    status code
- *            - 0 success
- *            - 1 set cabc minimum brightness failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetCabcMinimumBrightness(uint8_t brightness)
+static void SetCabcMinimumBrightness(uint8_t brightness)
 {
     WriteByte(ST7789_CMD_WRCABCMB, ST7789_CMD); /* write CABC minimum brightness command */
 
     WriteByte(brightness, ST7789_DATA); /* write brightness */
 }
 
-/**
- * @brief     set ram control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] ram_mode ram mode
- * @param[in] display_mode display mode
- * @param[in] frame_type frame type
- * @param[in] data_mode data mode
- * @param[in] bus_width bus width
- * @param[in] pixel_type pixel type
- * @return    status code
- *            - 0 success
- *            - 1 set ram control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetRamControl(
-    ST7789_ram_access_t ram_mode,
-    ST7789_display_mode_t display_mode,
-    ST7789_frame_type_t frame_type,
-    ST7789_data_mode_t data_mode,
-    ST7789_rgb_bus_width_t bus_width,
-    ST7789_pixel_type_t pixel_type)
+static void SetRamControl(ST7789_ram_access_t ram_mode,
+                          ST7789_display_mode_t display_mode,
+                          ST7789_frame_type_t frame_type,
+                          ST7789_data_mode_t data_mode,
+                          ST7789_rgb_bus_width_t bus_width,
+                          ST7789_pixel_type_t pixel_type)
 {
     uint8_t buf[2];
 
@@ -891,35 +594,7 @@ void ST7789_SetRamControl(
     WriteBytes(buf, 2, ST7789_DATA);               /* write data */
 }
 
-/**
- * @brief     set porch
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] back_porch_normal back porch setting in normal mode
- * @param[in] front_porch_normal front porch setting in normal mode
- * @param[in] separate_porch_enable bool value
- * @param[in] back_porch_idle back porch setting in idle mode
- * @param[in] front_porch_idle front porch setting in idle mode
- * @param[in] back_porch_partial back porch setting in partial mode
- * @param[in] front_porch_partial front porch setting in partial mode
- * @return    status code
- *            - 0 success
- *            - 1 set porch failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 back_porch_normal > 0x7F
- *            - 5 front_porch_normal > 0x7F
- *            - 6 back_porch_idle > 0xF
- *            - 7 front_porch_idle > 0xF
- *            - 8 back_porch_partial > 0xF
- *            - 9 front_porch_partial > 0xF
- * @note      0x01 <= back_porch_normal <= 0x7F
- *            0x01 <= front_porch_normal <= 0x7F
- *            0x01 <= back_porch_idle <= 0xF
- *            0x01 <= front_porch_idle <= 0xF
- *            0x01 <= back_porch_partial <= 0xF
- *            0x01 <= front_porch_partial <= 0xF
- */
-void ST7789_SetPorch(uint8_t back_porch_normal,
+static void SetPorch(uint8_t back_porch_normal,
                      uint8_t front_porch_normal,
                      ST7789_bool_t separate_porch_enable,
                      uint8_t back_porch_idle,
@@ -938,26 +613,7 @@ void ST7789_SetPorch(uint8_t back_porch_normal,
     WriteBytes(buf, 5, ST7789_DATA);                                        /* write data */
 }
 
-/**
- * @brief     set frame rate control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] separate_fr_control bool value
- * @param[in] div_control frame rate divided control
- * @param[in] idle_mode inversion idle mode
- * @param[in] idle_frame_rate idle frame rate
- * @param[in] partial_mode inversion partial mode
- * @param[in] partial_frame_rate partial frame rate
- * @return    status code
- *            - 0 success
- *            - 1 set frame rate control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 idle_frame_rate > 0x1F
- *            - 5 partial_frame_rate > 0x1F
- * @note      0 <= idle_frame_rate <= 0x1F
- *            0 <= partial_frame_rate <= 0x1F
- */
-void ST7789_SetFrameRateControl(ST7789_bool_t separate_fr_control,
+static void SetFrameRateControl(ST7789_bool_t separate_fr_control,
                                 ST7789_frame_rate_divided_control_t div_control,
                                 ST7789_inversion_idle_mode_t idle_mode,
                                 uint8_t idle_frame_rate,
@@ -973,23 +629,9 @@ void ST7789_SetFrameRateControl(ST7789_bool_t separate_fr_control,
     WriteBytes(buf, 3, ST7789_DATA);                                   /* write data */
 }
 
-/**
- * @brief     set partial mode control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] level non-display source output level
- * @param[in] mode non-display area scan mode
- * @param[in] frequency non-display frame frequency
- * @return    status code
- *            - 0 success
- *            - 1 set partial mode control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetPartialModeControl(
-    ST7789_non_display_source_output_level_t level,
-    ST7789_non_display_area_scan_mode_t mode,
-    ST7789_non_display_frame_frequency_t frequency)
+static void SetPartialModeControl(ST7789_non_display_source_output_level_t level,
+                                  ST7789_non_display_area_scan_mode_t mode,
+                                  ST7789_non_display_frame_frequency_t frequency)
 {
     uint8_t reg;
 
@@ -998,19 +640,7 @@ void ST7789_SetPartialModeControl(
     WriteByte(reg, ST7789_DATA);                         /* write data */
 }
 
-/**
- * @brief     set gate control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] vghs vghs level
- * @param[in] vgls vgls level
- * @return    status code
- *            - 0 success
- *            - 1 set gate control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetGateControl(ST7789_vghs_t vghs, ST7789_vgls_t vgls)
+static void SetGateControl(ST7789_vghs_t vghs, ST7789_vgls_t vgls)
 {
     uint8_t reg;
 
@@ -1019,18 +649,7 @@ void ST7789_SetGateControl(ST7789_vghs_t vghs, ST7789_vgls_t vgls)
     WriteByte(reg, ST7789_DATA);             /* write data */
 }
 
-/**
- * @brief     enable or disable digital gamma
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] enable bool value
- * @return    status code
- *            - 0 success
- *            - 1 set digital gamma failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetDigitalGamma(ST7789_bool_t enable)
+static void SetDigitalGamma(ST7789_bool_t enable)
 {
     uint8_t reg;
 
@@ -1039,84 +658,13 @@ void ST7789_SetDigitalGamma(ST7789_bool_t enable)
     WriteByte(reg, ST7789_DATA);             /* write data */
 }
 
-/**
- * @brief     set vcoms
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] vcoms set vcoms
- * @return    status code
- *            - 0 success
- *            - 1 set vcoms failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 vcoms > 0x3F
- * @note      0 <= vcoms <= 0x3F
- */
-void ST7789_SetVcoms(uint8_t vcoms)
-{
-    uint8_t reg;
-
-    WriteByte(ST7789_CMD_VCOMS, ST7789_CMD); /* write vcoms setting command */
-    reg = vcoms & 0x3F;                      /* set param */
-    WriteByte(reg, ST7789_DATA);             /* write data */
-}
-
-/**
- * @brief      convert the vcom to the register raw data
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  v vcom
- * @param[out] *reg pointer to a register raw buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VcomConvertToRegister(float v, uint8_t *reg)
-{
-    *reg = (uint8_t)((v - 0.1f) / 0.025f); /* convert real data to register data */
-}
-
-/**
- * @brief      convert the register raw data to the vcom
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  reg register raw data
- * @param[out] *v pointer to a vcom buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VcomConvertToData(uint8_t reg, float *v)
-{
-    *v = (uint8_t)((float)(reg) * 0.025f + 0.1f); /* convert raw data to real data */
-}
-
-/**
- * @brief     set lcm control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] xmy bool value
- * @param[in] xbgr bool value
- * @param[in] xinv bool value
- * @param[in] xmx bool value
- * @param[in] xmh bool value
- * @param[in] xmv bool value
- * @param[in] xgs bool value
- * @return    status code
- *            - 0 success
- *            - 1 set lcm control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetLcmControl(
-    ST7789_bool_t xmy,
-    ST7789_bool_t xbgr,
-    ST7789_bool_t xinv,
-    ST7789_bool_t xmx,
-    ST7789_bool_t xmh,
-    ST7789_bool_t xmv,
-    ST7789_bool_t xgs)
+static void SetLcmControl(ST7789_bool_t xmy,
+                          ST7789_bool_t xbgr,
+                          ST7789_bool_t xinv,
+                          ST7789_bool_t xmx,
+                          ST7789_bool_t xmh,
+                          ST7789_bool_t xmv,
+                          ST7789_bool_t xgs)
 {
     uint8_t reg;
 
@@ -1126,35 +674,7 @@ void ST7789_SetLcmControl(
     WriteByte(reg, ST7789_DATA);                /* write data */
 }
 
-/**
- * @brief     set id code setting
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *id pointer to an id buffer
- * @return    status code
- *            - 0 success
- *            - 1 set id code setting failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetIdCodeSetting(uint8_t id[3])
-{
-    WriteByte(ST7789_CMD_IDSET, ST7789_CMD); /* write id setting command */
-    WriteBytes(id, 3, ST7789_DATA);          /* write data */
-}
-
-/**
- * @brief     set vdv vrh from
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] from vdv and vrh from
- * @return    status code
- *            - 0 success
- *            - 1 set vdv vrh from failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetVdvVrhFrom(ST7789_vdv_vrh_from_t from)
+static void SetVdvVrhFrom(ST7789_vdv_vrh_from_t from)
 {
     uint8_t buf[2];
 
@@ -1164,19 +684,7 @@ void ST7789_SetVdvVrhFrom(ST7789_vdv_vrh_from_t from)
     WriteBytes(buf, 2, ST7789_DATA);            /* write data */
 }
 
-/**
- * @brief     set vrhs
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] vrhs set vrhs
- * @return    status code
- *            - 0 success
- *            - 1 set vrhs failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 vrhs > 0x27
- * @note      0 <= vrhs <= 0x27
- */
-void ST7789_SetVrhs(uint8_t vrhs)
+static void SetVrhs(uint8_t vrhs)
 {
     uint8_t reg;
 
@@ -1185,51 +693,12 @@ void ST7789_SetVrhs(uint8_t vrhs)
     WriteByte(reg, ST7789_DATA);            /* write data */
 }
 
-/**
- * @brief      convert the vrhs to the register raw data
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  v vcom
- * @param[out] *reg pointer to a register raw buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VrhsConvertToRegister(float v, uint8_t *reg)
+static void VrhsConvertToRegister(float v, uint8_t *reg)
 {
     *reg = (uint8_t)((v - 3.55f) / 0.05f); /* convert real data to register data */
 }
 
-/**
- * @brief      convert the register raw data to the vrhs
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  reg register raw data
- * @param[out] *v pointer to a vcom buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VrhsConvertToData(uint8_t reg, float *v)
-{
-    *v = (uint8_t)((float)(reg) * 0.05f + 3.55f); /* convert raw data to real data */
-}
-
-/**
- * @brief     set vdv
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] vdv set vdv
- * @return    status code
- *            - 0 success
- *            - 1 set vdv failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 vdv > 0x3F
- * @note      0 <= vdv <= 0x3F
- */
-void ST7789_SetVdv(uint8_t vdv)
+static void SetVdv(uint8_t vdv)
 {
     uint8_t reg;
 
@@ -1238,51 +707,13 @@ void ST7789_SetVdv(uint8_t vdv)
     WriteByte(reg, ST7789_DATA);              /* write data */
 }
 
-/**
- * @brief      convert the vdv to the register raw data
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  v vcom
- * @param[out] *reg pointer to a register raw buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VdvConvertToRegister(float v, uint8_t *reg)
+static void VdvConvertToRegister(float v, uint8_t *reg)
 {
     *reg = (uint8_t)((v + 0.8f) / 0.025f); /* convert real data to register data */
 }
 
-/**
- * @brief      convert the register raw data to the vdv
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  reg register raw data
- * @param[out] *v pointer to a vcom buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VdvConvertToData(uint8_t reg, float *v)
-{
-    *v = (uint8_t)((float)(reg) * 0.025f - 0.8f); /* convert raw data to real data */
-}
 
-/**
- * @brief     set vcoms offset
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] offset vcoms offset
- * @return    status code
- *            - 0 success
- *            - 1 set vcoms offset failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 offset > 0x3F
- * @note      0 <= offset <= 0x3F
- */
-void ST7789_SetVcomsOffset(uint8_t offset)
+static void SetVcomsOffset(uint8_t offset)
 {
     uint8_t reg;
 
@@ -1291,51 +722,12 @@ void ST7789_SetVcomsOffset(uint8_t offset)
     WriteByte(reg, ST7789_DATA);                /* write data */
 }
 
-/**
- * @brief      convert the vcoms offset to the register raw data
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  v vcoms offset
- * @param[out] *reg pointer to a register raw buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VcomsOffsetConvertToRegister(float v, uint8_t *reg)
+static void VcomsOffsetConvertToRegister(float v, uint8_t *reg)
 {
     *reg = (uint8_t)((v + 0.8f) / 0.025f); /* convert real data to register data */
 }
 
-/**
- * @brief      convert the register raw data to the vcoms offset
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  reg register raw data
- * @param[out] *v pointer to a vcoms offset buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_VcomsOffsetConvertToData(uint8_t reg, float *v)
-{
-    *v = (uint8_t)((float)(reg) * 0.025f - 0.8f); /* convert raw data to real data */
-}
-
-/**
- * @brief     set frame rate
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] selection inversion selection
- * @param[in] rate frame rate
- * @return    status code
- *            - 0 success
- *            - 1 set frame rate failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetFrameRate(ST7789_inversion_selection_t selection, ST7789_frame_rate_t rate)
+static void SetFrameRate(ST7789_inversion_selection_t selection, ST7789_frame_rate_t rate)
 {
     uint8_t reg;
 
@@ -1344,21 +736,7 @@ void ST7789_SetFrameRate(ST7789_inversion_selection_t selection, ST7789_frame_ra
     WriteByte(reg, ST7789_DATA);              /* write data */
 }
 
-/**
- * @brief     set cabc control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] led_on bool value
- * @param[in] led_pwm_init bool value
- * @param[in] led_pwm_fix bool value
- * @param[in] led_pwm_polarity bool value
- * @return    status code
- *            - 0 success
- *            - 1 set cabc control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetCabcControl(ST7789_bool_t led_on,
+static void SetCabcControl(ST7789_bool_t led_on,
                            ST7789_bool_t led_pwm_init,
                            ST7789_bool_t led_pwm_fix,
                            ST7789_bool_t led_pwm_polarity)
@@ -1371,18 +749,7 @@ void ST7789_SetCabcControl(ST7789_bool_t led_on,
     WriteByte(reg, ST7789_DATA);                        /* write data */
 }
 
-/**
- * @brief     set pwm frequency
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] frequency pwm frequency
- * @return    status code
- *            - 0 success
- *            - 1 set pwm frequency failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetPwmFrequency(ST7789_pwm_frequency_t frequency)
+static void SetPwmFrequency(ST7789_pwm_frequency_t frequency)
 {
     uint8_t reg;
 
@@ -1391,20 +758,7 @@ void ST7789_SetPwmFrequency(ST7789_pwm_frequency_t frequency)
     WriteByte(reg, ST7789_DATA);                /* write data */
 }
 
-/**
- * @brief     set power control 1
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] avdd avdd param
- * @param[in] avcl avcl param
- * @param[in] vds vds param
- * @return    status code
- *            - 0 success
- *            - 1 set power control 1 failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetPowerControl1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_t vds)
+static void SetPowerControl1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_t vds)
 {
     uint8_t buf[2];
 
@@ -1414,75 +768,19 @@ void ST7789_SetPowerControl1(ST7789_avdd_t avdd, ST7789_avcl_t avcl, ST7789_vds_
     WriteBytes(buf, 2, ST7789_DATA);                 /* write data */
 }
 
-/**
- * @brief     set positive voltage gamma control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *param pointer to a param buffer
- * @return    status code
- *            - 0 success
- *            - 1 set positive voltage gamma control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetPositiveVoltageGammaControl(uint8_t param[14])
+static void SetPositiveVoltageGammaControl(uint8_t param[14])
 {
     WriteByte(ST7789_CMD_PVGAMCTRL, ST7789_CMD); /* write positive voltage gamma control command */
     WriteBytes(param, 14, ST7789_DATA);          /* write data */
 }
 
-/**
- * @brief     set negative voltage gamma control
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *param pointer to a param buffer
- * @return    status code
- *            - 0 success
- *            - 1 set negative voltage gamma control failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetNegativeVoltageGammaControl(uint8_t param[14])
+static void SetNegativeVoltageGammaControl(uint8_t param[14])
 {
     WriteByte(ST7789_CMD_NVGAMCTRL, ST7789_CMD); /* write negative voltage gamma control command */
     WriteBytes(param, 14, ST7789_DATA);          /* write data */
 }
 
-/**
- * @brief     set blue digital gamma look up table
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *param pointer to a param buffer
- * @return    status code
- *            - 0 success
- *            - 1 set digital gamma look up table blue failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetDigitalGammaLookUpTableBlue(uint8_t param[64])
-{
-    WriteByte(ST7789_CMD_DGMLUTB, ST7789_CMD); /* write digital gamma look-up table for blue command */
-    WriteBytes(param, 64, ST7789_DATA);        /* write data */
-}
-
-/**
- * @brief     set gate
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] gate_line_number gate line number
- * @param[in] first_scan_line_number first scan line number
- * @param[in] mode gate scan mode
- * @param[in] direction gate scan direction
- * @return    status code
- *            - 0 success
- *            - 1 set gate failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 gate_line_number > 0x3F
- *            - 5 first_scan_line_number > 0x3F
- * @note      0 <= gate_line_number <= 0x3F
- *            0 <= first_scan_line_number 0x3F
- */
-void ST7789_SetGate(uint8_t gate_line_number,
+static void SetGate(uint8_t gate_line_number,
                     uint8_t first_scan_line_number,
                     ST7789_gate_scan_mode_t mode,
                     ST7789_gate_scan_direction_t direction)
@@ -1496,51 +794,12 @@ void ST7789_SetGate(uint8_t gate_line_number,
     WriteBytes(buf, 3, ST7789_DATA);                /* write data */
 }
 
-/**
- * @brief      convert the gate line to the register raw data
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  l gate line
- * @param[out] *reg pointer to a register raw buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_GateLineConvertToRegister(uint16_t l, uint8_t *reg)
+static void GateLineConvertToRegister(uint16_t l, uint8_t *reg)
 {
     *reg = (uint8_t)((l / 8) - 1); /* convert real data to register data */
 }
 
-/**
- * @brief      convert the register raw data to the gate line
- * @param[in]  *handle pointer to an st7789 handle structure
- * @param[in]  reg register raw data
- * @param[out] *l pointer to a gate line buffer
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- *             - 3 handle is not initialized
- * @note       none
- */
-void ST7789_GateLineConvertToData(uint8_t reg, uint16_t *l)
-{
-    *l = (uint8_t)(reg * 8 + 8); /* convert raw data to real data */
-}
-
-/**
- * @brief     set power control 2
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] sbclk sbclk div
- * @param[in] stp14ck stp14ck div
- * @return    status code
- *            - 0 success
- *            - 1 set power control 2 failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- * @note      none
- */
-void ST7789_SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck)
+static void SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck)
 {
     uint8_t reg;
 
@@ -1549,55 +808,33 @@ void ST7789_SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp1
     WriteByte(reg, ST7789_DATA);               /* write data */
 }
 
-/**
- * @brief     close the chip
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 spi deinit failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 power down failed
- *            - 5 reset gpio deinit failed
- *            - 6 command && data deinit failed
- * @note      none
- */
-void ST7789_Deinitialize()
-{
-    spi_bus_remove_device(spiDeviceHandle);
-}
-
-/**
- * @brief     clear the display
- * @param[in] *handle pointer to an st7789 handle structure
- * @return    status code
- *            - 0 success
- *            - 1 clear failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 format is invalid
- * @note      none
- */
 void LCD_Clear(void)
 {
     uint8_t buf[4];
     uint32_t i;
     uint32_t m;
     uint32_t n;
+    uint16_t col0;
+    uint16_t row0;
+    uint16_t col1;
+    uint16_t row1;
 
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD);               /* write set column address command */
-    buf[0] = (Y_OFFSET >> 8) & 0xFF;                       /* start address msb */
-    buf[1] = (Y_OFFSET >> 0) & 0xFF;                       /* start address lsb */
-    buf[2] = ((Y_OFFSET + SCREEN_HEIGHT - 1) >> 8) & 0xFF; /* end address msb */
-    buf[3] = ((Y_OFFSET + SCREEN_HEIGHT - 1) >> 0) & 0xFF; /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);                       /* write data */
+    transform(0, 0, &col0, &row0);
+    transform(SCREEN_WIDTH, SCREEN_HEIGHT, &col1, &row1);
 
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD);              /* write set row address command */
-    buf[0] = (X_OFFSET >> 8) & 0xFF;                      /* start address msb */
-    buf[1] = (X_OFFSET >> 0) & 0xFF;                      /* start address lsb */
-    buf[2] = ((X_OFFSET + SCREEN_WIDTH - 1) >> 8) & 0xFF; /* end address msb */
-    buf[3] = ((X_OFFSET + SCREEN_WIDTH - 1) >> 0) & 0xFF; /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);                      /* write data */
+    WriteByte(ST7789_CMD_CASET, ST7789_CMD);          /* write set column address command */
+    buf[0] = (col0 >> 8) & 0xFF;                       /* start address msb */
+    buf[1] = (col0 >> 0) & 0xFF;                       /* start address lsb */
+    buf[2] = (col1 >> 8) & 0xFF; /* end address msb */
+    buf[3] = (col1 >> 0) & 0xFF; /* end address lsb */
+    WriteBytes(buf, 4, ST7789_DATA);                  /* write data */
+
+    WriteByte(ST7789_CMD_RASET, ST7789_CMD);         /* write set row address command */
+    buf[0] = (row0 >> 8) & 0xFF;                      /* start address msb */
+    buf[1] = (row0 >> 0) & 0xFF;                      /* start address lsb */
+    buf[2] = (row1 >> 8) & 0xFF; /* end address msb */
+    buf[3] = (row1 >> 0) & 0xFF; /* end address lsb */
+    WriteBytes(buf, 4, ST7789_DATA);                 /* write data */
 
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
 
@@ -1609,54 +846,40 @@ void LCD_Clear(void)
     {
         WriteBytes(buffer, ST7789_BUFFER_SIZE, ST7789_DATA); /* write data */
     }
-    
+
     if (n != 0) /* not end */
     {
         WriteBytes(buffer, n, ST7789_DATA); /* write data */
     }
 }
 
-/**
- * @brief     fill the rect
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] left left coordinate x
- * @param[in] top top coordinate y
- * @param[in] right right coordinate x
- * @param[in] bottom bottom coordinate y
- * @param[in] color display color
- * @return    status code
- *            - 0 success
- *            - 1 fill rect failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 left is over column
- *            - 5 right is over column
- *            - 6 left >= right
- *            - 7 top is over row
- *            - 8 bottom is over row
- *            - 9 top >= bottom
- * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
- */
-void LCD_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint32_t color)
+void LCD_FillRectangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint32_t color)
 {
     uint8_t buf[4];
     uint32_t i;
     uint32_t m;
     uint32_t n;
+    uint16_t col0;
+    uint16_t row0;
+    uint16_t col1;
+    uint16_t row1;
 
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD);   /* write set column address command */
-    buf[0] = ((Y_OFFSET + left) >> 8) & 0xFF;  /* start address msb */
-    buf[1] = ((Y_OFFSET + left) >> 0) & 0xFF;  /* start address lsb */
-    buf[2] = ((Y_OFFSET + right) >> 8) & 0xFF; /* end address msb */
-    buf[3] = ((Y_OFFSET + right) >> 0) & 0xFF; /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);           /* write data */
+    transform(x0, y0, &col0, &row0);
+    transform(x1, y1, &col1, &row1);
 
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD);    /* write set row address command */
-    buf[0] = ((X_OFFSET + top) >> 8) & 0xFF;    /* start address msb */
-    buf[1] = ((X_OFFSET + top) >> 0) & 0xFF;    /* start address lsb */
-    buf[2] = ((X_OFFSET + bottom) >> 8) & 0xFF; /* end address msb */
-    buf[3] = ((X_OFFSET + bottom) >> 0) & 0xFF; /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);            /* write data */
+    WriteByte(ST7789_CMD_CASET, ST7789_CMD); /* write set column address command */
+    buf[0] = (col0 >> 8) & 0xFF;             /* start address msb */
+    buf[1] = (col0 >> 0) & 0xFF;             /* start address lsb */
+    buf[2] = (col1 >> 8) & 0xFF;             /* end address msb */
+    buf[3] = (col1 >> 0) & 0xFF;             /* end address lsb */
+    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
+
+    WriteByte(ST7789_CMD_RASET, ST7789_CMD); /* write set row address command */
+    buf[0] = (row0 >> 8) & 0xFF;             /* start address msb */
+    buf[1] = (row0 >> 0) & 0xFF;             /* start address lsb */
+    buf[2] = (row1 >> 8) & 0xFF;             /* end address msb */
+    buf[3] = (row1 >> 0) & 0xFF;             /* end address lsb */
+    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
 
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
 
@@ -1666,9 +889,9 @@ void LCD_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16_t bot
         buffer[i + 1] = (color >> 0) & 0xFF; /* set the color */
     }
 
-    m = (uint32_t)(right - left + 1) * (bottom - top + 1) * 2 /
+    m = (uint32_t)(x1 - x0 + 1) * (y0 - y1 + 1) * 2 /
         ST7789_BUFFER_SIZE; /* total times */
-    n = ((uint32_t)(right - left + 1) * (bottom - top + 1) * 2) %
+    n = ((uint32_t)(x1 - x0 + 1) * (y0 - y1 + 1) * 2) %
         ST7789_BUFFER_SIZE; /* the last */
 
     for (i = 0; i < m; i++)
@@ -1682,27 +905,6 @@ void LCD_FillRectangle(uint16_t left, uint16_t top, uint16_t right, uint16_t bot
     }
 }
 
-/**
- * @brief     draw a picture
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] left left coordinate x
- * @param[in] top top coordinate y
- * @param[in] right right coordinate x
- * @param[in] bottom bottom coordinate y
- * @param[in] *image pointer to an image buffer
- * @return    status code
- *            - 0 success
- *            - 1 draw picture 16bits failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 left is over column
- *            - 5 right is over column
- *            - 6 left >= right
- *            - 7 top is over row
- *            - 8 bottom is over row
- *            - 9 top >= bottom
- * @note      left <= column && right <= column && left < right && top <= row && bottom <= row && top < bottom
- */
 void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image)
 {
     uint8_t buf[4];
@@ -1767,32 +969,35 @@ void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t
     }
 }
 
-/**
- * @brief     write a string in the display
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] x coordinate x
- * @param[in] y coordinate y
- * @param[in] *str pointer to a write string address
- * @param[in] len length of the string
- * @param[in] color display color
- * @param[in] font string font
- * @return    status code
- *            - 0 success
- *            - 1 draw point failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 x or y is invalid
- * @note      x < column && y < row
- */
+void LCD_SetAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+{
+    // Column address set
+    WriteByte(ST7789_CMD_CASET, ST7789_CMD);
+    WriteByte(x0 >> 8, ST7789_DATA);
+    WriteByte(x0 & 0xFF, ST7789_DATA);
+    WriteByte(x1 >> 8, ST7789_DATA);
+    WriteByte(x1 & 0xFF, ST7789_DATA);
+
+    // Row address set
+    WriteByte(ST7789_CMD_RASET, ST7789_CMD);
+    WriteByte(y0 >> 8, ST7789_DATA);
+    WriteByte(y0 & 0xFF, ST7789_DATA);
+    WriteByte(y1 >> 8, ST7789_DATA);
+    WriteByte(y1 & 0xFF, ST7789_DATA);
+
+    // Write to RAM
+    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD);
+}
+
 void LCD_DrawString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, LCD_Font_t font)
 {
     while ((len != 0) && (*str <= '~') && (*str >= ' ')) /* write all string */
     {
-        ST7789_DrawChar(x, y, *str, font, color);
+        LCD_DrawChar(x, y, *str, font, color);
 
-        x += (uint8_t)(font / 2); /* x + font/2 */
-        str++;                    /* str address++ */
-        len--;                    /* str length-- */
+        x += (uint8_t)(font / 2); 
+        str++;                    
+        len--;                 
     }
 }
 
@@ -1812,37 +1017,26 @@ void LCD_ClearString(uint16_t x, uint16_t y, uint8_t length, uint32_t color, LCD
     }
 }
 
-/**
- * @brief     draw a point in the display
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] x coordinate x
- * @param[in] y coordinate y
- * @param[in] color point color
- * @return    status code
- *            - 0 success
- *            - 1 draw point failed
- *            - 2 handle is NULL
- *            - 3 handle is not initialized
- *            - 4 x is over column
- *            - 5 y is over row
- * @note      x < column && y < row
- */
 void LCD_DrawPoint(uint16_t x, uint16_t y, uint32_t color)
 {
     uint8_t buf[4];
+    uint16_t col;
+    uint16_t row;
+
+    transform(x, y, &col, &row);
 
     WriteByte(ST7789_CMD_CASET, ST7789_CMD); /* write set column address command */
-    buf[0] = ((X_OFFSET + x) >> 8) & 0xFF;   /* start address msb */
-    buf[1] = ((X_OFFSET + x) >> 0) & 0xFF;   /* start address lsb */
-    buf[2] = ((X_OFFSET + x) >> 8) & 0xFF;   /* end address msb */
-    buf[3] = ((X_OFFSET + x) >> 0) & 0xFF;   /* end address lsb */
+    buf[0] = (col >> 8) & 0xFF;              /* start address msb */
+    buf[1] = (col >> 0) & 0xFF;              /* start address lsb */
+    buf[2] = (col >> 8) & 0xFF;              /* end address msb */
+    buf[3] = (col >> 0) & 0xFF;              /* end address lsb */
     WriteBytes(buf, 4, ST7789_DATA);         /* write data */
 
     WriteByte(ST7789_CMD_RASET, ST7789_CMD); /* write set row address command */
-    buf[0] = ((Y_OFFSET + y) >> 8) & 0xFF;   /* start address msb */
-    buf[1] = ((Y_OFFSET + y) >> 0) & 0xFF;   /* start address lsb */
-    buf[2] = ((Y_OFFSET + y) >> 8) & 0xFF;   /* end address msb */
-    buf[3] = ((Y_OFFSET + y) >> 0) & 0xFF;   /* end address lsb */
+    buf[0] = (row >> 8) & 0xFF;              /* start address msb */
+    buf[1] = (row >> 0) & 0xFF;              /* start address lsb */
+    buf[2] = (row >> 8) & 0xFF;              /* end address msb */
+    buf[3] = (row >> 0) & 0xFF;              /* end address lsb */
     WriteBytes(buf, 4, ST7789_DATA);         /* write data */
 
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
@@ -1852,59 +1046,24 @@ void LCD_DrawPoint(uint16_t x, uint16_t y, uint32_t color)
     WriteBytes(buf, 2, ST7789_DATA); /* write data */
 }
 
-/**
- * @brief      get chip's information
- * @param[out] *info pointer to an st7789 info structure
- * @return     status code
- *             - 0 success
- *             - 2 handle is NULL
- * @note       none
- */
-void ST7789_Info(ST7789_info_t *info)
-{
-    memset(info, 0, sizeof(ST7789_info_t));                  /* initialize st7789 info structure */
-    strncpy(info->chip_name, CHIP_NAME, 32);                 /* copy chip name */
-    strncpy(info->manufacturer_name, MANUFACTURER_NAME, 32); /* copy manufacturer name */
-    strncpy(info->interface, "SPI", 8);                      /* copy interface name */
-    info->supply_voltage_min_v = SUPPLY_VOLTAGE_MIN;         /* set minimal supply voltage */
-    info->supply_voltage_max_v = SUPPLY_VOLTAGE_MAX;         /* set maximum supply voltage */
-    info->max_current_ma = MAX_CURRENT;                      /* set maximum current */
-    info->temperature_max = TEMPERATURE_MAX;                 /* set minimal temperature */
-    info->temperature_min = TEMPERATURE_MIN;                 /* set maximum temperature */
-    info->driver_version = DRIVER_VERSION;                   /* set driver version */
-}
-
-/**
- * @brief     draw a char in the display
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] x coordinate x
- * @param[in] y coordinate y
- * @param[in] chr display char
- * @param[in] size display size
- * @param[in] color display color
- * @return    status code
- *            - 0 success
- *            - 1 show char failed
- * @note      none
- */
-void ST7789_DrawChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t color)
+void LCD_DrawChar(uint16_t x, uint16_t y, uint8_t chr, LCD_Font_t font, uint32_t color)
 {
     uint8_t temp, t, t1;
     uint16_t y0 = y;
-    uint8_t csize = (size / 8 + ((size % 8) ? 1 : 0)) * (size / 2); /* get size */
+    uint8_t csize = (font / 8 + ((font % 8) ? 1 : 0)) * (font / 2); /* get size */
 
     chr = chr - ' ';            /* get index */
     for (t = 0; t < csize; t++) /* write size */
     {
-        if (size == 12) /* if size 12 */
+        if (font == 12) /* if size 12 */
         {
             temp = gsc_st7789_ascii_1206[chr][t]; /* get ascii 1206 */
         }
-        else if (size == 16) /* if size 16 */
+        else if (font == 16) /* if size 16 */
         {
             temp = gsc_st7789_ascii_1608[chr][t]; /* get ascii 1608 */
         }
-        else if (size == 24) /* if size 24 */
+        else if (font == 24) /* if size 24 */
         {
             temp = gsc_st7789_ascii_2412[chr][t]; /* get ascii 2412 */
         }
@@ -1918,7 +1077,7 @@ void ST7789_DrawChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t
 
             temp <<= 1; /* left shift 1 */
             y++;
-            if ((y - y0) == size) /* reset size */
+            if ((y - y0) == font) /* reset size */
             {
                 y = y0; /* set y */
                 x++;    /* x++ */
@@ -1929,16 +1088,6 @@ void ST7789_DrawChar(uint16_t x, uint16_t y, uint8_t chr, uint8_t size, uint32_t
     }
 }
 
-/**
- * @brief     write one byte
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] data written data
- * @param[in] cmd data type
- * @return    status code
- *            - 0 success
- *            - 1 write failed
- * @note      none
- */
 static uint8_t WriteByte(uint8_t data, uint32_t cmd)
 {
     spi_transaction_t transaction;
@@ -1951,17 +1100,6 @@ static uint8_t WriteByte(uint8_t data, uint32_t cmd)
     return spi_device_polling_transmit(spiDeviceHandle, &transaction);
 }
 
-/**
- * @brief     write bytes
- * @param[in] *handle pointer to an st7789 handle structure
- * @param[in] *data pointer to a data buffer
- * @param[in] len data length
- * @param[in] cmd data type
- * @return    status code
- *            - 0 success
- *            - 1 write failed
- * @note      none
- */
 static uint8_t WriteBytes(uint8_t *data, uint16_t len, uint32_t cmd)
 {
     spi_transaction_t transaction;
@@ -1978,4 +1116,28 @@ static void SpiPreTransferCallback(spi_transaction_t *t)
 {
     int dc = (int)t->user;
     gpio_set_level(GPIO_PIN_NUM_DC, dc);
+}
+
+static void TransformPortrait1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
+{
+    *col = x + COL_OFFSET;
+    *row = y + ROW_OFFSET;
+}
+
+static void TransformPortrait2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
+{
+    *col = COL_OFFSET + x;
+    *row = ROW_OFFSET + y;
+}
+
+static void TransformLandscape1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
+{
+    *col = y + ROW_OFFSET;
+    *row = x + COL_OFFSET;
+}
+
+static void TransformLandscape2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
+{
+    *col = y + COL_OFFSET;
+    *row = x + ROW_OFFSET;
 }

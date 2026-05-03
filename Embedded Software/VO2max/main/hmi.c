@@ -74,6 +74,7 @@ static Menu_t pressureCalibrationMenu;
 static Menu_t bluetoothSettingsMenu;
 static Menu_t measureSettingsMenu;
 static Menu_t userSettingsMenu;
+static Menu_t bluetoothEnableMenu;
 static Menu_t bluetoothMacMenu;
 static Menu_t bluetoothNameMenu;
 static Menu_t bluetoothPairMenu;
@@ -104,6 +105,7 @@ static void SpirometerScreenAction(void);
 static void O2CalibrationScreenAction(void);
 static void PressureCalibrationScreenAction(void);
 static void UserWeightScreenAction(void);
+static void bleEnableScreenAction(void);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -270,9 +272,11 @@ static void InitializeMenus(void)
     MENU_AddSubmenu(&settingsMenu, &userSettingsMenu);
 
     // Bluetooth menu
+    MENU_Create(&bluetoothEnableMenu, "BLE Enabling");
     MENU_Create(&bluetoothNameMenu, "Name");
     MENU_Create(&bluetoothMacMenu, "MAC");
     MENU_Create(&bluetoothPairMenu, "Pair");
+    MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothEnableMenu);
     MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothNameMenu);
     MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothMacMenu);
     MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothPairMenu);
@@ -303,6 +307,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
     MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
     MENU_AddAction(&weightMenu, UserWeightScreenAction);
+    MENU_AddAction(&bluetoothEnableMenu, bleEnableScreenAction);
 }
 
 static void NormalOperation(void)
@@ -510,6 +515,70 @@ static PushButtonState_e GetPushButton2State(void)
     return ret;
 }
 
+static void bleEnableScreenAction(void)
+{
+    PushButtonState_e pushButton1State;
+    PushButtonState_e pushButton2State;
+    char enabledString[] = "ENABLED ";
+    char disabledString[] = "DISABLED";
+    bool exit = false;
+    Settings_t settings;
+    bool bleOn;
+
+    SETTINGS_LoadSettings(&settings);
+
+    bleOn = settings.bleOn;
+
+    LCD_Clear();
+
+    LCD_DrawString(CENTER_X("BLE Enable"), MENU_NAME_POSITION_Y, "BLE Enable", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(20, 48, "BLE", LCD_COLOR_BLACK, LCD_FONT_24);
+
+    if (true == bleOn)
+    {
+        LCD_DrawString(80, 48, enabledString, LCD_COLOR_BLACK, LCD_FONT_24);
+    }
+    else
+    {
+        LCD_DrawString(80, 48, disabledString, LCD_COLOR_BLACK, LCD_FONT_24);
+    }
+
+    while (false == exit)
+    {
+        pushButton1State = GetPushButton1State();
+        pushButton2State = GetPushButton2State();
+
+        if (BUTTON_SHORT_PRESS == pushButton1State)
+        {
+            if (true == bleOn)
+            {
+                bleOn = false;
+                LCD_ClearString(80, 48, 9, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 48, disabledString, LCD_COLOR_BLACK, LCD_FONT_24);
+            }
+        }
+        else if (BUTTON_SHORT_PRESS == pushButton2State)
+        {
+            if (false == bleOn)
+            {
+                bleOn = true;
+                LCD_ClearString(80, 48, 9, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 48, enabledString, LCD_COLOR_BLACK, LCD_FONT_24);
+            }
+        }
+
+        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+
+    if (BUTTON_LONG_PRESS == pushButton2State)
+    {
+        settings.bleOn = bleOn;
+        SETTINGS_SaveSettings(&settings);
+    }
+}
+
 static void O2CalibrationScreenAction(void)
 {
     PushButtonState_e pushButton1State;
@@ -604,8 +673,6 @@ static void UserWeightScreenAction(void)
 
     SETTINGS_LoadSettings(&settings);
 
-    ESP_LOGI(hmiTaskTag, "Settings read = %f", settings.userWeight);
-
     if ((settings.userWeight < 40.0f) || (settings.userWeight > 120.0f))
     {
         weightValue = 70.0f;
@@ -650,7 +717,6 @@ static void UserWeightScreenAction(void)
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
         settings.userWeight = weightValue;
-        ESP_LOGI(hmiTaskTag, "Settings write = %f", settings.userWeight);
         SETTINGS_SaveSettings(&settings);
     }
 }

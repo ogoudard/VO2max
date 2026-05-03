@@ -89,6 +89,7 @@ QueueHandle_t g_humidityQueue;
 QueueHandle_t g_pressureQueue;
 QueueHandle_t g_totalExhaledVolumeQueue;
 QueueHandle_t g_cycleExhaledVolumeQueue;
+QueueHandle_t g_exhaleFrequencyQueue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -133,6 +134,7 @@ void MEASURE_Initialize()
     g_humidityQueue = xQueueCreate(1, sizeof(float));
     g_temperatureQueue = xQueueCreate(1, sizeof(float));
     g_pressureQueue = xQueueCreate(1, sizeof(float));
+    g_exhaleFrequencyQueue = xQueueCreate(1, sizeof(float));
 
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
     g_o2InitializationSemaphore = xSemaphoreCreateBinary();
@@ -152,7 +154,7 @@ void MEASURE_Initialize()
 
 static void FlowTask(void *pvParameters)
 {
-    const char *tagFlow = "[Flow Task]";
+    const char *flowTaskTag = "[Flow Task]";
     int64_t timestamp;
     float diffPressure;
     float flow = 0.0f;
@@ -163,18 +165,21 @@ static void FlowTask(void *pvParameters)
     float previousFlow = 0.0F;
     int16_t scalingFactor;
     int16_t diffPressureRaw;
+    int64_t previousExhaleTimestamp;
+    int64_t exhaleDuration;
+    float exhaleFrequency;
+    bool exhale = false;
 #if LOG_FLOW
     uint16_t i = 0;
 #endif
-    bool exhale = false;
 
-    ESP_LOGI(tagFlow, "Task started");
+    ESP_LOGI(flowTaskTag, "Task started");
 
-    ESP_LOGI(tagFlow, "Initialize SDP810 differential pressur sensor");
+    ESP_LOGI(flowTaskTag, "Initialize SDP810 differential pressur sensor");
 
     if (!SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL))
     {
-        ESP_LOGE(tagFlow, "SDP810 initialization failed, suspending task");
+        ESP_LOGE(flowTaskTag, "SDP810 initialization failed, suspending task");
 
         vTaskSuspend(flowTaskHandle);
 
@@ -190,15 +195,16 @@ static void FlowTask(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(100)); // Wait for first measure
 
         SDP8XX_ReadScalingFactor(&scalingFactor);
-        ESP_LOGI(tagFlow, "Scaling factor = %d", scalingFactor);
+        ESP_LOGI(flowTaskTag, "Scaling factor = %d", scalingFactor);
 
         previousTimestamp = esp_timer_get_time();
+        previousExhaleTimestamp = previousTimestamp;
 
         xSemaphoreGive(g_flowInitializationSemaphore);
 
         while (1)
         {
-            if(xSemaphoreTake(g_resetExhaledVolumeSemaphore, (TickType_t)0))
+            if (xSemaphoreTake(g_resetExhaledVolumeSemaphore, (TickType_t)0))
             {
                 totalExhaledVolume = 0.0f;
                 cycleExhaledVolume = 0.0f;
@@ -218,11 +224,15 @@ static void FlowTask(void *pvParameters)
                 {
                     if (exhale == true)
                     {
+                        exhaleDuration = esp_timer_get_time() - previousExhaleTimestamp;
+                        previousExhaleTimestamp = esp_timer_get_time();
+                        exhaleFrequency = 60000000 / (float)exhaleDuration;
+                        xQueueOverwrite(g_exhaleFrequencyQueue, (void *)&exhaleFrequency);
                         totalExhaledVolume += cycleExhaledVolume;
                         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 
 #if LOG_TOTAL_EXHALED_VOLUME
-                        ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
+                        ESP_LOGI(flowTaskTag, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
                         exhale = false;
                     }
@@ -238,12 +248,12 @@ static void FlowTask(void *pvParameters)
                     {
                         exhale = true;
 #if LOG_TOTAL_EXHALED_VOLUME
-                        ESP_LOGI(tagFlow, "#5,%.3f,%d", totalExhaledVolume, timestamp);
+                        ESP_LOGI(flowTaskTag, "#5,%.3f,%d", totalExhaledVolume, timestamp);
 #endif
                         cycleExhaledVolume = 0.0f;
 
 #if LOG_CYCLE_EXHALED_VOLUME
-                        ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
+                        ESP_LOGI(flowTaskTag, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
 #endif
                         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
                     }
@@ -252,7 +262,7 @@ static void FlowTask(void *pvParameters)
                     cycleExhaledVolume += (float)deltaT * (flow + previousFlow) / 120000.0f; // Trapezoidal rule
                     xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
-                    ESP_LOGI(tagFlow, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
+                    ESP_LOGI(flowTaskTag, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
 #endif
                 }
 
@@ -262,7 +272,7 @@ static void FlowTask(void *pvParameters)
 #if LOG_FLOW
                 if ((i % 5) == 0)
                 {
-                    ESP_LOGI(tagFlow, "#1,%.3f,%d", flow, timestamp);
+                    ESP_LOGI(flowTaskTag, "#1,%.3f,%d", flow, timestamp);
                 }
 
                 if (i < 1000)

@@ -12,6 +12,7 @@ extern QueueHandle_t g_humidityQueue;
 extern QueueHandle_t g_totalExhaledVolumeQueue;
 extern QueueHandle_t g_cycleExhaledVolumeQueue;
 extern QueueHandle_t g_pressureQueue;
+extern QueueHandle_t g_exhaleFrequencyQueue;
 
 extern SemaphoreHandle_t g_flowInitializationSemaphore;
 extern SemaphoreHandle_t g_o2InitializationSemaphore;

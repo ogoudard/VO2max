@@ -100,29 +100,23 @@ static const char *TAG = "[ST7789]";
 
 static spi_device_handle_t spiDeviceHandle;
 
+static LCD_Orientation_e currentOrientation;
 static uint8_t buffer[ST7789_BUFFER_SIZE];
 
 static uint8_t WriteByte(uint8_t data, uint32_t cmd);
 static uint8_t WriteBytes(uint8_t *data, uint16_t len, uint32_t cmd);
 static void SpiPreTransferCallback(spi_transaction_t *t);
-static void TransformPortrait1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
-static void TransformPortrait2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
-static void TransformLandscape1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
-static void TransformLandscape2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
+static void TransformPortrait(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
+static void TransformLandscape(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row);
 static void InitializeController(spi_host_device_t host);
 static void SoftwareReset();
 static void SleepOut();
 static void NormalDisplayModeOn();
 static void SetGamma(uint8_t gamma);
-static void SetColumnAddress(uint16_t start_address, uint16_t end_address);
-static void SetRowAddress(uint16_t start_address, uint16_t end_address);
-static void MemoryWrite(uint8_t *data, uint16_t len);
-static void SetPartialAreas(uint16_t start_row, uint16_t end_row);
 static void SetMemoryDataAccessControl(uint8_t order);
 static void IdleModeOff();
 static void SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
                                     ST7789_control_interface_color_format_t control);
-static void MemoryContinueWrite(uint8_t *data, uint16_t len);
 static void SetDisplayBrightness(uint8_t brightness);
 static void SetDisplayControl(ST7789_bool_t brightness_control_block,
                               ST7789_bool_t display_dimming,
@@ -184,8 +178,9 @@ static void SetGate(uint8_t gate_line_number,
                     ST7789_gate_scan_direction_t direction);
 static void GateLineConvertToRegister(uint16_t l, uint8_t *reg);
 static void SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp14ck);
+static void SetAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
 
-static void (*transform)(uint16_t, uint16_t, uint16_t *, uint16_t *) = TransformPortrait1;
+static void (*transform)(uint16_t, uint16_t, uint16_t *, uint16_t *) = TransformPortrait;
 
 /**
  * @brief  basic example init
@@ -355,7 +350,8 @@ void LCD_SetOrientation(LCD_Orientation_e orientation)
     switch (orientation)
     {
     case LCD_ORIENTATION_PORTRAIT_1:
-        transform = TransformPortrait1;
+        currentOrientation = orientation;
+        transform = TransformPortrait;
         SetMemoryDataAccessControl(ST7789_ORDER_PAGE_TOP_TO_BOTTOM |
                                    ST7789_ORDER_COLUMN_LEFT_TO_RIGHT |
                                    ST7789_ORDER_PAGE_COLUMN_NORMAL |
@@ -364,7 +360,8 @@ void LCD_SetOrientation(LCD_Orientation_e orientation)
                                    ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
         break;
     case LCD_ORIENTATION_PORTRAIT_2:
-        transform = TransformPortrait2;
+        currentOrientation = orientation;
+        transform = TransformPortrait;
         SetMemoryDataAccessControl(ST7789_ORDER_PAGE_BOTTOM_TO_TOP |
                                    ST7789_ORDER_COLUMN_RIGHT_TO_LEFT |
                                    ST7789_ORDER_PAGE_COLUMN_NORMAL |
@@ -373,8 +370,9 @@ void LCD_SetOrientation(LCD_Orientation_e orientation)
                                    ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
         break;
     case LCD_ORIENTATION_LANDSCAPE_1:
-        transform = TransformLandscape1;
-        SetMemoryDataAccessControl(ST7789_ORDER_PAGE_TOP_TO_BOTTOM|
+        currentOrientation = orientation;
+        transform = TransformLandscape;
+        SetMemoryDataAccessControl(ST7789_ORDER_PAGE_TOP_TO_BOTTOM |
                                    ST7789_ORDER_COLUMN_RIGHT_TO_LEFT |
                                    ST7789_ORDER_PAGE_COLUMN_REVERSE |
                                    ST7789_ORDER_LINE_TOP_TO_BOTTOM |
@@ -382,7 +380,8 @@ void LCD_SetOrientation(LCD_Orientation_e orientation)
                                    ST7789_ORDER_REFRESH_LEFT_TO_RIGHT);
         break;
     case LCD_ORIENTATION_LANDSCAPE_2:
-        transform = TransformLandscape2;
+        currentOrientation = orientation;
+        transform = TransformLandscape;
         SetMemoryDataAccessControl(ST7789_ORDER_PAGE_BOTTOM_TO_TOP |
                                    ST7789_ORDER_COLUMN_LEFT_TO_RIGHT |
                                    ST7789_ORDER_PAGE_COLUMN_REVERSE |
@@ -471,48 +470,6 @@ static void SetGamma(uint8_t gamma)
     WriteByte(gamma & 0x0F, ST7789_DATA);     /* write gamma data */
 }
 
-static void SetColumnAddress(uint16_t start_address, uint16_t end_address)
-{
-    uint8_t buf[4];
-
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD); /* write set column address command */
-    buf[0] = (start_address >> 8) & 0xFF;    /* start address msb */
-    buf[1] = (start_address >> 0) & 0xFF;    /* start address lsb */
-    buf[2] = (end_address >> 8) & 0xFF;      /* end address msb */
-    buf[3] = (end_address >> 0) & 0xFF;      /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
-}
-
-static void SetRowAddress(uint16_t start_address, uint16_t end_address)
-{
-    uint8_t buf[4];
-
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD); /* write set row address command */
-    buf[0] = (start_address >> 8) & 0xFF;    /* start address msb */
-    buf[1] = (start_address >> 0) & 0xFF;    /* start address lsb */
-    buf[2] = (end_address >> 8) & 0xFF;      /* end address msb */
-    buf[3] = (end_address >> 0) & 0xFF;      /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
-}
-
-static void MemoryWrite(uint8_t *data, uint16_t len)
-{
-    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
-    WriteBytes(data, len, ST7789_DATA);      /* write data */
-}
-
-static void SetPartialAreas(uint16_t start_row, uint16_t end_row)
-{
-    uint8_t buf[4];
-
-    WriteByte(ST7789_CMD_PTLAR, ST7789_CMD); /* write set partial areas command */
-    buf[0] = (start_row >> 8) & 0xFF;        /* start row msb */
-    buf[1] = (start_row >> 0) & 0xFF;        /* start row lsb */
-    buf[2] = (end_row >> 8) & 0xFF;          /* end row msb */
-    buf[3] = (end_row >> 0) & 0xFF;          /* end row lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
-}
-
 static void SetMemoryDataAccessControl(uint8_t order)
 {
     WriteByte(ST7789_CMD_MADCTL, ST7789_CMD); /* write set memory data access control command */
@@ -533,12 +490,6 @@ static void SetInterfacePixelFormat(ST7789_rgb_interface_color_format_t rgb,
 
     data = (rgb << 4) | (control << 0); /* set pixel format */
     WriteByte(data, ST7789_DATA);       /* write data */
-}
-
-static void MemoryContinueWrite(uint8_t *data, uint16_t len)
-{
-    WriteByte(ST7789_CMD_RAMWRC, ST7789_CMD); /* write memory write continue command */
-    WriteBytes(data, len, ST7789_DATA);       /* write data */
 }
 
 static void SetDisplayBrightness(uint8_t brightness)
@@ -712,7 +663,6 @@ static void VdvConvertToRegister(float v, uint8_t *reg)
     *reg = (uint8_t)((v + 0.8f) / 0.025f); /* convert real data to register data */
 }
 
-
 static void SetVcomsOffset(uint8_t offset)
 {
     uint8_t reg;
@@ -808,9 +758,25 @@ static void SetPowerControl2(ST7789_sbclk_div_t sbclk, ST7789_stp14ck_div_t stp1
     WriteByte(reg, ST7789_DATA);               /* write data */
 }
 
+static void SetAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+{
+    // Column address set
+    WriteByte(ST7789_CMD_CASET, ST7789_CMD);
+    WriteByte(x0 >> 8, ST7789_DATA);
+    WriteByte(x0 & 0xFF, ST7789_DATA);
+    WriteByte(x1 >> 8, ST7789_DATA);
+    WriteByte(x1 & 0xFF, ST7789_DATA);
+
+    // Row address set
+    WriteByte(ST7789_CMD_RASET, ST7789_CMD);
+    WriteByte(y0 >> 8, ST7789_DATA);
+    WriteByte(y0 & 0xFF, ST7789_DATA);
+    WriteByte(y1 >> 8, ST7789_DATA);
+    WriteByte(y1 & 0xFF, ST7789_DATA);
+}
+
 void LCD_Clear(void)
 {
-    uint8_t buf[4];
     uint32_t i;
     uint32_t m;
     uint32_t n;
@@ -820,21 +786,17 @@ void LCD_Clear(void)
     uint16_t row1;
 
     transform(0, 0, &col0, &row0);
-    transform(SCREEN_WIDTH, SCREEN_HEIGHT, &col1, &row1);
 
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD);          /* write set column address command */
-    buf[0] = (col0 >> 8) & 0xFF;                       /* start address msb */
-    buf[1] = (col0 >> 0) & 0xFF;                       /* start address lsb */
-    buf[2] = (col1 >> 8) & 0xFF; /* end address msb */
-    buf[3] = (col1 >> 0) & 0xFF; /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);                  /* write data */
+    if ((currentOrientation == LCD_ORIENTATION_PORTRAIT_1) || (currentOrientation == LCD_ORIENTATION_PORTRAIT_2))
+    {
+        transform(SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1, &col1, &row1);
+    }
+    else if ((currentOrientation == LCD_ORIENTATION_LANDSCAPE_1) || (currentOrientation == LCD_ORIENTATION_LANDSCAPE_2))
+    {
+        transform(SCREEN_HEIGHT - 1, SCREEN_WIDTH - 1, &col1, &row1);
+    }
 
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD);         /* write set row address command */
-    buf[0] = (row0 >> 8) & 0xFF;                      /* start address msb */
-    buf[1] = (row0 >> 0) & 0xFF;                      /* start address lsb */
-    buf[2] = (row1 >> 8) & 0xFF; /* end address msb */
-    buf[3] = (row1 >> 0) & 0xFF; /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);                 /* write data */
+    SetAddrWindow(col0, row0, col1, row1);
 
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
 
@@ -855,7 +817,6 @@ void LCD_Clear(void)
 
 void LCD_FillRectangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint32_t color)
 {
-    uint8_t buf[4];
     uint32_t i;
     uint32_t m;
     uint32_t n;
@@ -867,19 +828,7 @@ void LCD_FillRectangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint3
     transform(x0, y0, &col0, &row0);
     transform(x1, y1, &col1, &row1);
 
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD); /* write set column address command */
-    buf[0] = (col0 >> 8) & 0xFF;             /* start address msb */
-    buf[1] = (col0 >> 0) & 0xFF;             /* start address lsb */
-    buf[2] = (col1 >> 8) & 0xFF;             /* end address msb */
-    buf[3] = (col1 >> 0) & 0xFF;             /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
-
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD); /* write set row address command */
-    buf[0] = (row0 >> 8) & 0xFF;             /* start address msb */
-    buf[1] = (row0 >> 0) & 0xFF;             /* start address lsb */
-    buf[2] = (row1 >> 8) & 0xFF;             /* end address msb */
-    buf[3] = (row1 >> 0) & 0xFF;             /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
+    SetAddrWindow(col0, row0, col1, row1);
 
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
 
@@ -889,9 +838,9 @@ void LCD_FillRectangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint3
         buffer[i + 1] = (color >> 0) & 0xFF; /* set the color */
     }
 
-    m = (uint32_t)(x1 - x0 + 1) * (y0 - y1 + 1) * 2 /
+    m = (uint32_t)(x1 - x0 + 1) * (y1 - y0 + 1) * 2 /
         ST7789_BUFFER_SIZE; /* total times */
-    n = ((uint32_t)(x1 - x0 + 1) * (y0 - y1 + 1) * 2) %
+    n = ((uint32_t)(x1 - x0 + 1) * (y1 - y0 + 1) * 2) %
         ST7789_BUFFER_SIZE; /* the last */
 
     for (i = 0; i < m; i++)
@@ -916,22 +865,17 @@ void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t
     uint16_t r;
     uint16_t c;
     uint16_t color;
+    uint16_t col0;
+    uint16_t row0;
+    uint16_t col1;
+    uint16_t row1;
 
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD); /* write set column address command */
-    buf[0] = (left >> 8) & 0xFF;             /* start address msb */
-    buf[1] = (left >> 0) & 0xFF;             /* start address lsb */
-    buf[2] = ((right) >> 8) & 0xFF;          /* end address msb */
-    buf[3] = ((right) >> 0) & 0xFF;          /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
+    transform(left, top, &col0, &row0);
+    transform(right, bottom, &col1, &row1);
 
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD); /* write set row address command */
-    buf[0] = (top >> 8) & 0xFF;              /* start address msb */
-    buf[1] = (top >> 0) & 0xFF;              /* start address lsb */
-    buf[2] = ((bottom) >> 8) & 0xFF;         /* end address msb */
-    buf[3] = ((bottom) >> 0) & 0xFF;         /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
+    SetAddrWindow(col0, row0, col1, row1);
 
-    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
+    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD);
 
     c = right - left + 1; /* column */
     r = bottom - top + 1; /* row */
@@ -969,35 +913,19 @@ void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t
     }
 }
 
-void LCD_SetAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+void LCD_DrawString(uint16_t x, uint16_t y, const char *str, uint32_t color, LCD_Font_t font)
 {
-    // Column address set
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD);
-    WriteByte(x0 >> 8, ST7789_DATA);
-    WriteByte(x0 & 0xFF, ST7789_DATA);
-    WriteByte(x1 >> 8, ST7789_DATA);
-    WriteByte(x1 & 0xFF, ST7789_DATA);
+    size_t len;
 
-    // Row address set
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD);
-    WriteByte(y0 >> 8, ST7789_DATA);
-    WriteByte(y0 & 0xFF, ST7789_DATA);
-    WriteByte(y1 >> 8, ST7789_DATA);
-    WriteByte(y1 & 0xFF, ST7789_DATA);
+    len = strlen(str);
 
-    // Write to RAM
-    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD);
-}
-
-void LCD_DrawString(uint16_t x, uint16_t y, const char *str, uint16_t len, uint32_t color, LCD_Font_t font)
-{
     while ((len != 0) && (*str <= '~') && (*str >= ' ')) /* write all string */
     {
         LCD_DrawChar(x, y, *str, font, color);
 
-        x += (uint8_t)(font / 2); 
-        str++;                    
-        len--;                 
+        x += (uint8_t)(font / 2);
+        str++;
+        len--;
     }
 }
 
@@ -1006,13 +934,15 @@ void LCD_ClearString(uint16_t x, uint16_t y, uint8_t length, uint32_t color, LCD
     switch (font)
     {
     case LCD_FONT_12:
-        LCD_FillRectangle(x + 6, y - 6, x + 6 * (length + 1), y + 6, color);
+        LCD_FillRectangle(x, y, x + 6 * length, y + 12, color);
         break;
     case LCD_FONT_16:
-        LCD_FillRectangle(x + 8, y - 9, x + 8 * (length + 1), y + 9, color);
+        LCD_FillRectangle(x, y, x + 8 * length, y + 16, color);
         break;
     case LCD_FONT_24:
-        LCD_FillRectangle(x + 12, y - 12, x + 12 * (length + 1), y + 12, color);
+        LCD_FillRectangle(x, y, x + 12 * length, y + 24, color);
+        break;
+    default:
         break;
     }
 }
@@ -1025,21 +955,9 @@ void LCD_DrawPoint(uint16_t x, uint16_t y, uint32_t color)
 
     transform(x, y, &col, &row);
 
-    WriteByte(ST7789_CMD_CASET, ST7789_CMD); /* write set column address command */
-    buf[0] = (col >> 8) & 0xFF;              /* start address msb */
-    buf[1] = (col >> 0) & 0xFF;              /* start address lsb */
-    buf[2] = (col >> 8) & 0xFF;              /* end address msb */
-    buf[3] = (col >> 0) & 0xFF;              /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
+    SetAddrWindow(col, row, col, row);
 
-    WriteByte(ST7789_CMD_RASET, ST7789_CMD); /* write set row address command */
-    buf[0] = (row >> 8) & 0xFF;              /* start address msb */
-    buf[1] = (row >> 0) & 0xFF;              /* start address lsb */
-    buf[2] = (row >> 8) & 0xFF;              /* end address msb */
-    buf[3] = (row >> 0) & 0xFF;              /* end address lsb */
-    WriteBytes(buf, 4, ST7789_DATA);         /* write data */
-
-    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD); /* write memory write command */
+    WriteByte(ST7789_CMD_RAMWR, ST7789_CMD);
 
     buf[0] = (color >> 8) & 0xFF;    /* set the color */
     buf[1] = (color >> 0) & 0xFF;    /* set the color */
@@ -1118,26 +1036,14 @@ static void SpiPreTransferCallback(spi_transaction_t *t)
     gpio_set_level(GPIO_PIN_NUM_DC, dc);
 }
 
-static void TransformPortrait1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
+static void TransformPortrait(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
 {
     *col = x + COL_OFFSET;
     *row = y + ROW_OFFSET;
 }
 
-static void TransformPortrait2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
+static void TransformLandscape(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
 {
-    *col = COL_OFFSET + x;
-    *row = ROW_OFFSET + y;
-}
-
-static void TransformLandscape1(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
-{
-    *col = y + ROW_OFFSET;
-    *row = x + COL_OFFSET;
-}
-
-static void TransformLandscape2(uint16_t x, uint16_t y, uint16_t *col, uint16_t *row)
-{
-    *col = y + COL_OFFSET;
-    *row = x + ROW_OFFSET;
+    *col = x + ROW_OFFSET;
+    *row = y + COL_OFFSET;
 }

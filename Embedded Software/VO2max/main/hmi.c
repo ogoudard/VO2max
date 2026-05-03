@@ -36,9 +36,12 @@
 
 #define SHORT_LONG_PRESS_THRESHOLD_US 400000
 
-#define MENU_LIST_X_START 20
-#define MENU_LIST_Y_START_POSITION 50
+#define MENU_NAME_POSITION_Y 10
+#define MENU_LIST_X_START 30
+#define MENU_LIST_Y_START 30
 #define MENU_LIST_Y_STEP 24
+
+#define CENTER_X(str) (SCREEN_HEIGHT - 12 * strlen(str)) / 2
 
 /************************************
  * PRIVATE TYPEDEFS
@@ -154,47 +157,21 @@ static void HmiTask(void *pvParameters)
     LCD_DisplayOn();
     LCD_Clear();
 
-    for(uint8_t i = 11; i < 20; i++)
-    {
-        for(uint8_t j = 11; j < 20; j++)
-        {
-            LCD_DrawPoint(i, j, LCD_COLOR_BLACK);
-        }
-    }
-    for (uint16_t i = 10; i < 230; i++)
-    {
-        LCD_DrawPoint(i, 10, LCD_COLOR_BLACK);
-        LCD_DrawPoint(i, 125, LCD_COLOR_BLACK);
-    }
-
-    for (uint16_t i = 10; i < 125; i++)
-    {
-        LCD_DrawPoint(10, i, LCD_COLOR_BLACK);
-        LCD_DrawPoint(230, i, LCD_COLOR_BLACK);
-    }
-    while (1)
-    {
-    };
-
-    LCD_DrawString(0, 25, "VO2max", strlen("VO2max"), LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 10, "VO2max", LCD_COLOR_BLACK, LCD_FONT_24);
 
     snprintf(versionString, sizeof(versionString), "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
-    LCD_DrawString(0, 50, versionString, strlen(versionString), LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 34, versionString, LCD_COLOR_BLACK, LCD_FONT_24);
 
-    LCD_DrawString(0, 75, "Initializing...", strlen("Initializing..."), LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 58, "Initializing...", LCD_COLOR_BLACK, LCD_FONT_24);
 
     waitNotification &= xSemaphoreTake(g_flowInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_co2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     // waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
 
-    InitializeMenus();
-
-    vTaskDelay(pdMS_TO_TICKS(1000));
-
     if (pdFALSE == waitNotification)
     {
-        LCD_DrawString(70, 110, "Error!", strlen("ERROR!"), LCD_COLOR_RED, LCD_FONT_24);
+        LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("Error!")) / 2, 90, "Error!", LCD_COLOR_RED, LCD_FONT_24);
 
         vTaskSuspend(g_hmiTaskHandle);
 
@@ -205,8 +182,9 @@ static void HmiTask(void *pvParameters)
     }
     else
     {
-        LCD_DrawString(60, 110, "Success!", strlen("Success!"), LCD_COLOR_GREEN, LCD_FONT_24);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("Success!")) / 2, 90, "Success!", LCD_COLOR_GREEN, LCD_FONT_24);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        InitializeMenus();
         LCD_Clear();
         NormalOperation();
     }
@@ -270,7 +248,7 @@ static void MenuNavigate(Menu_t **menu, uint8_t *selected)
 static void InitializeMenus(void)
 {
     // Main menu
-    MENU_Create(&mainMenu, "VO2max");
+    MENU_Create(&mainMenu, "Main");
     MENU_Create(&vo2maxMenu, "VO2max");
     MENU_Create(&spirometerMenu, "Spirometer");
     MENU_Create(&liveValuesMenu, "Live values");
@@ -401,23 +379,23 @@ static void DisplayBatterySoc(void)
 
             if (batterySoc >= 0)
             {
-                snprintf(batterySocString, sizeof(batterySocString), "%3d%%", batterySoc);
+                snprintf(batterySocString, sizeof(batterySocString), " %3d%%", batterySoc);
             }
             else if (batterySoc == BATTERY_SOC_CHARGING)
             {
-                snprintf(batterySocString, sizeof(batterySocString), "charge");
+                strcpy(batterySocString, "charge");
             }
             else if (batterySoc == BATTERY_SOC_USB_PLUGGED)
             {
-                snprintf(batterySocString, sizeof(batterySocString), "usb");
+                strcpy(batterySocString, "   usb");
             }
             else
             {
                 ESP_LOGE(hmiTaskTag, "Invalid SOC value received: %d", batterySoc);
             }
 
-            LCD_ClearString(170, 20, 7, LCD_COLOR_WHITE, LCD_FONT_16);
-            LCD_DrawString(170, 20, batterySocString, strlen(batterySocString), LCD_COLOR_BLACK, LCD_FONT_16);
+            LCD_ClearString(190, 5, sizeof(batterySocString), LCD_COLOR_WHITE, LCD_FONT_16);
+            LCD_DrawString(190, 5, batterySocString, LCD_COLOR_BLACK, LCD_FONT_16);
             previousBatterySoc = batterySoc;
         }
     }
@@ -425,13 +403,8 @@ static void DisplayBatterySoc(void)
 
 static void DisplayMenuName(Menu_t *menu)
 {
-    uint8_t length = strlen(menu->name);
-    uint8_t xPos;
-
-    xPos = (SCREEN_HEIGHT - 16 * length) / 2;
-
-    LCD_ClearString(0, 16, 18, LCD_COLOR_WHITE, LCD_FONT_24);
-    LCD_DrawString(xPos, 16, menu->name, length, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_ClearString(10, MENU_NAME_POSITION_Y, 18, LCD_COLOR_WHITE, LCD_FONT_24);
+    LCD_DrawString(CENTER_X(menu->name), 5, menu->name, LCD_COLOR_BLACK, LCD_FONT_24);
 }
 
 static void DisplayPage(Menu_t *menu, uint8_t page)
@@ -450,11 +423,11 @@ static void DisplayPage(Menu_t *menu, uint8_t page)
         endIndex = menu->childrenCount;
     }
 
-    LCD_FillRectangle(30, 40, 239, 134, LCD_COLOR_WHITE);
+    LCD_FillRectangle(MENU_LIST_X_START, MENU_LIST_Y_START, 239, 134, LCD_COLOR_WHITE);
 
     for (uint8_t i = startIndex; i < endIndex; i++)
     {
-        LCD_DrawString(MENU_LIST_X_START, MENU_LIST_Y_START_POSITION + yPos * MENU_LIST_Y_STEP, menu->children[i]->name, strlen(menu->children[i]->name), LCD_COLOR_BLACK, LCD_FONT_24);
+        LCD_DrawString(MENU_LIST_X_START, MENU_LIST_Y_START + yPos * MENU_LIST_Y_STEP, menu->children[i]->name, LCD_COLOR_BLACK, LCD_FONT_24);
         yPos++;
     }
 }
@@ -463,9 +436,9 @@ static void DisplaySelected(uint8_t selected)
 {
     uint8_t selectedPos = selected % 4;
 
-    LCD_FillRectangle(0, 40, 25, 134, LCD_COLOR_WHITE);
+    LCD_FillRectangle(0, MENU_LIST_Y_START, MENU_LIST_X_START, SCREEN_WIDTH - 1, LCD_COLOR_WHITE);
 
-    LCD_DrawString(0, MENU_LIST_Y_START_POSITION + selectedPos * MENU_LIST_Y_STEP, ">", 1, LCD_COLOR_RED, LCD_FONT_24);
+    LCD_DrawString(10, MENU_LIST_Y_START + selectedPos * MENU_LIST_Y_STEP, ">", LCD_COLOR_RED, LCD_FONT_24);
 }
 
 static PushButtonState_e GetPushButton1State(void)
@@ -544,10 +517,10 @@ static void O2CalibrationScreenAction(void)
 
     LCD_Clear();
 
-    LCD_DrawString(30, 16, "O2 Calibration", 14, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 48, "cal =          %", 16, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(CENTER_X("O2 Calibration"), MENU_NAME_POSITION_Y, "O2 Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 48, "cal =          %", LCD_COLOR_BLACK, LCD_FONT_24);
     snprintf(o2String, sizeof(o2String), "%2.1f", o2Value);
-    LCD_DrawString(80, 48, o2String, 4, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (false == exit)
     {
@@ -558,15 +531,15 @@ static void O2CalibrationScreenAction(void)
         {
             o2Value += 0.1f;
             snprintf(o2String, sizeof(o2String), "%2.1f", o2Value);
-            LCD_ClearString(80, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(80, 48, o2String, 4, LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_SHORT_PRESS == pushButton2State)
         {
             o2Value -= 0.1f;
             snprintf(o2String, sizeof(o2String), "%2.1f", o2Value);
-            LCD_ClearString(80, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(80, 48, o2String, 4, LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_LONG_PRESS == pushButton1State)
         {
@@ -587,11 +560,11 @@ static void PressureCalibrationScreenAction(void)
 
     LCD_Clear();
 
-    LCD_DrawString(50, 12, "Pressure", 8, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(40, 36, "Calibration", 11, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 72, "cal =          hPa", 18, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(CENTER_X("Pressure"), MENU_NAME_POSITION_Y, "Pressure", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(CENTER_X("Calibration"), MENU_NAME_POSITION_Y + 24, "Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 72, "cal =          hPa", LCD_COLOR_BLACK, LCD_FONT_24);
     snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
-    LCD_DrawString(80, 72, pressureString, 7, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (false == exit)
     {
@@ -603,14 +576,14 @@ static void PressureCalibrationScreenAction(void)
             pressureValue += 0.25f;
             snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
             LCD_ClearString(80, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(80, 72, pressureString, 7, LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_SHORT_PRESS == pushButton2State)
         {
             pressureValue -= 0.25f;
             snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
             LCD_ClearString(80, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(80, 72, pressureString, 7, LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_LONG_PRESS == pushButton1State)
         {
@@ -639,12 +612,12 @@ static void LiveValuesScreenAction(void)
 
     LCD_Clear();
 
-    LCD_DrawString(0, 12, "O2  =            %", 18, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 34, "CO2 =          ppm", 18, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 57, "Q   =        L/min", 18, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 80, "T   =            C", 18, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 103, "H   =            %", 18, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 126, "P   =          hPa", 18, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 0, "O2  =             %", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 22, "CO2 =           ppm", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 44, "Q   =         L/min", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 66, "T   =             C", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 88, "H   =             %", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 110, "P   =           hPa", LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
@@ -653,8 +626,8 @@ static void LiveValuesScreenAction(void)
             if (o2 != previousO2)
             {
                 snprintf(string, sizeof(string), "%.1f", o2);
-                LCD_ClearString(70, 12, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(70, 12, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 0, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 0, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousO2 = o2;
             }
         }
@@ -663,8 +636,8 @@ static void LiveValuesScreenAction(void)
             if (co2 != previousCo2)
             {
                 snprintf(string, sizeof(string), "%-5.0f", co2);
-                LCD_ClearString(70, 34, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(70, 34, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 22, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 22, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousCo2 = co2;
             }
         }
@@ -673,8 +646,8 @@ static void LiveValuesScreenAction(void)
             if (flow != previousFlow)
             {
                 snprintf(string, sizeof(string), "%-5.1f", flow);
-                LCD_ClearString(70, 57, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(70, 57, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 44, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 44, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousFlow = flow;
             }
         }
@@ -683,8 +656,8 @@ static void LiveValuesScreenAction(void)
             if (temperature != previousTemperature)
             {
                 snprintf(string, sizeof(string), "%-5.1f", temperature);
-                LCD_ClearString(70, 80, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(70, 80, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 66, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 66, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousTemperature = temperature;
             }
         }
@@ -693,8 +666,8 @@ static void LiveValuesScreenAction(void)
             if (humidity != previousHumidity)
             {
                 snprintf(string, sizeof(string), "%-5.0f", humidity);
-                LCD_ClearString(70, 103, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(70, 103, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 88, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousHumidity = humidity;
             }
         }
@@ -703,8 +676,8 @@ static void LiveValuesScreenAction(void)
             if (pressure != previousPressure)
             {
                 snprintf(string, sizeof(string), "%-5.1f", pressure);
-                LCD_ClearString(70, 126, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(70, 126, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 110, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 110, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousPressure = pressure;
             }
         }
@@ -721,23 +694,23 @@ static void SpirometerScreenAction(void)
 
     LCD_Clear();
 
-    LCD_DrawString(60, 24, "Spirometer", strlen("Spirometer"), LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 72, "VOLcyc =         L", 18, LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(0, 96, "VOLtot =         L", 18, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(CENTER_X("Spirometer"), MENU_NAME_POSITION_Y, "Spirometer", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 48, "VOLcyc =    0.0  L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 72, "VOLtot =    0.0  L", LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
         if (pdPASS == xQueueReceive(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
         {
-            LCD_ClearString(120, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_ClearString(120, 48, 7, LCD_COLOR_WHITE, LCD_FONT_24);
             snprintf(string, sizeof(string), "%5.1f", cycleExhaledVolume);
-            LCD_DrawString(130, 72, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_DrawString(130, 48, string, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         if (pdPASS == xQueueReceive(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume, (TickType_t)0))
         {
-            LCD_ClearString(120, 96, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_ClearString(120, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
             snprintf(string, sizeof(string), "%5.1f", totalExhaledVolume);
-            LCD_DrawString(130, 96, string, strlen(string), LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_DrawString(130, 72, string, LCD_COLOR_BLACK, LCD_FONT_24);
         }
     }
 }

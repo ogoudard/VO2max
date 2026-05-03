@@ -17,6 +17,7 @@ extern SemaphoreHandle_t g_flowInitializationSemaphore;
 extern SemaphoreHandle_t g_o2InitializationSemaphore;
 extern SemaphoreHandle_t g_co2InitializationSemaphore;
 extern SemaphoreHandle_t g_pressureInitializationSemaphore;
+extern SemaphoreHandle_t g_resetExhaledVolumeSemaphore;
 
 void MEASURE_Initialize(void);
 

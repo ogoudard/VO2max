@@ -14,6 +14,7 @@
 #include "driver_me2o2.h"
 #include "driver_bmp280.h"
 #include "driver/gpio.h"
+#include "hmi.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -77,6 +78,7 @@ SemaphoreHandle_t g_flowInitializationSemaphore;
 SemaphoreHandle_t g_o2InitializationSemaphore;
 SemaphoreHandle_t g_co2InitializationSemaphore;
 SemaphoreHandle_t g_pressureInitializationSemaphore;
+SemaphoreHandle_t g_resetExhaledVolumeSemaphore;
 
 /* Queues for intertask communication */
 QueueHandle_t g_flowQueue;
@@ -136,6 +138,7 @@ void MEASURE_Initialize()
     g_o2InitializationSemaphore = xSemaphoreCreateBinary();
     g_co2InitializationSemaphore = xSemaphoreCreateBinary();
     g_pressureInitializationSemaphore = xSemaphoreCreateBinary();
+    g_resetExhaledVolumeSemaphore = xSemaphoreCreateBinary();
 
     xTaskCreate(FlowTask, "Flow Task", FLOW_TASK_STACK_SIZE, NULL, FLOW_TASK_PRIORITY, &flowTaskHandle);
     xTaskCreate(O2Task, "O2 Task", O2_TASK_STACK_SIZE, NULL, O2_TASK_PRIORITY, &o2TaskHandle);
@@ -195,11 +198,18 @@ static void FlowTask(void *pvParameters)
 
         while (1)
         {
+            if(xSemaphoreTake(g_resetExhaledVolumeSemaphore, (TickType_t)0))
+            {
+                totalExhaledVolume = 0.0f;
+                cycleExhaledVolume = 0.0f;
+                xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
+                xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
+            }
+
             timestamp = esp_timer_get_time() / 1000;
 
             if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
             {
-
                 diffPressure = (float)diffPressureRaw / (float)scalingFactor;
                 deltaT = timestamp - previousTimestamp;
                 previousTimestamp = timestamp;

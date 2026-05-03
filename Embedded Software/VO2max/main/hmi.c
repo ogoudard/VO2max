@@ -697,9 +697,15 @@ static void SpirometerScreenAction(void)
     LCD_DrawString(CENTER_X("Spirometer"), MENU_NAME_POSITION_Y, "Spirometer", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(10, 48, "VOLcyc =    0.0  L", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(10, 72, "VOLtot =    0.0  L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
+        if(GetPushButton2State() == BUTTON_LONG_PRESS)
+        {
+            xSemaphoreGive(g_resetExhaledVolumeSemaphore);
+        }
+
         if (pdPASS == xQueueReceive(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
         {
             LCD_ClearString(120, 48, 7, LCD_COLOR_WHITE, LCD_FONT_24);
@@ -712,5 +718,7 @@ static void SpirometerScreenAction(void)
             snprintf(string, sizeof(string), "%5.1f", totalExhaledVolume);
             LCD_DrawString(130, 72, string, LCD_COLOR_BLACK, LCD_FONT_24);
         }
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
     }
 }

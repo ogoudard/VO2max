@@ -14,6 +14,7 @@
 #include "measure.h"
 #include "battery.h"
 #include "driver/spi_master.h"
+#include "settings.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -102,6 +103,7 @@ static void LiveValuesScreenAction(void);
 static void SpirometerScreenAction(void);
 static void O2CalibrationScreenAction(void);
 static void PressureCalibrationScreenAction(void);
+static void UserWeightScreenAction(void);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -300,6 +302,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&spirometerMenu, SpirometerScreenAction);
     MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
     MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
+    MENU_AddAction(&weightMenu, UserWeightScreenAction);
 }
 
 static void NormalOperation(void)
@@ -541,10 +544,8 @@ static void O2CalibrationScreenAction(void)
             LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
             LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
         }
-        else if (BUTTON_LONG_PRESS == pushButton1State)
-        {
-            exit = true;
-        }
+
+        exit = BUTTON_LONG_PRESS == pushButton1State;
 
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
     }
@@ -585,12 +586,72 @@ static void PressureCalibrationScreenAction(void)
             LCD_ClearString(80, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
             LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
-        else if (BUTTON_LONG_PRESS == pushButton1State)
-        {
-            exit = true;
-        }
+
+        exit = (BUTTON_LONG_PRESS == pushButton1State);
 
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+}
+
+static void UserWeightScreenAction(void)
+{
+    PushButtonState_e pushButton1State;
+    PushButtonState_e pushButton2State;
+    float weightValue;
+    char weightString[6];
+    bool exit = false;
+    Settings_t settings;
+
+    SETTINGS_LoadSettings(&settings);
+
+    ESP_LOGI(hmiTaskTag, "Settings read = %f", settings.userWeight);
+
+    if ((settings.userWeight < 40.0f) || (settings.userWeight > 120.0f))
+    {
+        weightValue = 70.0f;
+    }
+    else
+    {
+        weightValue = settings.userWeight;
+    }
+
+    LCD_Clear();
+
+    LCD_DrawString(CENTER_X("User Weight"), MENU_NAME_POSITION_Y, "User Weight", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 48, "weight =         kg", LCD_COLOR_BLACK, LCD_FONT_24);
+    snprintf(weightString, sizeof(weightString), "%3.1f", weightValue);
+    LCD_DrawString(120, 48, weightString, LCD_COLOR_BLACK, LCD_FONT_24);
+
+    while (false == exit)
+    {
+        pushButton1State = GetPushButton1State();
+        pushButton2State = GetPushButton2State();
+
+        if (BUTTON_SHORT_PRESS == pushButton1State)
+        {
+            weightValue += 0.1f;
+            snprintf(weightString, sizeof(weightString), "%3.1f", weightValue);
+            LCD_ClearString(120, 48, 5, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(120, 48, weightString, LCD_COLOR_BLACK, LCD_FONT_24);
+        }
+        else if (BUTTON_SHORT_PRESS == pushButton2State)
+        {
+            weightValue -= 0.1f;
+            snprintf(weightString, sizeof(weightString), "%3.1f", weightValue);
+            LCD_ClearString(120, 48, 5, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(120, 48, weightString, LCD_COLOR_BLACK, LCD_FONT_24);
+        }
+
+        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+
+    if (BUTTON_LONG_PRESS == pushButton2State)
+    {
+        settings.userWeight = weightValue;
+        ESP_LOGI(hmiTaskTag, "Settings write = %f", settings.userWeight);
+        SETTINGS_SaveSettings(&settings);
     }
 }
 
@@ -701,7 +762,7 @@ static void SpirometerScreenAction(void)
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
-        if(GetPushButton2State() == BUTTON_LONG_PRESS)
+        if (GetPushButton2State() == BUTTON_LONG_PRESS)
         {
             xSemaphoreGive(g_resetExhaledVolumeSemaphore);
         }

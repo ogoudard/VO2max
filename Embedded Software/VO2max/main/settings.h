@@ -7,6 +7,7 @@ typedef struct
     float co2Calibration;
     float flowCalibration;
     bool bleOn;
+    float userWeight;
 } Settings_t;
 
 void SETTINGS_Initialize(void);

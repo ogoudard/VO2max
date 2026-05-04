@@ -23,20 +23,20 @@
 /* Each sensor runs in its own FreeRTOS task
    → stack size = memory allocated
    → priority = importance (higher = more CPU time)
-   → period = sampling rate */
+   → period = sampling rate (O2 measured every 2s/CO2 measured every 3s/Flow measured every 10ms) */
 
 #define O2_TASK_STACK_SIZE 8192
 #define O2_TASK_PRIORITY 2
-#define O2_TASK_PERIOD_MS 2000   // O2 measured every 2s
+#define O2_TASK_PERIOD_MS 2000 
 
 #define CO2_TASK_STACK_SIZE 8192
 #define CO2_TASK_PRIORITY 1
-#define CO2_TASK_PERIOD_MS 3000  // CO2 measured every 3s
+#define CO2_TASK_PERIOD_MS 3000  
 #define SCD30_MEASUREMENT_INTERVAL_S 2
 
 #define FLOW_TASK_STACK_SIZE 8192
-#define FLOW_TASK_PRIORITY 5     // High priority (fast signal)
-#define FLOW_TASK_PERIOD_MS 10   // 100 Hz sampling
+#define FLOW_TASK_PRIORITY 5     
+#define FLOW_TASK_PERIOD_MS 10   
 
 #define PRESSURE_TASK_STACK_SIZE 8192
 #define PRESSURE_TASK_PRIORITY 6

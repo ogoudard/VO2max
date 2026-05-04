@@ -103,6 +103,7 @@ static PushButtonState_e GetPushButton2State(void);
 static void LiveValuesScreenAction(void);
 static void SpirometerScreenAction(void);
 static void O2CalibrationScreenAction(void);
+static void FlowCalibrationScreenAction(void);
 static void PressureCalibrationScreenAction(void);
 static void UserWeightScreenAction(void);
 static void bleEnableScreenAction(void);
@@ -308,6 +309,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
     MENU_AddAction(&weightMenu, UserWeightScreenAction);
     MENU_AddAction(&bluetoothEnableMenu, bleEnableScreenAction);
+    MENU_AddAction(&flowCalibrationMenu, FlowCalibrationScreenAction);
 }
 
 static void NormalOperation(void)
@@ -583,16 +585,21 @@ static void O2CalibrationScreenAction(void)
 {
     PushButtonState_e pushButton1State;
     PushButtonState_e pushButton2State;
-    static float o2Value = 20.9f;
-    char o2String[6];
+    float o2CalValue;
+    char o2CalString[6];
     bool exit = false;
+    Settings_t settings;
+
+    SETTINGS_LoadSettings(&settings);
+
+    o2CalValue = settings.o2Calibration;
 
     LCD_Clear();
 
     LCD_DrawString(CENTER_X("O2 Calibration"), MENU_NAME_POSITION_Y, "O2 Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(10, 48, "cal =          %", LCD_COLOR_BLACK, LCD_FONT_24);
-    snprintf(o2String, sizeof(o2String), "%2.1f", o2Value);
-    LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
+    snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
+    LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (false == exit)
     {
@@ -601,22 +608,80 @@ static void O2CalibrationScreenAction(void)
 
         if (BUTTON_SHORT_PRESS == pushButton1State)
         {
-            o2Value += 0.1f;
-            snprintf(o2String, sizeof(o2String), "%2.1f", o2Value);
+            o2CalValue += 0.1f;
+            snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
             LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_SHORT_PRESS == pushButton2State)
         {
-            o2Value -= 0.1f;
-            snprintf(o2String, sizeof(o2String), "%2.1f", o2Value);
+            o2CalValue -= 0.1f;
+            snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
             LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(90, 48, o2String, LCD_COLOR_BLACK, LCD_FONT_24);
+            LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
 
-        exit = BUTTON_LONG_PRESS == pushButton1State;
+        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
 
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+
+    if (BUTTON_LONG_PRESS == pushButton2State)
+    {
+        settings.o2Calibration = o2CalValue;
+        SETTINGS_SaveSettings(&settings);
+    }
+}
+
+static void FlowCalibrationScreenAction(void)
+{
+    PushButtonState_e pushButton1State;
+    PushButtonState_e pushButton2State;
+    float flowCalValue;
+    char flowCalString[6];
+    bool exit = false;
+    Settings_t settings;
+
+    SETTINGS_LoadSettings(&settings);
+
+    flowCalValue = settings.flowCalibration;
+
+    LCD_Clear();
+
+    LCD_DrawString(CENTER_X("Flow Calibration"), MENU_NAME_POSITION_Y, "Flow Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 48, "cal =          ", LCD_COLOR_BLACK, LCD_FONT_24);
+    snprintf(flowCalString, sizeof(flowCalString), "%2.2f", flowCalValue);
+    LCD_DrawString(90, 48, flowCalString, LCD_COLOR_BLACK, LCD_FONT_24);
+
+    while (false == exit)
+    {
+        pushButton1State = GetPushButton1State();
+        pushButton2State = GetPushButton2State();
+
+        if (BUTTON_SHORT_PRESS == pushButton1State)
+        {
+            flowCalValue += 0.01f;
+            snprintf(flowCalString, sizeof(flowCalString), "%2.2f", flowCalValue);
+            LCD_ClearString(90, 48, sizeof(flowCalString), LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(90, 48, flowCalString, LCD_COLOR_BLACK, LCD_FONT_24);
+        }
+        else if (BUTTON_SHORT_PRESS == pushButton2State)
+        {
+            flowCalValue -= 0.01f;
+            snprintf(flowCalString, sizeof(flowCalString), "%2.2f", flowCalValue);
+            LCD_ClearString(90, 48, sizeof(flowCalString), LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(90, 48, flowCalString, LCD_COLOR_BLACK, LCD_FONT_24);
+        }
+
+        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+
+    if (BUTTON_LONG_PRESS == pushButton2State)
+    {
+        settings.flowCalibration = flowCalValue;
+        SETTINGS_SaveSettings(&settings);
     }
 }
 

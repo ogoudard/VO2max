@@ -224,7 +224,7 @@ static void FlowTask(void *pvParameters)
     {
         SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging();    //Start continuous measurement
 
-        vTaskDelay(pdMS_TO_TICKS(100)); // Wait for first measure
+        vTaskDelay(pdMS_TO_TICKS(100));                                      // Wait for first measure
 
         SDP8XX_ReadScalingFactor(&scalingFactor);                            //correctionfactors refer to the application note on Signal Compensation
         ESP_LOGI(flowTaskTag, "Scaling factor = %d", scalingFactor);

@@ -61,7 +61,7 @@
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
 
-/* Calibration constant for O2 sensor */
+/* Calibration constant for O2 sensor 20.9% */
 #define INITIAL_O2_CONCENTRATION_PERCENT 20.9f
 
 

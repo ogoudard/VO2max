@@ -23,7 +23,7 @@
 /* Each sensor runs in its own FreeRTOS task
    → stack size = memory allocated
    → priority = importance (higher = more CPU time)
-   → period = sampling rate (O2 measured every 2s/CO2 measured every 3s/Flow measured every 10ms) */
+   → period = sampling rate (O2 measured every 2s/CO2 measured every 3s/Flow measured every 10ms/Ambient pressure measure every 5s) */
 
 #define O2_TASK_STACK_SIZE 8192
 #define O2_TASK_PRIORITY 2

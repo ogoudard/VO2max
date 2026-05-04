@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include "esp_log.h"
-#include "esp_timer.h"          // High resolution timer (µs precision)
+#include "esp_timer.h" // High resolution timer (µs precision)
 #include "measure.h"
 #include "freertos/FreeRTOS.h"
 #include "driver/i2c_master.h"
@@ -14,7 +14,7 @@
 #include "driver_me2o2.h"
 #include "driver_bmp280.h"
 #include "driver/gpio.h"
-#include "hmi.h"                // User interface (display)
+#include "hmi.h" // User interface (display)
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -27,11 +27,11 @@
 
 #define O2_TASK_STACK_SIZE 8192
 #define O2_TASK_PRIORITY 2
-#define O2_TASK_PERIOD_MS 2000 
+#define O2_TASK_PERIOD_MS 2000
 
 #define CO2_TASK_STACK_SIZE 8192
 #define CO2_TASK_PRIORITY 1
-#define CO2_TASK_PERIOD_MS 3000  
+#define CO2_TASK_PERIOD_MS 3000
 #define SCD30_MEASUREMENT_INTERVAL_S 2
 
 #define FLOW_TASK_STACK_SIZE 8192
@@ -52,19 +52,21 @@
 /* Sensor addresses */
 #define ME2O2_I2C_ADDRESS ME2O2_I2C_ADDRESS_0x73
 
-#define BMP280_I2C_ADDRESS BMP280_I2C_ADDRESS_0x76
+#define BMP280_I2C_ADDRESS BMP280_I2C_ADDRESS_0x77
 
 #define PRESSURE_SENSOR_MODEL SDP8XX_SDP810_500PA
-
 
 /* Threshold to detect exhalation */
 #define DIFFERENTIAL_PRESSURE_THRESHOLD 0.2f
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
-
 /* Calibration constant for O2 sensor 20.9% */
 #define INITIAL_O2_CONCENTRATION_PERCENT 20.9f
 
+/* Air density at Standard Temperature and Pressure Desaturated */
+#define RHO_STPD 1.292f
+
+#define USER_WHEIGHT 70.0f
 
 /* Debug logging flags (enable/disable logs) */
 #define LOG_FLOW 0
@@ -72,11 +74,11 @@
 #define LOG_CO2 0
 #define LOG_CYCLE_EXHALED_VOLUME 0
 #define LOG_TOTAL_EXHALED_VOLUME 0
+#define LOG_VO2 1
 
 /************************************
  * PRIVATE VARIABLES
  ************************************/
-
 
 /* I2C bus handle shared by all sensors */
 static i2c_master_bus_handle_t i2cHandle;
@@ -107,7 +109,8 @@ QueueHandle_t g_humidityQueue;
 QueueHandle_t g_pressureQueue;
 QueueHandle_t g_totalExhaledVolumeQueue;
 QueueHandle_t g_cycleExhaledVolumeQueue;
-QueueHandle_t g_exhaleFrequencyQueue;
+QueueHandle_t g_breathingFrequencyQueue;
+QueueHandle_t g_vo2Queue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -116,6 +119,8 @@ static void FlowTask(void *pvParameters);
 static void O2Task(void *pvParameters);
 static void CO2Task(void *pvParameters);
 static void PressureTask(void *pvParameters);
+static bool ComputeAirDensity(float *rho, float *rhoBtps);
+static bool ComputeVO2(float exhaledVol, int64_t durationUs, float *vo2);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -143,20 +148,21 @@ void MEASURE_Initialize()
     gpio_config(&gpioConfig);
 
     ESP_LOGI(measureTag, "Initializing measure...");
-    
+
     /* Initialize I2C */
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2cMasterConfig, &i2cHandle));
 
     /* Create queues (size = 1 → always keep latest value) */
-    g_flowQueue = xQueueCreate(1, sizeof(float));
-    g_o2Queue = xQueueCreate(1, sizeof(float));
-    g_co2Queue = xQueueCreate(1, sizeof(float));
-    g_cycleExhaledVolumeQueue = xQueueCreate(1, sizeof(float));
-    g_totalExhaledVolumeQueue = xQueueCreate(1, sizeof(float));
-    g_humidityQueue = xQueueCreate(1, sizeof(float));
-    g_temperatureQueue = xQueueCreate(1, sizeof(float));
-    g_pressureQueue = xQueueCreate(1, sizeof(float));
-    g_exhaleFrequencyQueue = xQueueCreate(1, sizeof(float));
+    g_flowQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_o2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_co2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_cycleExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_totalExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_humidityQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_temperatureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_pressureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_breathingFrequencyQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_vo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
 
     /* Create semaphores (used to signal initialization complete) */
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
@@ -169,7 +175,7 @@ void MEASURE_Initialize()
     xTaskCreate(FlowTask, "Flow Task", FLOW_TASK_STACK_SIZE, NULL, FLOW_TASK_PRIORITY, &flowTaskHandle);
     xTaskCreate(O2Task, "O2 Task", O2_TASK_STACK_SIZE, NULL, O2_TASK_PRIORITY, &o2TaskHandle);
     xTaskCreate(CO2Task, "CO2 Task", CO2_TASK_STACK_SIZE, NULL, CO2_TASK_PRIORITY, &co2TaskHandle);
-    // xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, 0, &pressureTaskHandle);
+    // xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, PRESSURE_TASK_PRIORITY, &pressureTaskHandle);
 }
 
 /************************************
@@ -179,36 +185,37 @@ void MEASURE_Initialize()
 static void FlowTask(void *pvParameters)
 {
     const char *flowTaskTag = "[Flow Task]";
-    
+
     /* Timing variables */
     int64_t timestamp;
     int64_t previousTimestamp;
     int64_t deltaT;
     int64_t previousExhaleTimestamp;
-    int64_t exhaleDuration;
-    float exhaleFrequency;
-    
+    int64_t breathDuration;
+    float breathingFrequency;
+
     /* Variables for flow computation */
     float flow = 0.0f;
     float cycleExhaledVolume = 0.0f;
     float totalExhaledVolume = 0.0f;
     float previousFlow = 0.0F;
-    
+    float vo2 = 0.0f;
+
     /* Sensor data */
     float diffPressure;
     int16_t scalingFactor;
     int16_t diffPressureRaw;
-    
+
     /* Breath detection */
     bool exhale = false;
-    
+
 #if LOG_FLOW
     uint16_t i = 0;
 #endif
 
     ESP_LOGI(flowTaskTag, "Task started");
 
-    ESP_LOGI(flowTaskTag, "Initialize SDP810 differential pressur sensor");
+    ESP_LOGI(flowTaskTag, "Initialize SDP810 differential pressure sensor");
 
     if (!SDP8XX_Initialize(i2cHandle, PRESSURE_SENSOR_MODEL))
     {
@@ -223,17 +230,17 @@ static void FlowTask(void *pvParameters)
     }
     else
     {
-        SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging();    //Start continuous measurement
+        SDP8XX_StartContinuousMeasurementWithMassFlowTCompAndAveraging(); // Start continuous measurement
 
-        vTaskDelay(pdMS_TO_TICKS(100));                                      // Wait for first measure
+        vTaskDelay(pdMS_TO_TICKS(100)); // Wait for first measure
 
-        SDP8XX_ReadScalingFactor(&scalingFactor);                            //correctionfactors refer to the application note on Signal Compensation
+        SDP8XX_ReadScalingFactor(&scalingFactor); // correctionfactors refer to the application note on Signal Compensation
         ESP_LOGI(flowTaskTag, "Scaling factor = %d", scalingFactor);
 
         previousTimestamp = esp_timer_get_time();
         previousExhaleTimestamp = previousTimestamp;
 
-        xSemaphoreGive(g_flowInitializationSemaphore);                      //Signal that flow sensor is ready
+        xSemaphoreGive(g_flowInitializationSemaphore); // Signal that flow sensor is ready
 
         while (1)
         {
@@ -245,25 +252,36 @@ static void FlowTask(void *pvParameters)
                 xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
             }
 
-            timestamp = esp_timer_get_time() / 1000;                          //µs to ms
+            timestamp = esp_timer_get_time() / 1000; // µs to ms
 
             if (SDP8XX_ReadDifferentialPressureRaw(&diffPressureRaw))
             {
-                diffPressure = (float)diffPressureRaw / (float)scalingFactor; //The sensor is calibrated for air and N2 at T = 25 °C and p = 966 mbar. If the properties of the system gas deviate from the properties of the calibration gas, a correction of the sensor reading may be applied. 
+                /* The sensor is calibrated for air and N2 at T = 25 °C and p = 966 mbar.
+                If the properties of the system gas deviate from the properties of the calibration gas,
+                a correction of the sensor reading may be applied. */
+                diffPressure = (float)diffPressureRaw / (float)scalingFactor;
                 deltaT = timestamp - previousTimestamp;
                 previousTimestamp = timestamp;
-                
+
                 /* Detect exhalation using threshold + hysteresis */
-                if (diffPressure < DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
+                if (diffPressure < (DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS))
                 {
-                    if (exhale == true)
+                    if (exhale == true) // End of exhalation
                     {
-                        exhaleDuration = esp_timer_get_time() - previousExhaleTimestamp;
+                        breathDuration = esp_timer_get_time() - previousExhaleTimestamp;
                         previousExhaleTimestamp = esp_timer_get_time();
-                        exhaleFrequency = 60000000 / (float)exhaleDuration;   //Exhale frequency in #/min
-                        xQueueOverwrite(g_exhaleFrequencyQueue, (void *)&exhaleFrequency);
+                        breathingFrequency = 60000000 / (float)breathDuration; // Breathing frequency in breath/min
+                        xQueueOverwrite(g_breathingFrequencyQueue, (void *)&breathingFrequency);
                         totalExhaledVolume += cycleExhaledVolume;
                         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
+
+                        if (ComputeVO2(cycleExhaledVolume, breathDuration, &vo2))
+                        {
+                            xQueueOverwrite(g_vo2Queue, (void *)&vo2);
+#if LOG_VO2
+                            ESP_LOGI(flowTaskTag, "#6,%.2f,%d", vo2, timestamp);
+#endif
+                        }
 
 #if LOG_TOTAL_EXHALED_VOLUME
                         ESP_LOGI(flowTaskTag, "#5,%.3f,%d", totalExhaledVolume, timestamp);
@@ -276,9 +294,9 @@ static void FlowTask(void *pvParameters)
 
                     xQueueOverwrite(g_flowQueue, (void *)&flow);
                 }
-                else if (diffPressure > DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS)
+                else if (diffPressure > (DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS))
                 {
-                    if (exhale == false)
+                    if (exhale == false) // Start of exhalation
                     {
                         exhale = true;
 #if LOG_TOTAL_EXHALED_VOLUME
@@ -353,7 +371,7 @@ static void O2Task(void *pvParameters)
 
         while (1)
         {
-            if (ME2O2_ReadOxygen(&o2))                                         //Start continuous measurement
+            if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
             {
                 xQueueOverwrite(g_o2Queue, (void *)&o2);
 #if LOG_O2
@@ -392,9 +410,9 @@ static void CO2Task(void *pvParameters)
     else
     {
         SCD30_SetMeasurementInterval(SCD30_MEASUREMENT_INTERVAL_S);
-        SCD30_StartPeriodicMeasurment();                                      //Start periodic measurement
+        SCD30_StartPeriodicMeasurment(); // Start periodic measurement
 
-        vTaskDelay(pdMS_TO_TICKS(1500 * SCD30_MEASUREMENT_INTERVAL_S));       // Wait for first measure
+        vTaskDelay(pdMS_TO_TICKS(1500 * SCD30_MEASUREMENT_INTERVAL_S)); // Wait for first measure
 
         xSemaphoreGive(g_co2InitializationSemaphore);
 
@@ -459,7 +477,7 @@ static void PressureTask(void *pvParameters)
         BMP280_SetStandbyTime(BMP280_T_STANDBY_4S);
         BMP280_SetOperationMode(BMP280_MODE_NORMAL);
 
-        xSemaphoreGive(g_pressureInitializationSemaphore);                 //Signal that ambient pressure sensor is ready
+        xSemaphoreGive(g_pressureInitializationSemaphore); // Signal that ambient pressure sensor is ready
 
         while (1)
         {
@@ -471,4 +489,47 @@ static void PressureTask(void *pvParameters)
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
         }
     }
+}
+
+static bool ComputeAirDensity(float *rho, float *rhoBtps)
+{
+    float temp;
+    float press;
+    bool ret = false;
+
+    if (pdTRUE == xQueuePeek(g_temperatureQueue, (void *)&temp, 0))
+    {
+        // TO DO: read pressure from queue when BMP280 sensor driver will work
+        // if(pdTRUE == xQueuePeek(g_pressureQueue, (void *)&press, 0))
+        //{
+        press = (float)BMP280_SEA_LEVEL_PRESSURE_PA;
+        *rho = press / ((temp + 273.15f) * 287.058f); // calculation of air density
+        *rhoBtps = press / 90257.135f;                // density at BTPS: 35°C, 95% humidity
+        ret = true;
+        //}
+    }
+
+    return ret;
+}
+
+static bool ComputeVO2(float exhaledVol, int64_t durationUs, float *vo2)
+{
+    float rho;
+    float rhoBtps;
+    float o2;
+    float o2Consumed;
+    bool ret = false;
+
+    if (ComputeAirDensity(&rho, &rhoBtps))
+    {
+        if (pdTRUE == xQueuePeek(g_o2Queue, (void *)&o2, 0))
+        {
+            o2Consumed = 20.95f - o2;
+            // TO DO: replace by user weight from settings
+            *vo2 = (exhaledVol * rhoBtps * o2Consumed * 600000000) / (durationUs * RHO_STPD * USER_WHEIGHT);
+            ret = true;
+        }
+    }
+
+    return ret;
 }

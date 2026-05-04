@@ -53,8 +53,6 @@
 #define BMP280_RESET_VALUE 0xB6
 #define BMP280_CHIP_ID 0x58
 
-#define SEA_LEVEL_PRESSURE 101325
-
 /************************************
  * PRIVATE VARIABLES
  ************************************/
@@ -92,10 +90,10 @@ bool BMP280_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address)
 
 	ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBusHandle, &devCfg, &devHandle));
 
+	BMP280_Reset();
+
 	if (CheckChipId())
 	{
-		BMP280_Reset();
-
 		ReadCalibration();
 		ret = true;
 		ESP_LOGI(TAG, "Initialization successfull");
@@ -248,7 +246,7 @@ void BMP280_CalculateAltitudeHypsometric(float *alt, uint32_t barometricPressure
 {
 	float tempResult;
 
-	tempResult = powf((float)SEA_LEVEL_PRESSURE / (float)barometricPressure, 0.00019022256f);
+	tempResult = powf((float)BMP280_SEA_LEVEL_PRESSURE_PA / (float)barometricPressure, 0.00019022256f);
 
 	*alt = ((ambientTemperatureInC + 273.15) * (tempResult - 1)) / 0.0065;
 }
@@ -343,8 +341,7 @@ static uint8_t Read8BitRegister(uint8_t reg)
 {
 	uint8_t regValue;
 
-	i2c_master_transmit(devHandle, &reg, sizeof(reg), -1);
-	i2c_master_receive(devHandle, &regValue, sizeof(regValue), -1);
+	i2c_master_transmit_receive(devHandle, &reg, sizeof(reg), &regValue, sizeof(regValue), -1);
 
 	return regValue;
 }

@@ -8,6 +8,8 @@
 #define BMP280_I2C_ADDRESS_0x76 0x76
 #define BMP280_I2C_ADDRESS_0x77 0x77
 
+#define BMP280_SEA_LEVEL_PRESSURE_PA 101325
+
 /**
  * @brief Oversampling rates for temperature and pressure
  */

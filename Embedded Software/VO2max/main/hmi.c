@@ -383,7 +383,7 @@ static void DisplayBatterySoc(void)
     static int8_t previousBatterySoc = -128;
     int8_t batterySoc;
 
-    if (pdPASS == xQueueReceive(g_batterySocQueue, (void *)&batterySoc, (TickType_t)0))
+    if (pdPASS == xQueuePeek(g_batterySocQueue, (void *)&batterySoc, (TickType_t)0))
     {
         if (batterySoc != previousBatterySoc)
         {
@@ -815,7 +815,7 @@ static void LiveValuesScreenAction(void)
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
-        if (pdPASS == xQueueReceive(g_o2Queue, (void *)&o2, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
         {
             if (o2 != previousO2)
             {
@@ -825,7 +825,7 @@ static void LiveValuesScreenAction(void)
                 previousO2 = o2;
             }
         }
-        if (pdPASS == xQueueReceive(g_co2Queue, (void *)&co2, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0))
         {
             if (co2 != previousCo2)
             {
@@ -835,7 +835,7 @@ static void LiveValuesScreenAction(void)
                 previousCo2 = co2;
             }
         }
-        if (pdPASS == xQueueReceive(g_flowQueue, (void *)&flow, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_flowQueue, (void *)&flow, (TickType_t)0))
         {
             if (flow != previousFlow)
             {
@@ -845,7 +845,7 @@ static void LiveValuesScreenAction(void)
                 previousFlow = flow;
             }
         }
-        if (pdPASS == xQueueReceive(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
         {
             if (temperature != previousTemperature)
             {
@@ -855,7 +855,7 @@ static void LiveValuesScreenAction(void)
                 previousTemperature = temperature;
             }
         }
-        if (pdPASS == xQueueReceive(g_humidityQueue, (void *)&humidity, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_humidityQueue, (void *)&humidity, (TickType_t)0))
         {
             if (humidity != previousHumidity)
             {
@@ -865,7 +865,7 @@ static void LiveValuesScreenAction(void)
                 previousHumidity = humidity;
             }
         }
-        if (pdPASS == xQueueReceive(g_pressureQueue, (void *)&pressure, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_pressureQueue, (void *)&pressure, (TickType_t)0))
         {
             if (pressure != previousPressure)
             {
@@ -947,15 +947,22 @@ static void Vo2MaxScreenAction(void)
     float previousVo2 = -1.0f;
     float vo2Max;
     float previousVo2Max = -1.0f;
+    float vCo2;
+    float previousVCo2 = -1.0f;
+
     char string[8];
 
     LCD_Clear();
 
     LCD_DrawString(CENTER_X("VO2max"), MENU_NAME_POSITION_Y, "VO2max", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 40, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 64, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 46, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
-    LCD_DrawString(168, 70, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 36, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 42, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+
+    LCD_DrawString(10, 60, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 66, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+
+    LCD_DrawString(10, 84, "VCO2 =    0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 90, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
 
     LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
 
@@ -970,9 +977,9 @@ static void Vo2MaxScreenAction(void)
         {
             if (vo2 != previousVo2)
             {
-                LCD_ClearString(118, 40, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 36, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%4.1f", vo2);
-                LCD_DrawString(118, 40, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 36, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousVo2 = vo2;
             }
         }
@@ -980,10 +987,20 @@ static void Vo2MaxScreenAction(void)
         {
             if (vo2Max != previousVo2Max)
             {
-                LCD_ClearString(118, 64, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 60, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%4.1f", vo2Max);
-                LCD_DrawString(118, 64, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 60, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousVo2Max = vo2Max;
+            }
+        }
+        if (pdPASS == xQueuePeek(g_vCo2Queue, (void *)&vCo2, (TickType_t)0))
+        {
+            if (vCo2 != previousVCo2)
+            {
+                LCD_ClearString(118, 84, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%4.1f", vCo2);
+                LCD_DrawString(118, 84, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousVCo2 = vCo2;
             }
         }
 

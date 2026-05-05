@@ -115,6 +115,7 @@ QueueHandle_t g_cycleExhaledVolumeQueue;
 QueueHandle_t g_respiratoryRateQueue;
 QueueHandle_t g_vo2Queue;
 QueueHandle_t g_vo2MaxQueue;
+QueueHandle_t g_vCo2Queue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -125,6 +126,7 @@ static void CO2Task(void *pvParameters);
 static void PressureTask(void *pvParameters);
 static void ComputeAirDensity(float temp, float press, float *rho, float *rhoBtps);
 static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_t durationUs, float weight);
+static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int64_t durationUs, float weight);
 static void FlowVolumeAndVo2Computation(float diffPressure);
 
 /************************************
@@ -169,6 +171,7 @@ void MEASURE_Initialize()
     g_respiratoryRateQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vo2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_vCo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
 
     /* Create semaphores (used to signal initialization complete) */
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
@@ -406,6 +409,15 @@ static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_
     return (exhaledVol * rhoBtps * o2Consumed * 600000000) / (durationUs * RHO_STPD * weight);
 }
 
+static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int64_t durationUs, float weight)
+{
+    float co2Produced;
+
+    co2Produced = co2percent - 0.0043f; // Substract CO2 concentration in the atmosphere
+
+    return (exhaledVol * rhoBtps * co2Produced * 600000000) / (durationUs * RHO_STPD * weight);
+}
+
 static void FlowVolumeAndVo2Computation(float diffPressure)
 {
     /* Timing variables */
@@ -421,11 +433,13 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     static float cycleExhaledVolume = 0.0f;
     static float totalExhaledVolume = 0.0f;
     static float previousFlow = 0.0f;
-    static float vo2Max = 0.0f;
-    float vo2 = 0.0f;
 
     /* Variables for VO2 computation */
+    static float vo2Max = 0.0f;
+    float vo2 = 0.0f;
+    float vCo2 = 0.0f;
     float o2;
+    float co2;
     float temp;
     float rho;
     float rhoBtps;
@@ -493,12 +507,13 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             totalExhaledVolume += cycleExhaledVolume;
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 
-            if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
+            if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temp, (TickType_t)0))
             {
-                if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temp, (TickType_t)0))
+                // TO DO: replace sea level pressure by measured pressure value when BMP280 driver will work
+                ComputeAirDensity(temp, BMP388_SEA_LEVEL_PRESSURE_PA, &rho, &rhoBtps);
+
+                if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
                 {
-                    // TO DO: replace sea level pressure by measured pressure value when BMP280 driver will work
-                    ComputeAirDensity(temp, BMP388_SEA_LEVEL_PRESSURE_PA, &rho, &rhoBtps);
                     // TO DO: replace user weight by setted value in settings
                     vo2 = ComputeVO2(rhoBtps, o2, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
 
@@ -512,6 +527,12 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
 #if LOG_VO2
                     ESP_LOGI(flowTaskTag, "#6,%.2f,%d", vo2, timestamp);
 #endif
+                }
+
+                if (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0))
+                {
+                    vCo2 = ComputeVCO2(rhoBtps, co2 / 10000.0f, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
+                    xQueueOverwrite(g_vCo2Queue, (void *)&vCo2);
                 }
             }
 

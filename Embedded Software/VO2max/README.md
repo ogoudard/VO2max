@@ -6,7 +6,7 @@
 * Sensirion SDP810-500Pa Differential Pressure Sensor
 * Sensirion SCD30 Carbon Dioxyde Sensor
 * Winsen ME2-O2 Oxygen Sensor
-* Fermion BMP280 Digital Pressure Sensor SEN0372 DFRobot
+* Gravity BMP388 barometric pressure sensors SEN0251
 * A USB cable for Power supply and programming
 
 ### Build and Flash (Visual Studio Code)

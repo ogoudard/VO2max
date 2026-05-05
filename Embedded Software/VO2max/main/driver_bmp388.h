@@ -20,7 +20,7 @@ typedef union
         uint8_t reserved3_7 : 1;
     };
     uint8_t reg;
-} ErrorRegister_u;
+} BMP388_Error_u;
 
 typedef union
 {
@@ -33,7 +33,7 @@ typedef union
         uint8_t reserved7 : 1;
     };
     uint8_t reg;
-} StatusRegister_u;
+} BMP388_Status_u;
 
 /**
  * @brief Oversampling rates for temperature and pressure
@@ -123,8 +123,8 @@ typedef struct
 
 bool BMP388_Initialize(i2c_master_bus_handle_t i2cBusHandle, uint8_t address);
 void BMP388_Reset(void);
-ErrorRegister_u BMP388_GetError(void);
-StatusRegister_u BMP388_GetStatus(void);
+BMP388_Error_u BMP388_GetError(void);
+BMP388_Status_u BMP388_GetStatus(void);
 void BMP388_EnableTemperatureMeasurement(bool en);
 void BMP388_EnablePressureMeasurement(bool en);
 void BMP388_SetOperationMode(BMP388_OperationMode_t operationMode);

@@ -132,14 +132,14 @@ void BMP388_Reset(void)
 	vTaskDelay(pdMS_TO_TICKS(BMP388_RESET_DELAY_MS));
 }
 
-ErrorRegister_u BMP388_GetError(void)
+BMP388_Error_u BMP388_GetError(void)
 {
-	return (ErrorRegister_u)Read8BitRegister(BMP388_REGISTER_ERR_REG);
+	return (BMP388_Error_u)Read8BitRegister(BMP388_REGISTER_ERR_REG);
 }
 
-StatusRegister_u BMP388_GetStatus(void)
+BMP388_Status_u BMP388_GetStatus(void)
 {
-	return (StatusRegister_u)Read8BitRegister(BMP388_REGISTER_STATUS);
+	return (BMP388_Status_u)Read8BitRegister(BMP388_REGISTER_STATUS);
 }
 
 void BMP388_SetOperationMode(BMP388_OperationMode_t operationMode)

@@ -347,6 +347,8 @@ static void CO2Task(void *pvParameters)
 static void PressureTask(void *pvParameters)
 {
     const char *pressureTaskTag = "[Pressure Task]";
+    double pressure;
+    BMP388_Status_u bmp388Status;
 
     ESP_LOGI(pressureTaskTag, "Task started");
 
@@ -375,19 +377,15 @@ static void PressureTask(void *pvParameters)
 
         while (1)
         {
-            double pressure;
+            bmp388Status = BMP388_GetStatus();
 
-            ESP_LOGI(pressureTaskTag, "status = %d", BMP388_GetStatus().reg);
-            // if(BMP388_GetStatus().drdyPress)
-            // {
-            //     pressure = BMP388_ReadPressure(25.0f);
-            //     ESP_LOGI(pressureTaskTag, "Pressure = %.2f hPa", pressure / 100.0f);
-            //     xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-            // }
-            // else
-            // {
-            //     ESP_LOGE(pressureTaskTag, "Data not ready");
-            // }
+            if (0 != bmp388Status.drdyPress)
+            {
+                pressure = BMP388_ReadPressure(25.0f);
+                ESP_LOGI(pressureTaskTag, "Pressure = %.2f hPa", pressure / 100.0f);
+                xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+            }
+
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
         }
     }

@@ -12,7 +12,7 @@
 #include "driver_sdp8XX.h"
 #include "driver_scd30.h"
 #include "driver_me2o2.h"
-#include "driver_bmp280.h"
+#include "driver_bmp388.h"
 #include "driver/gpio.h"
 #include "hmi.h" // User interface (display)
 
@@ -52,7 +52,7 @@
 /* Sensor addresses */
 #define ME2O2_I2C_ADDRESS ME2O2_I2C_ADDRESS_0x73
 
-#define BMP280_I2C_ADDRESS BMP280_I2C_ADDRESS_0x77
+#define BMP388_I2C_ADDRESS BMP388_I2C_ADDRESS_0x77
 
 #define PRESSURE_SENSOR_MODEL SDP8XX_SDP810_500PA
 
@@ -182,7 +182,7 @@ void MEASURE_Initialize()
     xTaskCreate(FlowTask, "Flow Task", FLOW_TASK_STACK_SIZE, NULL, FLOW_TASK_PRIORITY, &flowTaskHandle);
     xTaskCreate(O2Task, "O2 Task", O2_TASK_STACK_SIZE, NULL, O2_TASK_PRIORITY, &o2TaskHandle);
     xTaskCreate(CO2Task, "CO2 Task", CO2_TASK_STACK_SIZE, NULL, CO2_TASK_PRIORITY, &co2TaskHandle);
-    // xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, PRESSURE_TASK_PRIORITY, &pressureTaskHandle);
+    xTaskCreate(PressureTask, "Pressure Task", PRESSURE_TASK_STACK_SIZE, NULL, PRESSURE_TASK_PRIORITY, &pressureTaskHandle);
 }
 
 /************************************
@@ -346,15 +346,15 @@ static void CO2Task(void *pvParameters)
 
 static void PressureTask(void *pvParameters)
 {
-    const char *pressureTag = "[Pressure Task]";
+    const char *pressureTaskTag = "[Pressure Task]";
 
-    ESP_LOGI(pressureTag, "Task started");
+    ESP_LOGI(pressureTaskTag, "Task started");
 
-    ESP_LOGI(pressureTag, "Initializing pressure and altitude sensor BMP280");
+    ESP_LOGI(pressureTaskTag, "Initializing pressure and altitude sensor BMP280");
 
-    if (!BMP280_Initialize(i2cHandle, BMP280_I2C_ADDRESS))
+    if (!BMP388_Initialize(i2cHandle, BMP388_I2C_ADDRESS))
     {
-        ESP_LOGE(pressureTag, "BMP280 initialization failed, suspending task");
+        ESP_LOGE(pressureTaskTag, "BMP280 initialization failed, suspending task");
 
         vTaskSuspend(pressureTaskHandle);
 
@@ -365,21 +365,29 @@ static void PressureTask(void *pvParameters)
     }
     else
     {
-        BMP280_SetFilterTimeConstant(BMP280_FILTER_16X);
-        BMP280_SetPressureOversampling(BMP280_OVERSAMPLING_16X);
-        BMP280_SetTemperatureOversampling(BMP280_OVERSAMPLING_16X);
-        BMP280_SetStandbyTime(BMP280_T_STANDBY_4S);
-        BMP280_SetOperationMode(BMP280_MODE_NORMAL);
+        BMP388_EnablePressureMeasurement(true);
+        BMP388_EnableTemperatureMeasurement(true);
+        BMP388_SetPressureOversampling(BMP388_OVERSAMPLING_16X);
+        BMP388_SetTemperatureOversampling(BMP388_OVERSAMPLING_16X);
+        BMP388_SetOperationMode(BMP388_MODE_NORMAL);
 
         xSemaphoreGive(g_pressureInitializationSemaphore); // Signal that ambient pressure sensor is ready
 
         while (1)
         {
-            uint32_t pressure;
+            double pressure;
 
-            pressure = BMP280_GetPressure();
-            ESP_LOGI(pressureTag, "Pressure = %.2f hPa", (float)pressure / 100.0f);
-            xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+            ESP_LOGI(pressureTaskTag, "status = %d", BMP388_GetStatus().reg);
+            // if(BMP388_GetStatus().drdyPress)
+            // {
+            //     pressure = BMP388_ReadPressure(25.0f);
+            //     ESP_LOGI(pressureTaskTag, "Pressure = %.2f hPa", pressure / 100.0f);
+            //     xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+            // }
+            // else
+            // {
+            //     ESP_LOGE(pressureTaskTag, "Data not ready");
+            // }
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
         }
     }
@@ -492,7 +500,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                 if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temp, (TickType_t)0))
                 {
                     // TO DO: replace sea level pressure by measured pressure value when BMP280 driver will work
-                    ComputeAirDensity(temp, BMP280_SEA_LEVEL_PRESSURE_PA, &rho, &rhoBtps);
+                    ComputeAirDensity(temp, BMP388_SEA_LEVEL_PRESSURE_PA, &rho, &rhoBtps);
                     // TO DO: replace user weight by setted value in settings
                     vo2 = ComputeVO2(rhoBtps, o2, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
 

@@ -8,7 +8,7 @@
 #include "esp_gatt_common_api.h"
 #include "esp_bt_main.h"
 
-const char *TAG = "[BLE]";
+static const char *TAG = "[BLE]";
 
 #define BLUETOOTH_TASK_STACK_SIZE 8192
 #define BLUETOOTH_TASK_PRIORITY 0

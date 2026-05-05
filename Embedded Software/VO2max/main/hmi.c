@@ -102,6 +102,7 @@ static PushButtonState_e GetPushButton1State(void);
 static PushButtonState_e GetPushButton2State(void);
 static void LiveValuesScreenAction(void);
 static void SpirometerScreenAction(void);
+static void Vo2MaxScreenAction(void);
 static void O2CalibrationScreenAction(void);
 static void FlowCalibrationScreenAction(void);
 static void PressureCalibrationScreenAction(void);
@@ -310,6 +311,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&weightMenu, UserWeightScreenAction);
     MENU_AddAction(&bluetoothEnableMenu, bleEnableScreenAction);
     MENU_AddAction(&flowCalibrationMenu, FlowCalibrationScreenAction);
+    MENU_AddAction(&vo2maxMenu, Vo2MaxScreenAction);
 }
 
 static void NormalOperation(void)
@@ -881,14 +883,20 @@ static void LiveValuesScreenAction(void)
 static void SpirometerScreenAction(void)
 {
     float cycleExhaledVolume;
+    float previousCycleExhaledVolume = -1.0f;
     float totalExhaledVolume;
-    char string[30];
+    float previousTotalExhaledVolume = -1.0f;
+    float respiratoryRate;
+    float previousRespriatoryRate = -1.0f;
+    char string[8];
 
     LCD_Clear();
 
     LCD_DrawString(CENTER_X("Spirometer"), MENU_NAME_POSITION_Y, "Spirometer", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 48, "VOLcyc =    0.0  L", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 72, "VOLtot =    0.0  L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 40, "VOLcyc =     0.0 L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 64, "VOLtot =     0.0 L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 88, "Rate =   0.0 br/min", LCD_COLOR_BLACK, LCD_FONT_24);
+
     LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
@@ -898,17 +906,85 @@ static void SpirometerScreenAction(void)
             xSemaphoreGive(g_resetExhaledVolumeSemaphore);
         }
 
-        if (pdPASS == xQueueReceive(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
         {
-            LCD_ClearString(120, 48, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-            snprintf(string, sizeof(string), "%5.1f", cycleExhaledVolume);
-            LCD_DrawString(130, 48, string, LCD_COLOR_BLACK, LCD_FONT_24);
+            if (cycleExhaledVolume != previousCycleExhaledVolume)
+            {
+                LCD_ClearString(118, 40, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%7.1f", cycleExhaledVolume);
+                LCD_DrawString(118, 40, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousCycleExhaledVolume = cycleExhaledVolume;
+            }
         }
-        if (pdPASS == xQueueReceive(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume, (TickType_t)0))
         {
-            LCD_ClearString(120, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-            snprintf(string, sizeof(string), "%5.1f", totalExhaledVolume);
-            LCD_DrawString(130, 72, string, LCD_COLOR_BLACK, LCD_FONT_24);
+            if (totalExhaledVolume != previousTotalExhaledVolume)
+            {
+                LCD_ClearString(118, 64, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%7.1f", totalExhaledVolume);
+                LCD_DrawString(118, 64, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousTotalExhaledVolume = totalExhaledVolume;
+            }
+        }
+        if (pdPASS == xQueuePeek(g_respiratoryRateQueue, (void *)&respiratoryRate, (TickType_t)0))
+        {
+            if (respiratoryRate != previousRespriatoryRate)
+            {
+                LCD_ClearString(94, 88, 5, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%5.1f", respiratoryRate);
+                LCD_DrawString(94, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousRespriatoryRate = respiratoryRate;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    }
+}
+
+static void Vo2MaxScreenAction(void)
+{
+    float vo2;
+    float previousVo2 = -1.0f;
+    float vo2Max;
+    float previousVo2Max = -1.0f;
+    char string[8];
+
+    LCD_Clear();
+
+    LCD_DrawString(CENTER_X("VO2max"), MENU_NAME_POSITION_Y, "VO2max", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 40, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 64, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 46, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(168, 70, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+
+    LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
+
+    while (BUTTON_LONG_PRESS != GetPushButton1State())
+    {
+        if (GetPushButton2State() == BUTTON_LONG_PRESS)
+        {
+            xSemaphoreGive(g_resetVo2MaxSemaphore);
+        }
+
+        if (pdPASS == xQueuePeek(g_vo2Queue, (void *)&vo2, (TickType_t)0))
+        {
+            if (vo2 != previousVo2)
+            {
+                LCD_ClearString(118, 40, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%4.1f", vo2);
+                LCD_DrawString(118, 40, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousVo2 = vo2;
+            }
+        }
+        if (pdPASS == xQueuePeek(g_vo2MaxQueue, (void *)&vo2Max, (TickType_t)0))
+        {
+            if (vo2Max != previousVo2Max)
+            {
+                LCD_ClearString(118, 64, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%4.1f", vo2Max);
+                LCD_DrawString(118, 64, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousVo2Max = vo2Max;
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));

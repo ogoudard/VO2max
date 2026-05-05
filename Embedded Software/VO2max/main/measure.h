@@ -12,14 +12,16 @@ extern QueueHandle_t g_humidityQueue;
 extern QueueHandle_t g_totalExhaledVolumeQueue;
 extern QueueHandle_t g_cycleExhaledVolumeQueue;
 extern QueueHandle_t g_pressureQueue;
-extern QueueHandle_t g_breathingFrequencyQueue;
+extern QueueHandle_t g_respiratoryRateQueue;
 extern QueueHandle_t g_vo2Queue;
+extern QueueHandle_t g_vo2MaxQueue;
 
 extern SemaphoreHandle_t g_flowInitializationSemaphore;
 extern SemaphoreHandle_t g_o2InitializationSemaphore;
 extern SemaphoreHandle_t g_co2InitializationSemaphore;
 extern SemaphoreHandle_t g_pressureInitializationSemaphore;
 extern SemaphoreHandle_t g_resetExhaledVolumeSemaphore;
+extern SemaphoreHandle_t g_resetVo2MaxSemaphore;
 
 void MEASURE_Initialize(void);
 

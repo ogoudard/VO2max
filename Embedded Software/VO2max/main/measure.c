@@ -16,6 +16,7 @@
 #include "driver/gpio.h"
 #include "hmi.h" // User interface (display)
 #include "debug.h"
+#include "settings.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -66,8 +67,6 @@
 
 /* Air density at Standard Temperature and Pressure Desaturated */
 #define RHO_STPD 1.292f
-
-#define USER_WHEIGHT 74.0f
 
 /* Debug logging flags (enable/disable logs) */
 #define LOG_FLOW 0
@@ -492,8 +491,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         }
 
         // Bernoulli equation Q=k⋅sqrt(ΔP)
-        // TO DO: use flow calibration value
-        flow = 12.618f * sqrt(diffPressure);
+        flow = g_settings.flowCalibration * sqrt(diffPressure);
         cycleExhaledVolume += (float)deltaT * (flow + previousFlow) / 120000.0f; // Integrate flow → volume (Trapezoidal rule)
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
@@ -522,7 +520,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                         if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
                         {
                             // TO DO: replace user weight by setted value in settings
-                            vo2 = ComputeVO2(rho, o2, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
+                            vo2 = ComputeVO2(rho, o2, cycleExhaledVolume, breathDuration, g_settings.userWeight);
 
                             if (vo2 > vo2Max) // Compute VO2max
                             {
@@ -538,7 +536,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
 
                         if (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0))
                         {
-                            vCo2 = ComputeVCO2(rho, co2 / 10000.0f, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
+                            vCo2 = ComputeVCO2(rho, co2 / 10000.0f, cycleExhaledVolume, breathDuration, g_settings.userWeight);
                             xQueueOverwrite(g_vCo2Queue, (void *)&vCo2);
                         }
                     }

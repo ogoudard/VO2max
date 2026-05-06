@@ -5,6 +5,8 @@
 #define SETTINGS_NVS_NAMESPACE "vo2max"
 #define SETTINGS_NVS_KEYNAME "settings"
 
+Settings_t g_settings;
+
 static const char *TAG = "[SETTINGS]";
 static nvs_handle_t nvsHandle;
 static const Settings_t defaultSettings = {.bleOn = false, .co2Calibration = 400.0f, .flowCalibration = 1.0f, .o2Calibration = 20.9f, .userWeight = 70.0f};
@@ -27,7 +29,8 @@ void SETTINGS_Initialize(void)
     if (ESP_OK != nvs_find_key(nvsHandle, SETTINGS_NVS_KEYNAME, NULL))
     {
         ESP_LOGW(TAG, "No settings found in flash, writing default settings");
-        SETTINGS_SaveSettings(&defaultSettings);
+        g_settings = defaultSettings;
+        SETTINGS_SaveSettings();
     }
     else
     {
@@ -37,12 +40,13 @@ void SETTINGS_Initialize(void)
         {
             ESP_LOGE(TAG, "Invalid key size, settings default parameters");
             nvs_erase_key(nvsHandle, SETTINGS_NVS_KEYNAME);
-            SETTINGS_SaveSettings(&defaultSettings);
+            g_settings = defaultSettings;
+            SETTINGS_SaveSettings();
         }
     }
 }
 
-void SETTINGS_LoadSettings(Settings_t *settings)
+void SETTINGS_LoadSettings()
 {
     Settings_t settingsRead;
     size_t keySize = sizeof(Settings_t);
@@ -58,14 +62,14 @@ void SETTINGS_LoadSettings(Settings_t *settings)
     {
         if (keySize == sizeof(Settings_t))
         {
-            *settings = settingsRead;
+            g_settings = settingsRead;
         }
     }
 }
 
-void SETTINGS_SaveSettings(const Settings_t *settings)
+void SETTINGS_SaveSettings()
 {
-    if (ESP_OK != nvs_set_blob(nvsHandle, SETTINGS_NVS_KEYNAME, (void *)settings, sizeof(Settings_t)))
+    if (ESP_OK != nvs_set_blob(nvsHandle, SETTINGS_NVS_KEYNAME, (void *)&g_settings, sizeof(Settings_t)))
     {
         ESP_LOGE(TAG, "nvs_set_blob failed");
     }

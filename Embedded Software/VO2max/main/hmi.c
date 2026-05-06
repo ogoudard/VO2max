@@ -526,12 +526,9 @@ static void bleEnableScreenAction(void)
     char enabledString[] = "ENABLED ";
     char disabledString[] = "DISABLED";
     bool exit = false;
-    Settings_t settings;
     bool bleOn;
 
-    SETTINGS_LoadSettings(&settings);
-
-    bleOn = settings.bleOn;
+    bleOn = g_settings.bleOn;
 
     LCD_Clear();
 
@@ -578,8 +575,8 @@ static void bleEnableScreenAction(void)
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
-        settings.bleOn = bleOn;
-        SETTINGS_SaveSettings(&settings);
+        g_settings.bleOn = bleOn;
+        SETTINGS_SaveSettings();
     }
 }
 
@@ -590,11 +587,8 @@ static void O2CalibrationScreenAction(void)
     float o2CalValue;
     char o2CalString[6];
     bool exit = false;
-    Settings_t settings;
 
-    SETTINGS_LoadSettings(&settings);
-
-    o2CalValue = settings.o2Calibration;
+    o2CalValue = g_settings.o2Calibration;
 
     LCD_Clear();
 
@@ -630,8 +624,8 @@ static void O2CalibrationScreenAction(void)
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
-        settings.o2Calibration = o2CalValue;
-        SETTINGS_SaveSettings(&settings);
+        g_settings.o2Calibration = o2CalValue;
+        SETTINGS_SaveSettings();
     }
 }
 
@@ -642,11 +636,8 @@ static void FlowCalibrationScreenAction(void)
     float flowCalValue;
     char flowCalString[6];
     bool exit = false;
-    Settings_t settings;
 
-    SETTINGS_LoadSettings(&settings);
-
-    flowCalValue = settings.flowCalibration;
+    flowCalValue = g_settings.flowCalibration;
 
     LCD_Clear();
 
@@ -682,8 +673,8 @@ static void FlowCalibrationScreenAction(void)
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
-        settings.flowCalibration = flowCalValue;
-        SETTINGS_SaveSettings(&settings);
+        g_settings.flowCalibration = flowCalValue;
+        SETTINGS_SaveSettings();
     }
 }
 
@@ -736,18 +727,8 @@ static void UserWeightScreenAction(void)
     float weightValue;
     char weightString[6];
     bool exit = false;
-    Settings_t settings;
 
-    SETTINGS_LoadSettings(&settings);
-
-    if ((settings.userWeight < 40.0f) || (settings.userWeight > 120.0f))
-    {
-        weightValue = 70.0f;
-    }
-    else
-    {
-        weightValue = settings.userWeight;
-    }
+    weightValue = g_settings.userWeight;
 
     LCD_Clear();
 
@@ -783,8 +764,8 @@ static void UserWeightScreenAction(void)
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
-        settings.userWeight = weightValue;
-        SETTINGS_SaveSettings(&settings);
+        g_settings.userWeight = weightValue;
+        SETTINGS_SaveSettings();
     }
 }
 

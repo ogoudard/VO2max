@@ -72,7 +72,6 @@ static Menu_t co2CalibrationMenu;
 static Menu_t flowCalibrationMenu;
 static Menu_t pressureCalibrationMenu;
 static Menu_t bluetoothSettingsMenu;
-static Menu_t measureSettingsMenu;
 static Menu_t userSettingsMenu;
 static Menu_t bluetoothEnableMenu;
 static Menu_t bluetoothMacMenu;
@@ -104,6 +103,7 @@ static void LiveValuesScreenAction(void);
 static void SpirometerScreenAction(void);
 static void Vo2MaxScreenAction(void);
 static void O2CalibrationScreenAction(void);
+static void Co2CalibrationScreenAction(void);
 static void FlowCalibrationScreenAction(void);
 static void PressureCalibrationScreenAction(void);
 static void UserWeightScreenAction(void);
@@ -173,7 +173,7 @@ static void HmiTask(void *pvParameters)
     waitNotification &= xSemaphoreTake(g_flowInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_co2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
-    // waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
+    waitNotification &= xSemaphoreTake(g_pressureInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
 
     if (pdFALSE == waitNotification)
     {
@@ -266,12 +266,14 @@ static void InitializeMenus(void)
     MENU_AddSubmenu(&mainMenu, &settingsMenu);
 
     // Settings menu
-    MENU_Create(&measureSettingsMenu, "Measure");
     MENU_Create(&bluetoothSettingsMenu, "Bluetooth");
     MENU_Create(&userSettingsMenu, "User");
-    MENU_AddSubmenu(&settingsMenu, &measureSettingsMenu);
+    MENU_Create(&calibrationMenu, "Calibration");
+    MENU_Create(&acquisitionMenu, "Acquisition");
     MENU_AddSubmenu(&settingsMenu, &bluetoothSettingsMenu);
     MENU_AddSubmenu(&settingsMenu, &userSettingsMenu);
+    MENU_AddSubmenu(&settingsMenu, &calibrationMenu);
+    MENU_AddSubmenu(&settingsMenu, &acquisitionMenu);
 
     // Bluetooth menu
     MENU_Create(&bluetoothEnableMenu, "BLE Enabling");
@@ -284,10 +286,6 @@ static void InitializeMenus(void)
     MENU_AddSubmenu(&bluetoothSettingsMenu, &bluetoothPairMenu);
 
     // Measure menu
-    MENU_Create(&calibrationMenu, "Calibration");
-    MENU_Create(&acquisitionMenu, "Acquisition");
-    MENU_AddSubmenu(&measureSettingsMenu, &calibrationMenu);
-    MENU_AddSubmenu(&measureSettingsMenu, &acquisitionMenu);
 
     // Calibration Menu
     MENU_Create(&flowCalibrationMenu, "Flow");
@@ -312,6 +310,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&bluetoothEnableMenu, bleEnableScreenAction);
     MENU_AddAction(&flowCalibrationMenu, FlowCalibrationScreenAction);
     MENU_AddAction(&vo2maxMenu, Vo2MaxScreenAction);
+    MENU_AddAction(&co2CalibrationMenu, Co2CalibrationScreenAction);
 }
 
 static void NormalOperation(void)
@@ -525,7 +524,6 @@ static void bleEnableScreenAction(void)
     PushButtonState_e pushButton2State;
     char enabledString[] = "ENABLED ";
     char disabledString[] = "DISABLED";
-    bool exit = false;
     bool bleOn;
 
     bleOn = g_settings.bleOn;
@@ -544,7 +542,7 @@ static void bleEnableScreenAction(void)
         LCD_DrawString(80, 48, disabledString, LCD_COLOR_BLACK, LCD_FONT_24);
     }
 
-    while (false == exit)
+    do
     {
         pushButton1State = GetPushButton1State();
         pushButton2State = GetPushButton2State();
@@ -568,10 +566,8 @@ static void bleEnableScreenAction(void)
             }
         }
 
-        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
-
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-    }
+    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
@@ -586,7 +582,6 @@ static void O2CalibrationScreenAction(void)
     PushButtonState_e pushButton2State;
     float o2CalValue;
     char o2CalString[6];
-    bool exit = false;
 
     o2CalValue = g_settings.o2Calibration;
 
@@ -597,7 +592,7 @@ static void O2CalibrationScreenAction(void)
     snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
     LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
 
-    while (false == exit)
+    do
     {
         pushButton1State = GetPushButton1State();
         pushButton2State = GetPushButton2State();
@@ -617,10 +612,8 @@ static void O2CalibrationScreenAction(void)
             LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
 
-        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
-
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-    }
+    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
@@ -629,52 +622,163 @@ static void O2CalibrationScreenAction(void)
     }
 }
 
-static void FlowCalibrationScreenAction(void)
+static void Co2CalibrationScreenAction(void)
 {
     PushButtonState_e pushButton1State;
     PushButtonState_e pushButton2State;
-    float flowCalValue;
-    char flowCalString[6];
-    bool exit = false;
+    float co2CalValue;
+    char co2CalString[6];
 
-    flowCalValue = g_settings.flowCalibration;
+    co2CalValue = g_settings.co2Calibration;
 
     LCD_Clear();
 
-    LCD_DrawString(CENTER_X("Flow Calibration"), MENU_NAME_POSITION_Y, "Flow Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 48, "cal =          ", LCD_COLOR_BLACK, LCD_FONT_24);
-    snprintf(flowCalString, sizeof(flowCalString), "%2.2f", flowCalValue);
-    LCD_DrawString(90, 48, flowCalString, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(CENTER_X("CO2 Calibration"), MENU_NAME_POSITION_Y, "CO2 Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 48, "cal =          ppm", LCD_COLOR_BLACK, LCD_FONT_24);
+    snprintf(co2CalString, sizeof(co2CalString), "%4.0f", co2CalValue);
+    LCD_DrawString(90, 48, co2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
 
-    while (false == exit)
+    do
     {
         pushButton1State = GetPushButton1State();
         pushButton2State = GetPushButton2State();
 
         if (BUTTON_SHORT_PRESS == pushButton1State)
         {
-            flowCalValue += 0.01f;
-            snprintf(flowCalString, sizeof(flowCalString), "%2.2f", flowCalValue);
-            LCD_ClearString(90, 48, sizeof(flowCalString), LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(90, 48, flowCalString, LCD_COLOR_BLACK, LCD_FONT_24);
+            co2CalValue += 1.0f;
+            snprintf(co2CalString, sizeof(co2CalString), "%4.0f", co2CalValue);
+            LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(90, 48, co2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_SHORT_PRESS == pushButton2State)
         {
-            flowCalValue -= 0.01f;
-            snprintf(flowCalString, sizeof(flowCalString), "%2.2f", flowCalValue);
-            LCD_ClearString(90, 48, sizeof(flowCalString), LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(90, 48, flowCalString, LCD_COLOR_BLACK, LCD_FONT_24);
+            co2CalValue -= 1.0f;
+            snprintf(co2CalString, sizeof(co2CalString), "%4.0f", co2CalValue);
+            LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(90, 48, co2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
 
-        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
-
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-    }
+    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
-        g_settings.flowCalibration = flowCalValue;
+        g_settings.co2Calibration = co2CalValue;
         SETTINGS_SaveSettings();
+    }
+}
+
+static void FlowCalibrationScreenAction(void)
+{
+    PushButtonState_e pushButton1State;
+    PushButtonState_e pushButton2State;
+    float refVolume = 3.0f;
+    char refVolumeString[4];
+    float volume;
+    float previousVolume = -1.0f;
+    char volumeString[7];
+    float newCalValue;
+    char calString[20];
+
+    LCD_Clear();
+
+    LCD_DrawString(CENTER_X("Flow Calibration"), MENU_NAME_POSITION_Y, "Flow Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 48, "ref volume =      L", LCD_COLOR_BLACK, LCD_FONT_24);
+    snprintf(refVolumeString, sizeof(refVolumeString), "%2.1f", refVolume);
+    LCD_DrawString(166, 48, refVolumeString, LCD_COLOR_BLACK, LCD_FONT_24);
+
+    do
+    {
+        pushButton1State = GetPushButton1State();
+        pushButton2State = GetPushButton2State();
+
+        if (BUTTON_SHORT_PRESS == pushButton1State)
+        {
+            refVolume += 0.1f;
+            snprintf(refVolumeString, sizeof(refVolumeString), "%2.1f", refVolume);
+            LCD_ClearString(166, 48, sizeof(refVolumeString) - 1, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(166, 48, refVolumeString, LCD_COLOR_BLACK, LCD_FONT_24);
+        }
+        else if (BUTTON_SHORT_PRESS == pushButton2State)
+        {
+            refVolume -= 0.1f;
+            snprintf(refVolumeString, sizeof(refVolumeString), "%2.1f", refVolume);
+            LCD_ClearString(166, 48, sizeof(refVolumeString) - 1, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_DrawString(166, 48, refVolumeString, LCD_COLOR_BLACK, LCD_FONT_24);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+
+    if (BUTTON_LONG_PRESS == pushButton2State)
+    {
+        LCD_ClearString(10, 48, 19, LCD_COLOR_WHITE, LCD_FONT_24);
+        xSemaphoreGive(g_resetExhaledVolumeSemaphore);
+        LCD_DrawString(10, 48, "Push pump", LCD_COLOR_BLACK, LCD_FONT_24);
+        LCD_DrawString(10, 72, "Volume = 0.000 L", LCD_COLOR_BLACK, LCD_FONT_24);
+
+        do
+        {
+            pushButton1State = GetPushButton1State();
+            pushButton2State = GetPushButton2State();
+
+            if (pdPASS == xQueuePeek(g_totalExhaledVolumeQueue, (void *)&volume, (TickType_t)0))
+            {
+                if (volume != previousVolume)
+                {
+                    LCD_ClearString(118, 72, sizeof(volumeString) - 1, LCD_COLOR_WHITE, LCD_FONT_24);
+                    snprintf(volumeString, sizeof(volumeString), "%2.3f", volume);
+                    LCD_DrawString(118, 72, volumeString, LCD_COLOR_BLACK, LCD_FONT_24);
+                    previousVolume = volume;
+                }
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+        } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+
+        if (BUTTON_LONG_PRESS == pushButton2State)
+        {
+            LCD_ClearString(10, 48, 19, LCD_COLOR_WHITE, LCD_FONT_24);
+            LCD_ClearString(10, 72, 19, LCD_COLOR_WHITE, LCD_FONT_24);
+
+            if (volume < 0.1f)
+            {
+                LCD_DrawString(10, 48, "Not enough", LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(10, 72, "volume detected", LCD_COLOR_BLACK, LCD_FONT_24);
+
+                do
+                {
+                    pushButton1State = GetPushButton1State();
+                    pushButton2State = GetPushButton2State();
+
+                    vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+                } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+            }
+            else
+            {
+                newCalValue = g_settings.flowCalibration * refVolume / volume;
+
+                snprintf(calString, sizeof(calString), "Old cal = %2.5f", g_settings.flowCalibration);
+                LCD_DrawString(10, 48, calString, LCD_COLOR_BLACK, LCD_FONT_24);
+                snprintf(calString, sizeof(calString), "New cal = %2.5f", newCalValue);
+                LCD_DrawString(10, 72, calString, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(10, 96, "Press to confirm", LCD_COLOR_BLACK, LCD_FONT_24);
+
+                do
+                {
+                    pushButton1State = GetPushButton1State();
+                    pushButton2State = GetPushButton2State();
+
+                    vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+                } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+
+                if (BUTTON_LONG_PRESS == pushButton2State)
+                {
+                    g_settings.flowCalibration = newCalValue;
+                    SETTINGS_SaveSettings();
+                }
+            }
+        }
     }
 }
 
@@ -684,7 +788,8 @@ static void PressureCalibrationScreenAction(void)
     PushButtonState_e pushButton2State;
     static float pressureValue = 1013.0f;
     char pressureString[8];
-    bool exit = false;
+
+    pressureValue = g_settings.pressureCalibration;
 
     LCD_Clear();
 
@@ -694,7 +799,7 @@ static void PressureCalibrationScreenAction(void)
     snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
     LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
 
-    while (false == exit)
+    do
     {
         pushButton1State = GetPushButton1State();
         pushButton2State = GetPushButton2State();
@@ -714,9 +819,13 @@ static void PressureCalibrationScreenAction(void)
             LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
 
-        exit = (BUTTON_LONG_PRESS == pushButton1State);
-
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+
+    if (BUTTON_LONG_PRESS == pushButton2State)
+    {
+        g_settings.pressureCalibration = pressureValue;
+        SETTINGS_SaveSettings();
     }
 }
 
@@ -726,7 +835,6 @@ static void UserWeightScreenAction(void)
     PushButtonState_e pushButton2State;
     float weightValue;
     char weightString[6];
-    bool exit = false;
 
     weightValue = g_settings.userWeight;
 
@@ -737,7 +845,7 @@ static void UserWeightScreenAction(void)
     snprintf(weightString, sizeof(weightString), "%3.1f", weightValue);
     LCD_DrawString(120, 48, weightString, LCD_COLOR_BLACK, LCD_FONT_24);
 
-    while (false == exit)
+    do
     {
         pushButton1State = GetPushButton1State();
         pushButton2State = GetPushButton2State();
@@ -757,10 +865,8 @@ static void UserWeightScreenAction(void)
             LCD_DrawString(120, 48, weightString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
 
-        exit = (BUTTON_LONG_PRESS == pushButton1State) || (BUTTON_LONG_PRESS == pushButton2State);
-
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-    }
+    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {

@@ -8,6 +8,7 @@ typedef struct
     float o2Calibration;
     float co2Calibration;
     float flowCalibration;
+    float pressureCalibration;
     bool bleOn;
     float userWeight;
 } Settings_t;

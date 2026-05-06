@@ -125,7 +125,7 @@ static void FlowTask(void *pvParameters);
 static void O2Task(void *pvParameters);
 static void CO2Task(void *pvParameters);
 static void PressureTask(void *pvParameters);
-static void ComputeAirDensity(float temp, float press, float *rho, float *rhoBtps);
+static void ComputeAirDensity(float temperature, float pressure, float humidity, float *rho);
 static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_t durationUs, float weight);
 static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int64_t durationUs, float weight);
 static void FlowVolumeAndVo2Computation(float diffPressure);
@@ -289,10 +289,11 @@ static void CO2Task(void *pvParameters)
     float co2;
     float temperature;
     float humidity;
+    bool dataReady;
 
     ESP_LOGI(tagCO2, "Task started");
 
-    ESP_LOGI(tagCO2, "Initialize SCD30 carbon dioxide sensor");
+    ESP_LOGI(tagCO2, "Initialize SCD30 Carbon Dioxide Sensor");
 
     if (!SCD30_Initialize(i2cHandle))
     {
@@ -316,8 +317,6 @@ static void CO2Task(void *pvParameters)
 
         while (1)
         {
-            bool dataReady;
-
             if (false == SCD30_GetDataReadyStatus(&dataReady))
             {
                 ESP_LOGE(tagCO2, "Could not retrieve data status");
@@ -393,10 +392,15 @@ static void PressureTask(void *pvParameters)
     }
 }
 
-static void ComputeAirDensity(float temp, float press, float *rho, float *rhoBtps)
+static void ComputeAirDensity(float temperature, float pressure, float humidity, float *rho)
 {
-    *rho = press / ((temp + 273.15f) * 287.058f); // calculation of air density
-    *rhoBtps = press / 90257.135f;                // density at BTPS: 35°C, 95% humidity
+    float pSat;
+    float pV;
+
+    pSat = 611.21f * expf(17.502 * temperature / (240.97 + temperature));
+    pV = pSat * humidity / 100.0f;
+
+    *rho = pressure / (287.058f * (temperature + 273.15f)) + pV / (461.495f * (temperature + 273.15f));
 }
 
 static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_t durationUs, float weight)
@@ -439,9 +443,10 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     float vCo2 = 0.0f;
     float o2;
     float co2;
-    float temp;
+    float temperature;
+    float pressure;
+    float humidity;
     float rho;
-    float rhoBtps;
 
     /* Breath detection */
     static bool exhale = false;
@@ -506,32 +511,37 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             totalExhaledVolume += cycleExhaledVolume;
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 
-            if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temp, (TickType_t)0))
+            if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
             {
-                // TO DO: replace sea level pressure by measured pressure value when BMP280 driver will work
-                ComputeAirDensity(temp, BMP388_SEA_LEVEL_PRESSURE_PA, &rho, &rhoBtps);
-
-                if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
+                if (pdPASS == xQueuePeek(g_pressureQueue, (void *)&pressure, (TickType_t)0))
                 {
-                    // TO DO: replace user weight by setted value in settings
-                    vo2 = ComputeVO2(rhoBtps, o2, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
-
-                    if (vo2 > vo2Max) // Compute VO2max
+                    if (pdPASS == xQueuePeek(g_humidityQueue, (void *)&humidity, (TickType_t)0))
                     {
-                        vo2Max = vo2;
-                        xQueueOverwrite(g_vo2MaxQueue, (void *)&vo2Max);
-                    }
+                        ComputeAirDensity(temperature, pressure, humidity, &rho);
 
-                    xQueueOverwrite(g_vo2Queue, (void *)&vo2);
+                        if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
+                        {
+                            // TO DO: replace user weight by setted value in settings
+                            vo2 = ComputeVO2(rho, o2, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
+
+                            if (vo2 > vo2Max) // Compute VO2max
+                            {
+                                vo2Max = vo2;
+                                xQueueOverwrite(g_vo2MaxQueue, (void *)&vo2Max);
+                            }
+
+                            xQueueOverwrite(g_vo2Queue, (void *)&vo2);
 #if LOG_VO2
-                    ESP_LOGI(flowTaskTag, "#6,%.2f,%d", vo2, timestamp);
+                            ESP_LOGI(flowTaskTag, "#6,%.2f,%d", vo2, timestamp);
 #endif
-                }
+                        }
 
-                if (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0))
-                {
-                    vCo2 = ComputeVCO2(rhoBtps, co2 / 10000.0f, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
-                    xQueueOverwrite(g_vCo2Queue, (void *)&vCo2);
+                        if (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0))
+                        {
+                            vCo2 = ComputeVCO2(rho, co2 / 10000.0f, cycleExhaledVolume, breathDuration, USER_WHEIGHT);
+                            xQueueOverwrite(g_vCo2Queue, (void *)&vCo2);
+                        }
+                    }
                 }
             }
 

@@ -68,7 +68,6 @@ static uint16_t local_mtu = 23;
 static uint8_t char_value_read[] = {0xDE, 0xED, 0xBE, 0xEF};
 
 static esp_gatt_char_prop_t a_property = 0;
-static esp_gatt_char_prop_t b_property = 0;
 
 typedef struct
 {
@@ -172,7 +171,6 @@ static esp_ble_adv_params_t adv_params = {
 };
 
 static prepare_type_env_t a_prepare_write_env;
-static prepare_type_env_t b_prepare_write_env;
 
 struct gatts_profile_inst
 {

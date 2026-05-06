@@ -248,7 +248,7 @@ void BMP388_ReadTemperatureAndPressure(float *temperature, float *pressure)
 	ReadRawPressureAndTemperature(&rawPressure, &rawTemperature);
 
 	*temperature = (float)((double)CompensateTemperature(rawTemperature, &tFine) / 100.0f);
-	*pressure = (float)((double)CompensatePressure(tFine, rawPressure) / 10000.0f);
+	*pressure = (float)((double)CompensatePressure(tFine, rawPressure) / 100.0f);
 }
 
 void BMP388_CalculateAltitudeQuick(float *alt, uint32_t barometricPressure)

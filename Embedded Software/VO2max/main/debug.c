@@ -43,7 +43,7 @@ void DEBUG_ResetGpioDebugOut1(void)
     dev->out_w1tc = GPIO_REGISTER_MASK_OUT_1;
 }
 
-void DEBUG_TogglepioDebugOut1(void)
+void DEBUG_ToggleGpioDebugOut1(void)
 {
     if (dev->out & GPIO_REGISTER_MASK_OUT_1)
     {

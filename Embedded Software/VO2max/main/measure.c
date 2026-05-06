@@ -15,6 +15,7 @@
 #include "driver_bmp388.h"
 #include "driver/gpio.h"
 #include "hmi.h" // User interface (display)
+#include "debug.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -332,7 +333,6 @@ static void CO2Task(void *pvParameters)
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {
                         xQueueOverwrite(g_co2Queue, (void *)&co2);
-                        xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
                         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
 #if LOG_CO2
                         int64_t timestamp = esp_timer_get_time() / 1000;
@@ -350,7 +350,8 @@ static void CO2Task(void *pvParameters)
 static void PressureTask(void *pvParameters)
 {
     const char *pressureTaskTag = "[Pressure Task]";
-    double pressure;
+    float pressure;
+    float temperature;
     BMP388_Status_u bmp388Status;
 
     ESP_LOGI(pressureTaskTag, "Task started");
@@ -372,8 +373,6 @@ static void PressureTask(void *pvParameters)
     {
         BMP388_EnablePressureMeasurement(true);
         BMP388_EnableTemperatureMeasurement(true);
-        BMP388_SetPressureOversampling(BMP388_OVERSAMPLING_16X);
-        BMP388_SetTemperatureOversampling(BMP388_OVERSAMPLING_16X);
         BMP388_SetOperationMode(BMP388_MODE_NORMAL);
 
         xSemaphoreGive(g_pressureInitializationSemaphore); // Signal that ambient pressure sensor is ready
@@ -382,10 +381,10 @@ static void PressureTask(void *pvParameters)
         {
             bmp388Status = BMP388_GetStatus();
 
-            if (0 != bmp388Status.drdyPress)
+            if ((0 != bmp388Status.drdyPress) && (0 != bmp388Status.drdyTemp))
             {
-                pressure = BMP388_ReadPressure(25.0f);
-                ESP_LOGI(pressureTaskTag, "Pressure = %.2f hPa", pressure / 100.0f);
+                BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
+                xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
                 xQueueOverwrite(g_pressureQueue, (void *)&pressure);
             }
 

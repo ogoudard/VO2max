@@ -94,20 +94,20 @@ typedef enum
  */
 typedef struct
 {
-    double T1;
-    double T2;
-    double T3;
-    double P1;
-    double P2;
-    double P3;
-    double P4;
-    double P5;
-    double P6;
-    double P7;
-    double P8;
-    double P9;
-    double P10;
-    double P11;
+    uint16_t T1;
+    uint16_t T2;
+    int8_t T3;
+    int16_t P1;
+    int16_t P2;
+    int8_t P3;
+    int8_t P4;
+    uint16_t P5;
+    uint16_t P6;
+    int8_t P7;
+    int8_t P8;
+    int16_t P9;
+    int8_t P10;
+    int8_t P11;
 } BMP388_CalibrationParameters_t;
 
 /**
@@ -132,8 +132,7 @@ void BMP388_SetPressureOversampling(BMP388_Oversampling_t osValue);
 void BMP388_SetTemperatureOversampling(BMP388_Oversampling_t osValue);
 void BMP388_SetStandbyTime(BMP388_StandbyTime_t standbyTime);
 void BMP388_SetFilterTimeConstant(BMP388_FilterTimeConstant_t filterTimeConstant);
-float BMP388_ReadTemperature(void);
-double BMP388_ReadPressure(double temp);
+void BMP388_ReadTemperatureAndPressure(float *temperature, float *pressure);
 void BMP388_CalculateAltitudeQuick(float *alt, uint32_t barometricPressure);
 void BMP388_CalculateAltitudeHypsometric(float *alt, uint32_t barometricPressure, float ambientTemperatureInC);
 void BMP388_GetOperationMode(BMP388_OperationMode_t *mode);

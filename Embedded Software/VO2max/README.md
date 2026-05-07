@@ -11,6 +11,10 @@
 
 ### Build and Flash (Visual Studio Code)
 
+Install VSCode
+
+Install GIT and DevContainers if required by VSCode
+
 Install ESP-IDF VSCode extension and install SDK v6.0
 
 See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.

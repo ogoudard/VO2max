@@ -573,6 +573,10 @@ static void bleEnableScreenAction(void)
     {
         g_settings.bleOn = bleOn;
         SETTINGS_SaveSettings();
+        LCD_Clear();
+        LCD_DrawString(CENTER_X("SETTING"), 48, "SETTING", LCD_COLOR_GREEN, LCD_FONT_24);
+        LCD_DrawString(CENTER_X("SAVED"), 72, "SAVED", LCD_COLOR_GREEN, LCD_FONT_24);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -619,6 +623,10 @@ static void O2CalibrationScreenAction(void)
     {
         g_settings.o2Calibration = o2CalValue;
         SETTINGS_SaveSettings();
+        LCD_Clear();
+        LCD_DrawString(CENTER_X("CALIBRATION"), 48, "CALIBRATION", LCD_COLOR_GREEN, LCD_FONT_24);
+        LCD_DrawString(CENTER_X("SUCCESSFULL"), 72, "SUCCESSFULL", LCD_COLOR_GREEN, LCD_FONT_24);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -665,6 +673,10 @@ static void Co2CalibrationScreenAction(void)
     {
         g_settings.co2Calibration = co2CalValue;
         SETTINGS_SaveSettings();
+        LCD_Clear();
+        LCD_DrawString(CENTER_X("CALIBRATION"), 48, "CALIBRATION", LCD_COLOR_GREEN, LCD_FONT_24);
+        LCD_DrawString(CENTER_X("SUCCESSFULL"), 72, "SUCCESSFULL", LCD_COLOR_GREEN, LCD_FONT_24);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -743,16 +755,10 @@ static void FlowCalibrationScreenAction(void)
 
             if (volume < 0.1f)
             {
+                LCD_DrawString(CENTER_X("ERROR"), 48, "ERROR", LCD_COLOR_RED, LCD_FONT_24);
                 LCD_DrawString(10, 48, "Not enough", LCD_COLOR_BLACK, LCD_FONT_24);
                 LCD_DrawString(10, 72, "volume detected", LCD_COLOR_BLACK, LCD_FONT_24);
-
-                do
-                {
-                    pushButton1State = GetPushButton1State();
-                    pushButton2State = GetPushButton2State();
-
-                    vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-                } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+                vTaskDelay(pdMS_TO_TICKS(1000));
             }
             else
             {
@@ -776,6 +782,10 @@ static void FlowCalibrationScreenAction(void)
                 {
                     g_settings.flowCalibration = newCalValue;
                     SETTINGS_SaveSettings();
+                    LCD_Clear();
+                    LCD_DrawString(CENTER_X("CALIBRATION"), 48, "CALIBRATION", LCD_COLOR_GREEN, LCD_FONT_24);
+                    LCD_DrawString(CENTER_X("SUCCESSFULL"), 72, "SUCCESSFULL", LCD_COLOR_GREEN, LCD_FONT_24);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
                 }
             }
         }
@@ -835,7 +845,8 @@ static void AltitudeCalibrationScreenAction(void)
                     g_settings.temperatureReference = temperatureReference;
                     SETTINGS_SaveSettings();
                     LCD_Clear();
-                    LCD_DrawString(CENTER_X("SUCCESS"), 48, "SUCCESS", LCD_COLOR_GREEN, LCD_FONT_24);
+                    LCD_DrawString(CENTER_X("CALIBRATION"), 48, "CALIBRATION", LCD_COLOR_GREEN, LCD_FONT_24);
+                    LCD_DrawString(CENTER_X("SUCCESSFULL"), 72, "SUCCESSFULL", LCD_COLOR_GREEN, LCD_FONT_24);
                     vTaskDelay(pdMS_TO_TICKS(1000));
                 }
             }
@@ -886,13 +897,15 @@ static void UserWeightScreenAction(void)
     {
         g_settings.userWeight = weightValue;
         SETTINGS_SaveSettings();
+        LCD_Clear();
+        LCD_DrawString(CENTER_X("PARAMETER"), 48, "PARAMETER", LCD_COLOR_GREEN, LCD_FONT_24);
+        LCD_DrawString(CENTER_X("SAVED"), 72, "SAVED", LCD_COLOR_GREEN, LCD_FONT_24);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 static void LiveValuesScreenAction(void)
 {
-    float flow;
-    float previousFlow = FLT_MAX;
     float o2;
     float previousO2 = FLT_MAX;
     float co2;
@@ -985,6 +998,8 @@ static void LiveValuesScreenAction(void)
 
 static void SpirometerScreenAction(void)
 {
+    float flow;
+    float previousFlow = -1.0f;
     float cycleExhaledVolume;
     float previousCycleExhaledVolume = -1.0f;
     float totalExhaledVolume;
@@ -996,9 +1011,10 @@ static void SpirometerScreenAction(void)
     LCD_Clear();
 
     LCD_DrawString(CENTER_X("Spirometer"), MENU_NAME_POSITION_Y, "Spirometer", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 40, "VOLcyc =     0.0 L", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 64, "VOLtot =     0.0 L", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 88, "Rate =   0.0 br/min", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 30, "Flow =    0.0 L/min", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 52, "VOLcyc =  0.0     L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 74, "VOLtot =  0.0     L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 96, "Rate =   0.0 br/min", LCD_COLOR_BLACK, LCD_FONT_24);
 
     LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
 
@@ -1009,13 +1025,23 @@ static void SpirometerScreenAction(void)
             xSemaphoreGive(g_resetExhaledVolumeSemaphore);
         }
 
+        if (pdPASS == xQueuePeek(g_flowQueue, (void *)&flow, (TickType_t)0))
+        {
+            if (flow != previousFlow)
+            {
+                LCD_ClearString(118, 30, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%3.1f", flow);
+                LCD_DrawString(118, 30, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousFlow = flow;
+            }
+        }
         if (pdPASS == xQueuePeek(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))
         {
             if (cycleExhaledVolume != previousCycleExhaledVolume)
             {
-                LCD_ClearString(118, 40, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 52, 7, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%7.1f", cycleExhaledVolume);
-                LCD_DrawString(118, 40, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 52, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousCycleExhaledVolume = cycleExhaledVolume;
             }
         }
@@ -1023,9 +1049,9 @@ static void SpirometerScreenAction(void)
         {
             if (totalExhaledVolume != previousTotalExhaledVolume)
             {
-                LCD_ClearString(118, 64, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 74, 7, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%7.1f", totalExhaledVolume);
-                LCD_DrawString(118, 64, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 74, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousTotalExhaledVolume = totalExhaledVolume;
             }
         }
@@ -1033,9 +1059,9 @@ static void SpirometerScreenAction(void)
         {
             if (respiratoryRate != previousRespriatoryRate)
             {
-                LCD_ClearString(94, 88, 5, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%5.1f", respiratoryRate);
-                LCD_DrawString(94, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(94, 96, 6, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%4.1f", respiratoryRate);
+                LCD_DrawString(94, 96, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousRespriatoryRate = respiratoryRate;
             }
         }
@@ -1046,26 +1072,29 @@ static void SpirometerScreenAction(void)
 
 static void Vo2MaxScreenAction(void)
 {
-    float vo2;
-    float previousVo2 = -1.0f;
-    float vo2Max;
-    float previousVo2Max = -1.0f;
+    float vO2;
+    float previousVO2 = -1.0f;
+    float vO2Max;
+    float previousVO2Max = -1.0f;
     float vCo2;
     float previousVCo2 = -1.0f;
-
+    float respiratoryQuotient;
+    float previousRespiratoryQuotient = -1.0f;
     char string[8];
 
     LCD_Clear();
 
     LCD_DrawString(CENTER_X("VO2max"), MENU_NAME_POSITION_Y, "VO2max", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 36, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 42, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 30, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 36, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
 
-    LCD_DrawString(10, 60, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 66, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 52, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 58, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
 
-    LCD_DrawString(10, 84, "VCO2 =    0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 90, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 74, "VCO2 =    0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 80, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+
+    LCD_DrawString(10, 96, "RQ =      0.0", LCD_COLOR_BLACK, LCD_FONT_24);
 
     LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
 
@@ -1076,34 +1105,44 @@ static void Vo2MaxScreenAction(void)
             xSemaphoreGive(g_resetVo2MaxSemaphore);
         }
 
-        if (pdPASS == xQueuePeek(g_vo2Queue, (void *)&vo2, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_vO2Queue, (void *)&vO2, (TickType_t)0))
         {
-            if (vo2 != previousVo2)
+            if (vO2 != previousVO2)
             {
-                LCD_ClearString(118, 36, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%4.1f", vo2);
-                LCD_DrawString(118, 36, string, LCD_COLOR_BLACK, LCD_FONT_24);
-                previousVo2 = vo2;
+                LCD_ClearString(118, 30, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%4.1f", vO2);
+                LCD_DrawString(118, 30, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousVO2 = vO2;
             }
         }
-        if (pdPASS == xQueuePeek(g_vo2MaxQueue, (void *)&vo2Max, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_vO2MaxQueue, (void *)&vO2Max, (TickType_t)0))
         {
-            if (vo2Max != previousVo2Max)
+            if (vO2Max != previousVO2Max)
             {
-                LCD_ClearString(118, 60, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%4.1f", vo2Max);
-                LCD_DrawString(118, 60, string, LCD_COLOR_BLACK, LCD_FONT_24);
-                previousVo2Max = vo2Max;
+                LCD_ClearString(118, 52, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%4.1f", vO2Max);
+                LCD_DrawString(118, 52, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousVO2Max = vO2Max;
             }
         }
         if (pdPASS == xQueuePeek(g_vCo2Queue, (void *)&vCo2, (TickType_t)0))
         {
             if (vCo2 != previousVCo2)
             {
-                LCD_ClearString(118, 84, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 74, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%4.1f", vCo2);
-                LCD_DrawString(118, 84, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 74, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousVCo2 = vCo2;
+            }
+        }
+        if (pdPASS == xQueuePeek(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient, (TickType_t)0))
+        {
+            if (respiratoryQuotient != previousRespiratoryQuotient)
+            {
+                LCD_ClearString(130, 96, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%1.2f", respiratoryQuotient);
+                LCD_DrawString(130, 96, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousRespiratoryQuotient = respiratoryQuotient;
             }
         }
 

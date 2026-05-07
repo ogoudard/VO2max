@@ -14,9 +14,10 @@ extern QueueHandle_t g_cycleExhaledVolumeQueue;
 extern QueueHandle_t g_pressureQueue;
 extern QueueHandle_t g_altitudeQueue;
 extern QueueHandle_t g_respiratoryRateQueue;
-extern QueueHandle_t g_vo2Queue;
-extern QueueHandle_t g_vo2MaxQueue;
+extern QueueHandle_t g_vO2Queue;
+extern QueueHandle_t g_vO2MaxQueue;
 extern QueueHandle_t g_vCo2Queue;
+extern QueueHandle_t g_respiratoryQuotientQueue;
 
 extern SemaphoreHandle_t g_flowInitializationSemaphore;
 extern SemaphoreHandle_t g_o2InitializationSemaphore;

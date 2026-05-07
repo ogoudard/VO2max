@@ -114,9 +114,10 @@ QueueHandle_t g_altitudeQueue;
 QueueHandle_t g_totalExhaledVolumeQueue;
 QueueHandle_t g_cycleExhaledVolumeQueue;
 QueueHandle_t g_respiratoryRateQueue;
-QueueHandle_t g_vo2Queue;
-QueueHandle_t g_vo2MaxQueue;
+QueueHandle_t g_vO2Queue;
+QueueHandle_t g_vO2MaxQueue;
 QueueHandle_t g_vCo2Queue;
+QueueHandle_t g_respiratoryQuotientQueue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -172,9 +173,10 @@ void MEASURE_Initialize()
     g_pressureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_altitudeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_respiratoryRateQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_vo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_vo2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_vO2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_vO2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vCo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_respiratoryQuotientQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
 
     /* Create semaphores (used to signal initialization complete) */
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
@@ -444,8 +446,8 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     static float previousFlow = 0.0f;
 
     /* Variables for VO2 computation */
-    static float vo2Max = 0.0f;
-    float vo2 = 0.0f;
+    static float vO2Max = 0.0f;
+    float vO2 = 0.0f;
     float vCo2 = 0.0f;
     float o2;
     float co2;
@@ -453,6 +455,9 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     float pressure;
     float humidity;
     float rho;
+    bool vO2Compute;
+    bool vCo2Compute;
+    float respiratoryQuotient;
 
     /* Breath detection */
     static bool exhale = false;
@@ -471,8 +476,8 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
 
     if (xSemaphoreTake(g_resetVo2MaxSemaphore, (TickType_t)0))
     {
-        vo2Max = 0.0f;
-        xQueueOverwrite(g_vo2MaxQueue, (void *)&vo2Max);
+        vO2Max = 0.0f;
+        xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
     }
 
     timestamp = esp_timer_get_time() / 1000; // µs to ms
@@ -524,27 +529,36 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                     {
                         ComputeAirDensity(temperature, pressure, humidity, &rho);
 
-                        if (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0))
-                        {
-                            // TO DO: replace user weight by setted value in settings
-                            vo2 = ComputeVO2(rho, o2, cycleExhaledVolume, breathDuration, g_settings.userWeight);
+                        vO2Compute = (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0));
 
-                            if (vo2 > vo2Max) // Compute VO2max
+                        if (true == vO2Compute)
+                        {
+                            vO2 = ComputeVO2(rho, o2, cycleExhaledVolume, breathDuration, g_settings.userWeight);
+
+                            if (vO2 > vO2Max) // Compute VO2max
                             {
-                                vo2Max = vo2;
-                                xQueueOverwrite(g_vo2MaxQueue, (void *)&vo2Max);
+                                vO2Max = vO2;
+                                xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
                             }
 
-                            xQueueOverwrite(g_vo2Queue, (void *)&vo2);
+                            xQueueOverwrite(g_vO2Queue, (void *)&vO2);
 #if LOG_VO2
                             ESP_LOGI(flowTaskTag, "#6,%.2f,%d", vo2, timestamp);
 #endif
                         }
 
-                        if (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0))
+                        vCo2Compute = (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0));
+
+                        if (true == vCo2Compute)
                         {
                             vCo2 = ComputeVCO2(rho, co2 / 10000.0f, cycleExhaledVolume, breathDuration, g_settings.userWeight);
                             xQueueOverwrite(g_vCo2Queue, (void *)&vCo2);
+                        }
+
+                        if ((true == vCo2Compute) && (true == vO2Compute))
+                        {
+                            respiratoryQuotient = vCo2 / vO2;
+                            xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
                         }
                     }
                 }

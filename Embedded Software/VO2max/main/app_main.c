@@ -16,6 +16,7 @@
 #include "bluetooth.h"
 #include "settings.h"
 #include "debug.h"
+#include "driver/uart.h"
 
 #define MAIN_TASK_PERIOD_MS 3000
 

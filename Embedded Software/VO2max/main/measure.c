@@ -69,12 +69,35 @@
 #define RHO_STPD 1.292f
 
 /* Debug logging flags (enable/disable logs) */
-#define LOG_FLOW 0
-#define LOG_O2 0
-#define LOG_CO2 0
-#define LOG_CYCLE_EXHALED_VOLUME 0
-#define LOG_TOTAL_EXHALED_VOLUME 0
-#define LOG_VO2 0
+#define LOG_TEMPERATURE 1
+#define LOG_HUMIDITY 1
+#define LOG_PRESSURE 1
+#define LOG_ALTITUDE 1
+#define LOG_FLOW 1
+#define LOG_O2 1
+#define LOG_CO2 1
+#define LOG_CYCLE_EXHALED_VOLUME 1
+#define LOG_TOTAL_EXHALED_VOLUME 1
+#define LOG_VO2 1
+#define LOG_VO2MAX 1
+#define LOG_VCO2 1
+#define LOG_RQ 1
+#define LOG_RR 1
+
+#define TEMPERATURE_LOG_ID 0
+#define HUMIDITY_LOG_ID 1
+#define PRESSURE_LOG_ID 2
+#define ALTITUDE_LOG_ID 3
+#define FLOW_LOG_ID 4
+#define CYCLE_EXHALED_VOLUME_LOG_ID 5
+#define TOTAL_EXHALED_VOLUME_LOG_ID 6
+#define O2_LOG_ID 7
+#define CO2_LOG_ID 8
+#define VO2_LOG_ID 9
+#define VO2MAX_LOG_ID 10
+#define VCO2_LOG_ID 11
+#define RQ_LOG_ID 12
+#define RR_LOG_ID 13
 
 /************************************
  * PRIVATE VARIABLES
@@ -247,16 +270,17 @@ static void FlowTask(void *pvParameters)
 
 static void O2Task(void *pvParameters)
 {
-    const char *tagO2 = "[O2 Task]";
+    const char *o2TaskTag = "[O2 Task]";
     float o2;
+    int32_t timestamp;
 
-    ESP_LOGI(tagO2, "Task started");
+    ESP_LOGI(o2TaskTag, "Task started");
 
-    ESP_LOGI(tagO2, "Initialize M2-02 dioxygen sensor");
+    ESP_LOGI(o2TaskTag, "Initialize M2-02 dioxygen sensor");
 
     if (!ME2O2_Initialize(i2cHandle, ME2O2_I2C_ADDRESS))
     {
-        ESP_LOGE(tagO2, "ME2-O2 initialization failed, suspending task");
+        ESP_LOGE(o2TaskTag, "ME2-O2 initialization failed, suspending task");
 
         vTaskSuspend(o2TaskHandle);
 
@@ -273,12 +297,13 @@ static void O2Task(void *pvParameters)
 
         while (1)
         {
+            timestamp = esp_timer_get_time() / 1000;
+
             if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
             {
                 xQueueOverwrite(g_o2Queue, (void *)&o2);
 #if LOG_O2
-                int64_t timestamp = esp_timer_get_time() / 1000;
-                ESP_LOGI(tagO2, "#2,%.1f,%d", o2, timestamp);
+                printf("%d,%.1f,%ld\n", O2_LOG_ID, o2, timestamp);
 #endif
             }
 
@@ -289,19 +314,20 @@ static void O2Task(void *pvParameters)
 
 static void CO2Task(void *pvParameters)
 {
-    const char *tagCO2 = "[CO2 Task]";
+    const char *co2TaskTag = "[CO2 Task]";
     float co2;
     float temperature;
     float humidity;
     bool dataReady;
+    int32_t timestamp;
 
-    ESP_LOGI(tagCO2, "Task started");
+    ESP_LOGI(co2TaskTag, "Task started");
 
-    ESP_LOGI(tagCO2, "Initialize SCD30 Carbon Dioxide Sensor");
+    ESP_LOGI(co2TaskTag, "Initialize SCD30 Carbon Dioxide Sensor");
 
     if (!SCD30_Initialize(i2cHandle))
     {
-        ESP_LOGE(tagCO2, "SCD30 initialization failed, suspending task");
+        ESP_LOGE(co2TaskTag, "SCD30 initialization failed, suspending task");
 
         vTaskSuspend(co2TaskHandle);
 
@@ -323,23 +349,27 @@ static void CO2Task(void *pvParameters)
         {
             if (false == SCD30_GetDataReadyStatus(&dataReady))
             {
-                ESP_LOGE(tagCO2, "Could not retrieve data status");
+                ESP_LOGE(co2TaskTag, "Could not retrieve data status");
             }
             else
             {
                 if (false == dataReady)
                 {
-                    ESP_LOGE(tagCO2, "Data not ready");
+                    ESP_LOGE(co2TaskTag, "Data not ready");
                 }
                 else
                 {
+                    timestamp = esp_timer_get_time() / 1000;
+
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {
                         xQueueOverwrite(g_co2Queue, (void *)&co2);
                         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
 #if LOG_CO2
-                        int64_t timestamp = esp_timer_get_time() / 1000;
-                        ESP_LOGI(tagCO2, "#3,%.1f,%d", co2, timestamp);
+                        printf("%d,%ld,%ld\n", CO2_LOG_ID, (uint32_t)co2, timestamp);
+#endif
+#if LOG_HUMIDITY
+                        printf("%d,%ld,%ld\n", HUMIDITY_LOG_ID, (uint32_t)humidity, timestamp);
 #endif
                     }
                 }
@@ -357,6 +387,7 @@ static void PressureTask(void *pvParameters)
     float temperature;
     float altitude;
     BMP388_Status_u bmp388Status;
+    int32_t timestamp;
 
     ESP_LOGI(pressureTaskTag, "Task started");
 
@@ -387,12 +418,23 @@ static void PressureTask(void *pvParameters)
 
             if ((0 != bmp388Status.drdyPress) && (0 != bmp388Status.drdyTemp))
             {
-                BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
-                xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-                xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+                timestamp = esp_timer_get_time() / 1000;
 
+                BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
+
+                xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
+#if LOG_TEMPERATURE
+                printf("%d,%.1f,%ld\n", TEMPERATURE_LOG_ID, temperature, timestamp);
+#endif
+                xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+#if LOG_PRESSURE
+                printf("%d,%ld,%ld\n", PRESSURE_LOG_ID, (uint32_t)pressure, timestamp);
+#endif
                 altitude = CalculateAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
                 xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
+#if LOG_ALTITUDE
+                printf("%d,%ld,%ld\n", ALTITUDE_LOG_ID, (uint32_t)altitude, timestamp);
+#endif
             }
 
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
@@ -432,7 +474,7 @@ static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int6
 static void FlowVolumeAndVo2Computation(float diffPressure)
 {
     /* Timing variables */
-    int64_t timestamp;
+    int32_t timestamp;
     static int64_t previousTimestamp = 0;
     int64_t deltaT;
     static int64_t previousExhaleTimestamp = 0;
@@ -458,29 +500,36 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     bool vO2Compute;
     bool vCo2Compute;
     float respiratoryQuotient;
-
-    /* Breath detection */
-    static bool exhale = false;
+    static bool exhale = false; // Breath detection
 
 #if LOG_FLOW
     uint16_t i = 0;
 #endif
+
+    timestamp = esp_timer_get_time() / 1000;
 
     if (xSemaphoreTake(g_resetExhaledVolumeSemaphore, (TickType_t)0))
     {
         totalExhaledVolume = 0.0f;
         cycleExhaledVolume = 0.0f;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
+#if LOG_TOTAL_EXHALED_VOLUME
+        printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+#endif
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
+#if LOG_CYCLE_EXHALED_VOLUME
+        printf("%d,%.1f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+#endif
     }
 
     if (xSemaphoreTake(g_resetVo2MaxSemaphore, (TickType_t)0))
     {
         vO2Max = 0.0f;
         xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
+#if LOG_VO2MAX
+        printf("%d,%.1f,%ld", VO2MAX_LOG_ID, vO2Max, timestamp);
+#endif
     }
-
-    timestamp = esp_timer_get_time() / 1000; // µs to ms
 
     deltaT = timestamp - previousTimestamp;
     previousTimestamp = timestamp;
@@ -492,12 +541,12 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         {
             exhale = true;
 #if LOG_TOTAL_EXHALED_VOLUME
-            ESP_LOGI(flowTaskTag, "#5,%.3f,%d", totalExhaledVolume, timestamp);
+            printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 #endif
             cycleExhaledVolume = 0.0f;
 
 #if LOG_CYCLE_EXHALED_VOLUME
-            ESP_LOGI(flowTaskTag, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
+            printf("%d,%.1f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 #endif
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
         }
@@ -507,7 +556,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         cycleExhaledVolume += (float)deltaT * (flow + previousFlow) / 120000.0f; // Integrate flow → volume (Trapezoidal rule)
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
-        ESP_LOGI(flowTaskTag, "#4,%.3f,%d", cycleExhaledVolume, timestamp);
+        printf("%d,%.1f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 #endif
     }
     else if ((DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) > diffPressure)
@@ -518,8 +567,14 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             previousExhaleTimestamp = esp_timer_get_time();
             respiratoryRate = 60000000 / (float)breathDuration; // Respiratory rate in breath/min
             xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
+#if LOG_RR
+            printf("%d,%.1f,%ld\n", RR_LOG_ID, respiratoryRate, timestamp);
+#endif
             totalExhaledVolume += cycleExhaledVolume;
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
+#if LOG_TOTAL_EXHALED_VOLUME
+            printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, respiratoryRate, timestamp);
+#endif
 
             if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
             {
@@ -539,11 +594,14 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                             {
                                 vO2Max = vO2;
                                 xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
+#if LOG_VO2MAX
+                                printf("%d,%.1f,%ld\n", VO2MAX_LOG_ID, vO2Max, timestamp);
+#endif
                             }
 
                             xQueueOverwrite(g_vO2Queue, (void *)&vO2);
 #if LOG_VO2
-                            ESP_LOGI(flowTaskTag, "#6,%.2f,%d", vo2, timestamp);
+                            printf("%d,%.1f,%ld\n", VO2_LOG_ID, vO2, timestamp);
 #endif
                         }
 
@@ -553,19 +611,25 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                         {
                             vCo2 = ComputeVCO2(rho, co2 / 10000.0f, cycleExhaledVolume, breathDuration, g_settings.userWeight);
                             xQueueOverwrite(g_vCo2Queue, (void *)&vCo2);
+#if LOG_VCO2
+                            printf("%d,%.1f,%ld\n", VCO2_LOG_ID, vCo2, timestamp);
+#endif
                         }
 
                         if ((true == vCo2Compute) && (true == vO2Compute))
                         {
                             respiratoryQuotient = vCo2 / vO2;
                             xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
+#if LOG_RQ
+                            printf("%d,%.2f,%ld\n", RQ_LOG_ID, respiratoryQuotient, timestamp);
+#endif
                         }
                     }
                 }
             }
 
 #if LOG_TOTAL_EXHALED_VOLUME
-            ESP_LOGI(flowTaskTag, "#5,%.3f,%d", totalExhaledVolume, timestamp);
+            printf("%d,%.2f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 #endif
             exhale = false;
         }
@@ -580,19 +644,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
 
     xQueueOverwrite(g_flowQueue, (void *)&flow);
 #if LOG_FLOW
-    if ((i % 5) == 0)
-    {
-        ESP_LOGI(flowTaskTag, "#1,%.3f,%d", flow, timestamp);
-    }
-
-    if (i < 1000)
-    {
-        i++;
-    }
-    else
-    {
-        i = 0;
-    }
+    printf("%d,%.2f,%ld\n", FLOW_LOG_ID, flow, timestamp);
 #endif
 }
 

@@ -8,14 +8,13 @@ import time
 
 ser = serial.Serial(
     port=sys.argv[1],\
-    baudrate=115200,\
+    baudrate=230400,\
     parity=serial.PARITY_NONE,\
     stopbits=serial.STOPBITS_ONE,\
     bytesize=serial.EIGHTBITS,\
         timeout=10000)
         
 startTime = int(time.time())
-
 
 def animate(i):
     line = ser.readline().decode("ascii").replace("\r\n", "")
@@ -104,17 +103,18 @@ animate.co2Array = []
 animate.exhaledCycleArray = []
 animate.exhaledTotalArray = []
 
-fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, layout='constrained')
+if __name__ == "__main__":
+    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, layout='constrained')
 
-ax1.set_ylabel("Mass Flow (l/min)")
-ax2.set_ylabel("O2 Concentration (%)")
-ax3.set_ylabel("CO2 Concentration (ppm)")
-ax4.set_ylabel("Exhaled volume cycle")
-ax5.set_ylabel("Exhaled volume total")
-# ax2 = ax1.twinx()
-# ax3 = ax1.twinx()
-# ax4 = ax1.twinx()
+    ax1.set_ylabel("Mass Flow (l/min)")
+    ax2.set_ylabel("O2 Concentration (%)")
+    ax3.set_ylabel("CO2 Concentration (ppm)")
+    ax4.set_ylabel("Exhaled volume cycle")
+    ax5.set_ylabel("Exhaled volume total")
+    # ax2 = ax1.twinx()
+    # ax3 = ax1.twinx()
+    # ax4 = ax1.twinx()
 
-ani = animation.FuncAnimation(fig, animate, frames=1000, interval=50)
-plt.show()
+    ani = animation.FuncAnimation(fig, animate, frames=1000, interval=50)
+    plt.show()
 

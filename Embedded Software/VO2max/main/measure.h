@@ -12,6 +12,7 @@ extern QueueHandle_t g_humidityQueue;
 extern QueueHandle_t g_totalExhaledVolumeQueue;
 extern QueueHandle_t g_cycleExhaledVolumeQueue;
 extern QueueHandle_t g_pressureQueue;
+extern QueueHandle_t g_altitudeQueue;
 extern QueueHandle_t g_respiratoryRateQueue;
 extern QueueHandle_t g_vo2Queue;
 extern QueueHandle_t g_vo2MaxQueue;

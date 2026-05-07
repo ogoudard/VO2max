@@ -70,7 +70,7 @@ static Menu_t liveValuesMenu;
 static Menu_t o2CalibrationMenu;
 static Menu_t co2CalibrationMenu;
 static Menu_t flowCalibrationMenu;
-static Menu_t pressureCalibrationMenu;
+static Menu_t altitudeCalibrationMenu;
 static Menu_t bluetoothSettingsMenu;
 static Menu_t userSettingsMenu;
 static Menu_t bluetoothEnableMenu;
@@ -105,7 +105,7 @@ static void Vo2MaxScreenAction(void);
 static void O2CalibrationScreenAction(void);
 static void Co2CalibrationScreenAction(void);
 static void FlowCalibrationScreenAction(void);
-static void PressureCalibrationScreenAction(void);
+static void AltitudeCalibrationScreenAction(void);
 static void UserWeightScreenAction(void);
 static void bleEnableScreenAction(void);
 
@@ -291,11 +291,11 @@ static void InitializeMenus(void)
     MENU_Create(&flowCalibrationMenu, "Flow");
     MENU_Create(&o2CalibrationMenu, "O2");
     MENU_Create(&co2CalibrationMenu, "CO2");
-    MENU_Create(&pressureCalibrationMenu, "Pressure");
+    MENU_Create(&altitudeCalibrationMenu, "Altitude");
     MENU_AddSubmenu(&calibrationMenu, &o2CalibrationMenu);
     MENU_AddSubmenu(&calibrationMenu, &co2CalibrationMenu);
     MENU_AddSubmenu(&calibrationMenu, &flowCalibrationMenu);
-    MENU_AddSubmenu(&calibrationMenu, &pressureCalibrationMenu);
+    MENU_AddSubmenu(&calibrationMenu, &altitudeCalibrationMenu);
 
     // User settings menu
     MENU_Create(&weightMenu, "Weight");
@@ -305,7 +305,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&liveValuesMenu, LiveValuesScreenAction);
     MENU_AddAction(&spirometerMenu, SpirometerScreenAction);
     MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
-    MENU_AddAction(&pressureCalibrationMenu, PressureCalibrationScreenAction);
+    MENU_AddAction(&altitudeCalibrationMenu, AltitudeCalibrationScreenAction);
     MENU_AddAction(&weightMenu, UserWeightScreenAction);
     MENU_AddAction(&bluetoothEnableMenu, bleEnableScreenAction);
     MENU_AddAction(&flowCalibrationMenu, FlowCalibrationScreenAction);
@@ -782,50 +782,64 @@ static void FlowCalibrationScreenAction(void)
     }
 }
 
-static void PressureCalibrationScreenAction(void)
+static void AltitudeCalibrationScreenAction(void)
 {
     PushButtonState_e pushButton1State;
     PushButtonState_e pushButton2State;
-    static float pressureValue = 1013.0f;
-    char pressureString[8];
+    float altitudeValue;
+    char altitudeString[8];
+    float pressureReference;
+    float temperatureReference;
 
-    pressureValue = g_settings.pressureCalibration;
-
-    LCD_Clear();
-
-    LCD_DrawString(CENTER_X("Pressure"), MENU_NAME_POSITION_Y, "Pressure", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(CENTER_X("Calibration"), MENU_NAME_POSITION_Y + 24, "Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 72, "cal =          hPa", LCD_COLOR_BLACK, LCD_FONT_24);
-    snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
-    LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
-
-    do
+    if (pdPASS == xQueuePeek(g_altitudeQueue, (void *)&altitudeValue, (TickType_t)0))
     {
-        pushButton1State = GetPushButton1State();
-        pushButton2State = GetPushButton2State();
+        LCD_Clear();
 
-        if (BUTTON_SHORT_PRESS == pushButton1State)
+        LCD_DrawString(CENTER_X("Altitude"), MENU_NAME_POSITION_Y, "Altitude", LCD_COLOR_BLACK, LCD_FONT_24);
+        LCD_DrawString(CENTER_X("Calibration"), MENU_NAME_POSITION_Y + 24, "Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
+        LCD_DrawString(10, 72, "altitude =        m", LCD_COLOR_BLACK, LCD_FONT_24);
+        snprintf(altitudeString, sizeof(altitudeString), "%4.0f", altitudeValue);
+        LCD_DrawString(130, 72, altitudeString, LCD_COLOR_BLACK, LCD_FONT_24);
+
+        do
         {
-            pressureValue += 0.25f;
-            snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
-            LCD_ClearString(80, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
-        }
-        else if (BUTTON_SHORT_PRESS == pushButton2State)
+            pushButton1State = GetPushButton1State();
+            pushButton2State = GetPushButton2State();
+
+            if (BUTTON_SHORT_PRESS == pushButton1State)
+            {
+                altitudeValue += 1.0f;
+                snprintf(altitudeString, sizeof(altitudeString), "%4.0f", altitudeValue);
+                LCD_ClearString(130, 72, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(130, 72, altitudeString, LCD_COLOR_BLACK, LCD_FONT_24);
+            }
+            else if (BUTTON_SHORT_PRESS == pushButton2State)
+            {
+                altitudeValue -= 1.0f;
+                snprintf(altitudeString, sizeof(altitudeString), "%4.0f", altitudeValue);
+                LCD_ClearString(130, 72, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(130, 72, altitudeString, LCD_COLOR_BLACK, LCD_FONT_24);
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
+        } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
+
+        if (BUTTON_LONG_PRESS == pushButton2State)
         {
-            pressureValue -= 0.25f;
-            snprintf(pressureString, sizeof(pressureString), "%4.2f", pressureValue);
-            LCD_ClearString(80, 72, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-            LCD_DrawString(80, 72, pressureString, LCD_COLOR_BLACK, LCD_FONT_24);
+            if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperatureReference, (TickType_t)0))
+            {
+                if (pdPASS == xQueuePeek(g_pressureQueue, (void *)&pressureReference, (TickType_t)0))
+                {
+                    g_settings.altitudeReference = altitudeValue;
+                    g_settings.pressureReference = pressureReference;
+                    g_settings.temperatureReference = temperatureReference;
+                    SETTINGS_SaveSettings();
+                    LCD_Clear();
+                    LCD_DrawString(CENTER_X("SUCCESS"), 48, "SUCCESS", LCD_COLOR_GREEN, LCD_FONT_24);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                }
+            }
         }
-
-        vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-    } while ((BUTTON_LONG_PRESS != pushButton1State) && (BUTTON_LONG_PRESS != pushButton2State));
-
-    if (BUTTON_LONG_PRESS == pushButton2State)
-    {
-        g_settings.pressureCalibration = pressureValue;
-        SETTINGS_SaveSettings();
     }
 }
 
@@ -889,16 +903,18 @@ static void LiveValuesScreenAction(void)
     float previousHumidity = FLT_MAX;
     float pressure;
     float previousPressure = FLT_MAX;
+    float altitude;
+    float previousAltitude = FLT_MAX;
     char string[10];
 
     LCD_Clear();
 
     LCD_DrawString(5, 0, "O2  =             %", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(5, 22, "CO2 =           ppm", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(5, 44, "Q   =         L/min", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(5, 66, "T   =             C", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(5, 88, "H   =             %", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(5, 110, "P   =            Pa", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 44, "T   =             C", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 66, "H   =             %", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 88, "P   =            Pa", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 110, "Alt =             m", LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {
@@ -922,23 +938,13 @@ static void LiveValuesScreenAction(void)
                 previousCo2 = co2;
             }
         }
-        if (pdPASS == xQueuePeek(g_flowQueue, (void *)&flow, (TickType_t)0))
-        {
-            if (flow != previousFlow)
-            {
-                snprintf(string, sizeof(string), "%-5.1f", flow);
-                LCD_ClearString(80, 44, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(80, 44, string, LCD_COLOR_BLACK, LCD_FONT_24);
-                previousFlow = flow;
-            }
-        }
         if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
         {
             if (temperature != previousTemperature)
             {
                 snprintf(string, sizeof(string), "%-5.1f", temperature);
-                LCD_ClearString(80, 66, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(80, 66, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 44, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 44, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousTemperature = temperature;
             }
         }
@@ -947,8 +953,8 @@ static void LiveValuesScreenAction(void)
             if (humidity != previousHumidity)
             {
                 snprintf(string, sizeof(string), "%-5.0f", humidity);
-                LCD_ClearString(80, 88, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                LCD_DrawString(80, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(80, 66, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 66, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousHumidity = humidity;
             }
         }
@@ -957,9 +963,19 @@ static void LiveValuesScreenAction(void)
             if (pressure != previousPressure)
             {
                 snprintf(string, sizeof(string), "%-5.1f", pressure);
+                LCD_ClearString(80, 88, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_DrawString(80, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousPressure = pressure;
+            }
+        }
+        if (pdPASS == xQueuePeek(g_altitudeQueue, (void *)&altitude, (TickType_t)0))
+        {
+            if (altitude != previousAltitude)
+            {
+                snprintf(string, sizeof(string), "%-4.1f", altitude);
                 LCD_ClearString(80, 110, 7, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 110, string, LCD_COLOR_BLACK, LCD_FONT_24);
-                previousPressure = pressure;
+                previousAltitude = altitude;
             }
         }
 

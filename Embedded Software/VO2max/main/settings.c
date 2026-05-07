@@ -9,7 +9,14 @@ Settings_t g_settings;
 
 static const char *TAG = "[SETTINGS]";
 static nvs_handle_t nvsHandle;
-static const Settings_t defaultSettings = {.bleOn = false, .co2Calibration = 400.0f, .flowCalibration = 1.0f, .o2Calibration = 20.9f, .userWeight = 70.0f};
+static const Settings_t defaultSettings = {.bleOn = false,
+                                           .co2Calibration = 400.0f,
+                                           .flowCalibration = 1.0f,
+                                           .o2Calibration = 20.9f,
+                                           .userWeight = 70.0f,
+                                           .altitudeReference = 0.0f,
+                                           .pressureReference = 101325.0f,
+                                           .temperatureReference = 20.0f};
 
 void SETTINGS_Initialize(void)
 {

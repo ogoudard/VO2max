@@ -110,6 +110,7 @@ QueueHandle_t g_co2Queue;
 QueueHandle_t g_temperatureQueue;
 QueueHandle_t g_humidityQueue;
 QueueHandle_t g_pressureQueue;
+QueueHandle_t g_altitudeQueue;
 QueueHandle_t g_totalExhaledVolumeQueue;
 QueueHandle_t g_cycleExhaledVolumeQueue;
 QueueHandle_t g_respiratoryRateQueue;
@@ -128,6 +129,7 @@ static void ComputeAirDensity(float temperature, float pressure, float humidity,
 static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_t durationUs, float weight);
 static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int64_t durationUs, float weight);
 static void FlowVolumeAndVo2Computation(float diffPressure);
+static float CalculateAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -168,6 +170,7 @@ void MEASURE_Initialize()
     g_humidityQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_temperatureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_pressureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_altitudeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_respiratoryRateQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vo2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
@@ -350,6 +353,7 @@ static void PressureTask(void *pvParameters)
     const char *pressureTaskTag = "[Pressure Task]";
     float pressure;
     float temperature;
+    float altitude;
     BMP388_Status_u bmp388Status;
 
     ESP_LOGI(pressureTaskTag, "Task started");
@@ -384,6 +388,9 @@ static void PressureTask(void *pvParameters)
                 BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
                 xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
                 xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+
+                altitude = CalculateAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
+                xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
             }
 
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
@@ -573,4 +580,10 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         i = 0;
     }
 #endif
+}
+
+static float CalculateAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure)
+{
+    // Hypsometric equation
+    return altitudeReference + (temperatureReference + 273.15f) / 0.0065f * (1 - powf(pressure / pressureReference, 0.190263));
 }

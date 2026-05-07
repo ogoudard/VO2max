@@ -37,7 +37,7 @@
 
 #define SHORT_LONG_PRESS_THRESHOLD_US 400000
 
-#define MENU_NAME_POSITION_Y 10
+#define MENU_NAME_POSITION_Y 5
 #define MENU_LIST_X_START 30
 #define MENU_LIST_Y_START 30
 #define MENU_LIST_Y_STEP 24
@@ -415,7 +415,7 @@ static void DisplayBatterySoc(void)
 static void DisplayMenuName(Menu_t *menu)
 {
     LCD_ClearString(10, MENU_NAME_POSITION_Y, 18, LCD_COLOR_WHITE, LCD_FONT_24);
-    LCD_DrawString(CENTER_X(menu->name), 5, menu->name, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(CENTER_X(menu->name), MENU_NAME_POSITION_Y, menu->name, LCD_COLOR_BLACK, LCD_FONT_24);
 }
 
 static void DisplayPage(Menu_t *menu, uint8_t page)
@@ -898,7 +898,7 @@ static void LiveValuesScreenAction(void)
     LCD_DrawString(5, 44, "Q   =         L/min", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(5, 66, "T   =             C", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(5, 88, "H   =             %", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(5, 110, "P   =           hPa", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(5, 110, "P   =            Pa", LCD_COLOR_BLACK, LCD_FONT_24);
 
     while (BUTTON_LONG_PRESS != GetPushButton1State())
     {

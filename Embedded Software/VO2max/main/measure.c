@@ -59,7 +59,7 @@
 #define PRESSURE_SENSOR_MODEL SDP8XX_SDP810_500PA
 
 /* Threshold to detect exhalation */
-#define DIFFERENTIAL_PRESSURE_THRESHOLD 0.2f
+#define DIFFERENTIAL_PRESSURE_THRESHOLD 0.3f
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
 /* Calibration constant for O2 sensor 20.9% */
@@ -73,7 +73,7 @@
 #define LOG_HUMIDITY 1
 #define LOG_PRESSURE 1
 #define LOG_ALTITUDE 1
-#define LOG_FLOW 1
+#define LOG_FLOW 0
 #define LOG_O2 1
 #define LOG_CO2 1
 #define LOG_CYCLE_EXHALED_VOLUME 1
@@ -84,6 +84,7 @@
 #define LOG_RQ 1
 #define LOG_RR 1
 #define LOG_RHO 1
+#define LOG_EXPIRATORY_FLOW 1
 
 #define TEMPERATURE_LOG_ID 0
 #define HUMIDITY_LOG_ID 1
@@ -100,6 +101,7 @@
 #define RQ_LOG_ID 12
 #define RR_LOG_ID 13
 #define RHO_LOG_ID 14
+#define EXPIRATORY_FLOW_LOG_ID 15
 
 /************************************
  * PRIVATE VARIABLES
@@ -143,7 +145,8 @@ QueueHandle_t g_vO2Queue;
 QueueHandle_t g_vO2MaxQueue;
 QueueHandle_t g_vCo2Queue;
 QueueHandle_t g_respiratoryQuotientQueue;
-QueueHandle_t g_O2CalibrationQueue;
+QueueHandle_t g_o2CalibrationQueue;
+QueueHandle_t g_expiratoryFlowQueue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -203,7 +206,8 @@ void MEASURE_Initialize()
     g_vO2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vCo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_respiratoryQuotientQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_O2CalibrationQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_o2CalibrationQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_expiratoryFlowQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
 
     /* Create semaphores (used to signal initialization complete) */
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
@@ -302,7 +306,7 @@ static void O2Task(void *pvParameters)
 
         while (1)
         {
-            if (pdPASS == xQueueReceive(g_O2CalibrationQueue, (void *)&o2CalValue, (TickType_t)0))
+            if (pdPASS == xQueueReceive(g_o2CalibrationQueue, (void *)&o2CalValue, (TickType_t)0))
             {
                 ME2O2_Calibrate(o2CalValue);
             }
@@ -510,6 +514,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     bool vO2Compute;
     bool vCo2Compute;
     float respiratoryQuotient;
+    float expiratoryFlow;
     static bool exhale = false; // Breath detection
 
     timestamp = esp_timer_get_time() / 1000;
@@ -520,11 +525,11 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         cycleExhaledVolume = 0.0f;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 #if LOG_TOTAL_EXHALED_VOLUME
-        printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+        printf("%d,%.2f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 #endif
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
-        printf("%d,%.1f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+        printf("%d,%.2f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 #endif
     }
 
@@ -547,12 +552,12 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         {
             exhale = true;
 #if LOG_TOTAL_EXHALED_VOLUME
-            printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+            printf("%d,%.2f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 #endif
             cycleExhaledVolume = 0.0f;
 
 #if LOG_CYCLE_EXHALED_VOLUME
-            printf("%d,%.1f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+            printf("%d,%.2f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 #endif
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
         }
@@ -562,7 +567,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         cycleExhaledVolume += (float)deltaT * (flow + previousFlow) / 120000.0f; // Integrate flow → volume (Trapezoidal rule)
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
 #if LOG_CYCLE_EXHALED_VOLUME
-        printf("%d,%.1f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+        printf("%d,%.2f,%ld\n", CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 #endif
     }
     else if ((DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) > diffPressure)
@@ -571,15 +576,23 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         {
             breathDuration = esp_timer_get_time() - previousExhaleTimestamp;
             previousExhaleTimestamp = esp_timer_get_time();
+
             respiratoryRate = 60000000 / (float)breathDuration; // Respiratory rate in breath/min
             xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
 #if LOG_RR
             printf("%d,%.1f,%ld\n", RR_LOG_ID, respiratoryRate, timestamp);
 #endif
+
+            expiratoryFlow = respiratoryRate * cycleExhaledVolume;
+            xQueueOverwrite(g_expiratoryFlowQueue, (void *)&expiratoryFlow);
+#if LOG_EXPIRATORY_FLOW
+            printf("%d,%.2f,%ld\n", EXPIRATORY_FLOW_LOG_ID, expiratoryFlow, timestamp);
+#endif
+
             totalExhaledVolume += cycleExhaledVolume;
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 #if LOG_TOTAL_EXHALED_VOLUME
-            printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+            printf("%d,%.2f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 #endif
 
             if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))

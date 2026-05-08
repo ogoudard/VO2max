@@ -621,7 +621,7 @@ static void O2CalibrationScreenAction(void)
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
-        xQueueOverwrite(g_O2CalibrationQueue, (void *)&o2CalValue);
+        xQueueOverwrite(g_o2CalibrationQueue, (void *)&o2CalValue);
         g_settings.o2Calibration = o2CalValue;
         SETTINGS_SaveSettings();
         LCD_Clear();

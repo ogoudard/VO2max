@@ -25,7 +25,8 @@ VCO2_LOG_ID=11
 RQ_LOG_ID=12
 RR_LOG_ID=13
 RHO_LOG_ID=14
- 
+EXPIRATORY_FLOW_ID=15
+
 flow = 0
 temperature = 0
 humidity = 0pressure = 0
@@ -40,10 +41,11 @@ vCo2 = 0
 rq = 0
 rr = 0
 rho = 0
+expiratoryFlow = 0
                 
 if __name__ == "__main__":
     with open(sys.argv[2], 'w+') as file:
-        file.write("timestamp,temperature,humidity,pressure,altitude,flow,cycle_volume,total_volume,o2,co2,vo2,vo2max,vco2,rq,rr,rho\n")
+        file.write("timestamp,temperature,humidity,pressure,altitude,flow,expiratory_flow,cycle_volume,total_volume,o2,co2,vo2,vo2max,vco2,rq,rr,rho\n")
         
         while(1):
             line = ser.readline().decode('ascii')
@@ -82,6 +84,8 @@ if __name__ == "__main__":
                 rr = data
             elif id == RHO_LOG_ID:
                 rho = data
+            elif id == EXPIRATORY_FLOW_ID:
+                expiratoryFlow = data
                 
-            fileLine = "{:d},{:.0f},{:.1f},{:.0f},{:.0f},{:.1f},{:.1f},{:.1f},{:.1f},{:.0f},{:.1f},{:.1f},{:.1f},{:.2f},{:.1f},{:.1f}\n".format(timestamp, temperature, humidity, pressure, altitude, flow, cycleVolume, totalVolume, o2, co2, vO2, vO2max, vCo2, rq, rr, rho)
+            fileLine = "{:d},{:.0f},{:.1f},{:.0f},{:.0f},{:.1f},{:.2f},{:.2f},{:.2f},{:.1f},{:.0f},{:.1f},{:.1f},{:.1f},{:.2f},{:.1f},{:.1f}\n".format(timestamp, temperature, humidity, pressure, altitude, flow, expiratoryFlow, cycleVolume, totalVolume, o2, co2, vO2, vO2max, vCo2, rq, rr, rho)
             file.write(fileLine)

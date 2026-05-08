@@ -593,7 +593,7 @@ static void O2CalibrationScreenAction(void)
 
     LCD_DrawString(CENTER_X("O2 Calibration"), MENU_NAME_POSITION_Y, "O2 Calibration", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(10, 48, "cal =          %", LCD_COLOR_BLACK, LCD_FONT_24);
-    snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
+    snprintf(o2CalString, sizeof(o2CalString), "%2.2f", o2CalValue);
     LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
 
     do
@@ -603,16 +603,16 @@ static void O2CalibrationScreenAction(void)
 
         if (BUTTON_SHORT_PRESS == pushButton1State)
         {
-            o2CalValue += 0.1f;
-            snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
-            LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+            o2CalValue += 0.01f;
+            snprintf(o2CalString, sizeof(o2CalString), "%2.2f", o2CalValue);
+            LCD_ClearString(90, 48, 5, LCD_COLOR_WHITE, LCD_FONT_24);
             LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
         else if (BUTTON_SHORT_PRESS == pushButton2State)
         {
-            o2CalValue -= 0.1f;
-            snprintf(o2CalString, sizeof(o2CalString), "%2.1f", o2CalValue);
-            LCD_ClearString(90, 48, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+            o2CalValue -= 0.01f;
+            snprintf(o2CalString, sizeof(o2CalString), "%2.2f", o2CalValue);
+            LCD_ClearString(90, 48, 5, LCD_COLOR_WHITE, LCD_FONT_24);
             LCD_DrawString(90, 48, o2CalString, LCD_COLOR_BLACK, LCD_FONT_24);
         }
 
@@ -621,6 +621,7 @@ static void O2CalibrationScreenAction(void)
 
     if (BUTTON_LONG_PRESS == pushButton2State)
     {
+        xQueueOverwrite(g_O2CalibrationQueue, (void *)&o2CalValue);
         g_settings.o2Calibration = o2CalValue;
         SETTINGS_SaveSettings();
         LCD_Clear();
@@ -935,8 +936,8 @@ static void LiveValuesScreenAction(void)
         {
             if (o2 != previousO2)
             {
-                snprintf(string, sizeof(string), "%.1f", o2);
-                LCD_ClearString(80, 0, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%2.2f", o2);
+                LCD_ClearString(80, 0, 8, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 0, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousO2 = o2;
             }

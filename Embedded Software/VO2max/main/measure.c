@@ -143,6 +143,7 @@ QueueHandle_t g_vO2Queue;
 QueueHandle_t g_vO2MaxQueue;
 QueueHandle_t g_vCo2Queue;
 QueueHandle_t g_respiratoryQuotientQueue;
+QueueHandle_t g_O2CalibrationQueue;
 
 /************************************
  * PRIVATE FUNCTION PROTOTYPES
@@ -202,6 +203,7 @@ void MEASURE_Initialize()
     g_vO2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_vCo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_respiratoryQuotientQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_O2CalibrationQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
 
     /* Create semaphores (used to signal initialization complete) */
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
@@ -275,6 +277,7 @@ static void O2Task(void *pvParameters)
     const char *o2TaskTag = "[O2 Task]";
     float o2;
     int32_t timestamp;
+    float o2CalValue;
 
     ESP_LOGI(o2TaskTag, "Task started");
 
@@ -293,12 +296,17 @@ static void O2Task(void *pvParameters)
     }
     else
     {
-        ME2O2_Calibrate(INITIAL_O2_CONCENTRATION_PERCENT);
+        ME2O2_Calibrate(g_settings.o2Calibration);
 
         xSemaphoreGive(g_o2InitializationSemaphore);
 
         while (1)
         {
+            if (pdPASS == xQueueReceive(g_O2CalibrationQueue, (void *)&o2CalValue, (TickType_t)0))
+            {
+                ME2O2_Calibrate(o2CalValue);
+            }
+
             timestamp = esp_timer_get_time() / 1000;
 
             if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
@@ -503,10 +511,6 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     bool vCo2Compute;
     float respiratoryQuotient;
     static bool exhale = false; // Breath detection
-
-#if LOG_FLOW
-    uint16_t i = 0;
-#endif
 
     timestamp = esp_timer_get_time() / 1000;
 

@@ -83,6 +83,7 @@
 #define LOG_VCO2 1
 #define LOG_RQ 1
 #define LOG_RR 1
+#define LOG_RHO 1
 
 #define TEMPERATURE_LOG_ID 0
 #define HUMIDITY_LOG_ID 1
@@ -98,6 +99,7 @@
 #define VCO2_LOG_ID 11
 #define RQ_LOG_ID 12
 #define RR_LOG_ID 13
+#define RHO_LOG_ID 14
 
 /************************************
  * PRIVATE VARIABLES
@@ -573,7 +575,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             totalExhaledVolume += cycleExhaledVolume;
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
 #if LOG_TOTAL_EXHALED_VOLUME
-            printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, respiratoryRate, timestamp);
+            printf("%d,%.1f,%ld\n", TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 #endif
 
             if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
@@ -583,7 +585,9 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                     if (pdPASS == xQueuePeek(g_humidityQueue, (void *)&humidity, (TickType_t)0))
                     {
                         ComputeAirDensity(temperature, pressure, humidity, &rho);
-
+#if LOG_RHO
+                        printf("%d,%.1f,%ld\n", RHO_LOG_ID, rho, timestamp);
+#endif
                         vO2Compute = (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0));
 
                         if (true == vO2Compute)

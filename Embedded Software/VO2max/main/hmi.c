@@ -1103,6 +1103,7 @@ static void Vo2MaxScreenAction(void)
         if (GetPushButton2State() == BUTTON_LONG_PRESS)
         {
             xSemaphoreGive(g_resetVo2MaxSemaphore);
+            xSemaphoreGive(g_resetExhaledVolumeSemaphore);
         }
 
         if (pdPASS == xQueuePeek(g_vO2Queue, (void *)&vO2, (TickType_t)0))

@@ -25,7 +25,7 @@ from matplotlib.widgets import CheckButtons
 CHANNELS = {
     "0":  {"label": "Temperature",        "unit": "°C"},
     "1":  {"label": "Humidity",           "unit": "%"},
-    "2":  {"label": "Pressure",           "unit": "hPa"},
+    "2":  {"label": "Pressure",           "unit": "Pa"},
     "3":  {"label": "Altitude",           "unit": "m"},
     "4":  {"label": "Flow",               "unit": "L/s"},
     "5":  {"label": "Cycle Exhaled Vol.", "unit": "L"},

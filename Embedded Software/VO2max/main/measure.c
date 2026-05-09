@@ -82,7 +82,7 @@
 #define LOG_HUMIDITY true
 #define LOG_PRESSURE true
 #define LOG_ALTITUDE true
-#define LOG_FLOW true
+#define LOG_FLOW false
 #define LOG_O2 true
 #define LOG_CO2 true
 #define LOG_CYCLE_EXHALED_VOLUME true
@@ -535,7 +535,14 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     float volume;
     static bool exhale = false; // Breath detection
 
+    if (diffPressure < 0.0f)
+    {
+        diffPressure = 0.0f;
+    }
+
     timestamp = esp_timer_get_time() / 1000;
+    deltaT = timestamp - previousTimestamp;
+    previousTimestamp = timestamp;
 
     if (xSemaphoreTake(g_resetExhaledVolumeSemaphore, (TickType_t)0))
     {
@@ -555,8 +562,12 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, "%.2f", timestamp);
     }
 
-    deltaT = timestamp - previousTimestamp;
-    previousTimestamp = timestamp;
+    // Bernoulli equation Q=k⋅sqrt(ΔP)
+    flow = g_settings.flowCalibration * sqrt(diffPressure);
+    volume = (float)deltaT * (flow + previousFlow) / 120000.0f; // Integrate flow → volume (Trapezoidal rule)
+    xQueueOverwrite(g_flowQueue, (void *)&flow);
+    LOG_DATA(LOG_FLOW, FLOW_LOG_ID, flow, "%.2f", timestamp);
+    previousFlow = flow;
 
     /* Detect exhalation using threshold + hysteresis */
     if ((DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) < diffPressure)
@@ -576,10 +587,6 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
         }
 
-        // Bernoulli equation Q=k⋅sqrt(ΔP)
-        flow = g_settings.flowCalibration * sqrt(diffPressure);
-        volume = (float)deltaT * (flow + previousFlow) / 120000.0f; // Integrate flow → volume (Trapezoidal rule)
-
         cycleExhaledVolume += volume;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
         LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
@@ -592,13 +599,22 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     {
         if (exhale == true) // End of exhalation
         {
+            exhale = false;
+
             endExhaleTimestamp = esp_timer_get_time();
 
             breathDuration = endExhaleTimestamp - previousExhaleTimestamp;
+            previousExhaleTimestamp = endExhaleTimestamp;
 
             if (breathDuration > BREATH_DURATION_THRESHOLD_US)
             {
-                previousExhaleTimestamp = endExhaleTimestamp;
+                cycleExhaledVolume += volume;
+                xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
+                LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
+
+                totalExhaledVolume += volume;
+                xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
+                LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, "%.2f", timestamp);
 
                 respiratoryRate = 60000000.0f / (float)breathDuration; // Respiratory rate in breath/min
                 xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
@@ -656,21 +672,9 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                         }
                     }
                 }
-
-                exhale = false;
             }
         }
-
-        diffPressure = 0.0f;
-        flow = 0.0f;
-
-        xQueueOverwrite(g_flowQueue, (void *)&flow);
     }
-
-    previousFlow = flow;
-
-    xQueueOverwrite(g_flowQueue, (void *)&flow);
-    LOG_DATA(LOG_FLOW, FLOW_LOG_ID, flow, "%.2f", timestamp);
 }
 
 static float CalculateAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure)

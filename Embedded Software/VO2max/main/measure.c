@@ -17,6 +17,7 @@
 #include "hmi.h" // User interface (display)
 #include "debug.h"
 #include "settings.h"
+#include "log.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -62,19 +63,20 @@
 #define DIFFERENTIAL_PRESSURE_THRESHOLD 0.3f
 #define DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS 0.1f
 
-#define BREATH_DURATION_THRESHOLD_US 200000
+#define BREATH_DURATION_THRESHOLD_US 400000
+
 /* Air density at Standard Temperature and Pressure Desaturated */
 #define RHO_STPD 1.292f
 
 #define CONCAT(A, B) A##B
 #define CONCAT_EXPAND(A, B) CONCAT(A, B)
 
-#define LOG_DATA(enable, id, value, format, timestamp) CONCAT_EXPAND(LOG_DATA_, enable)(id, value, format, timestamp)
+#define LOG_DATA(enable, id, value, timestamp) CONCAT_EXPAND(LOG_DATA_, enable)(id, value, timestamp)
 
-#define LOG_DATA_true(id, value, format, timestamp) printf("%d," format ",%" PRId64 "\n", id, value, timestamp);
-#define LOG_DATA_false(id, value, format, timestamp) \
-    while (0)                                        \
-    {                                                \
+#define LOG_DATA_true(id, value, timestamp) LOG_SendData(id, value, timestamp)
+#define LOG_DATA_false(id, value, timestamp) \
+    while (0)                                \
+    {                                        \
     }
 
 /* Debug logging flags (enable/disable logs) */
@@ -339,7 +341,7 @@ static void O2Task(void *pvParameters)
             if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
             {
                 xQueueOverwrite(g_o2Queue, (void *)&o2);
-                LOG_DATA(LOG_O2, O2_LOG_ID, o2, "%.1f", timestamp);
+                LOG_DATA(LOG_O2, O2_LOG_ID, o2, timestamp);
             }
 
             vTaskDelay(pdMS_TO_TICKS(O2_TASK_PERIOD_MS));
@@ -400,9 +402,9 @@ static void CO2Task(void *pvParameters)
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {
                         xQueueOverwrite(g_co2Queue, (void *)&co2);
-                        LOG_DATA(LOG_CO2, CO2_LOG_ID, (uint32_t)co2, "%ld", timestamp);
+                        LOG_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
                         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
-                        LOG_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, (uint32_t)humidity, "%ld", timestamp);
+                        LOG_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
                     }
                 }
             }
@@ -455,14 +457,14 @@ static void PressureTask(void *pvParameters)
                 BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
 
                 xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-                LOG_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, "%.1f", timestamp);
+                LOG_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, timestamp);
 
                 xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-                LOG_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, (uint32_t)pressure, "%ld", timestamp);
+                LOG_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, pressure, timestamp);
 
                 altitude = CalculateAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
                 xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
-                LOG_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, (uint32_t)altitude, "%ld", timestamp);
+                LOG_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, altitude, timestamp);
             }
 
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
@@ -545,21 +547,21 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     {
         totalExhaledVolume = 0.0f;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-        LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, "%.2f", timestamp);
+        LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 
         cycleExhaledVolume = 0.0f;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-        LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
+        LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
     }
 
     if (xSemaphoreTake(g_resetVo2MaxSemaphore, (TickType_t)0))
     {
         vO2Max = 0.0f;
         xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-        LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, "%.2f", timestamp);
+        LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
     }
 
-    LOG_DATA(LOG_DIFFERENTIAL_PRESSURE, DIFFERENTIAL_PRESSURE_LOG_ID, diffPressure, "%.3f", timestamp);
+    LOG_DATA(LOG_DIFFERENTIAL_PRESSURE, DIFFERENTIAL_PRESSURE_LOG_ID, diffPressure, timestamp);
 
     // Bernoulli equation Q=k⋅sqrt(ΔP)
     if (diffPressure < 0.0f)
@@ -571,10 +573,11 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         flow = g_settings.flowCalibration * sqrt(diffPressure);
     }
 
-    volume = (float)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
     xQueueOverwrite(g_flowQueue, (void *)&flow);
-    LOG_DATA(LOG_FLOW, FLOW_LOG_ID, flow, "%.2f", timestamp);
+    LOG_DATA(LOG_FLOW, FLOW_LOG_ID, flow, timestamp);
     previousFlow = flow;
+
+    volume = (float)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
 
     /* Detect exhalation using threshold + hysteresis */
     if ((DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) < diffPressure)
@@ -584,23 +587,23 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             exhale = true;
 
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-            LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, "%.2f", timestamp);
+            LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-            LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
+            LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 
             cycleExhaledVolume = 0.0f;
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-            LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
+            LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
         }
 
         cycleExhaledVolume += volume;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-        LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
+        LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 
         totalExhaledVolume += volume;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-        LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, "%.2f", timestamp);
+        LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
     }
     else if ((DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) > diffPressure)
     {
@@ -608,28 +611,28 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         {
             exhale = false;
 
-            endExhaleTimestamp = esp_timer_get_time();
+            endExhaleTimestamp = timestamp;
 
             breathDuration = endExhaleTimestamp - previousExhaleTimestamp;
-            previousExhaleTimestamp = endExhaleTimestamp;
+            previousExhaleTimestamp = timestamp;
 
             if (breathDuration > BREATH_DURATION_THRESHOLD_US)
             {
                 cycleExhaledVolume += volume;
                 xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-                LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, "%.2f", timestamp);
+                LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 
                 totalExhaledVolume += volume;
                 xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-                LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, "%.2f", timestamp);
+                LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 
                 respiratoryRate = 60000000.0f / (float)breathDuration; // Respiratory rate in breath/min
                 xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
-                LOG_DATA(LOG_RR, RR_LOG_ID, respiratoryRate, "%.2f", timestamp);
+                LOG_DATA(LOG_RR, RR_LOG_ID, respiratoryRate, timestamp);
 
                 expiratoryFlow = respiratoryRate * cycleExhaledVolume;
                 xQueueOverwrite(g_expiratoryFlowQueue, (void *)&expiratoryFlow);
-                LOG_DATA(LOG_EXPIRATORY_FLOW, EXPIRATORY_FLOW_LOG_ID, expiratoryFlow, "%.2f", timestamp);
+                LOG_DATA(LOG_EXPIRATORY_FLOW, EXPIRATORY_FLOW_LOG_ID, expiratoryFlow, timestamp);
 
                 if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
                 {
@@ -638,7 +641,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                         if (pdPASS == xQueuePeek(g_humidityQueue, (void *)&humidity, (TickType_t)0))
                         {
                             ComputeAirDensity(temperature, pressure, humidity, &rho);
-                            LOG_DATA(LOG_RHO, RHO_LOG_ID, rho, "%.2f", timestamp);
+                            LOG_DATA(LOG_RHO, RHO_LOG_ID, rho, timestamp);
 
                             vO2Compute = (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0));
 
@@ -649,13 +652,13 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 vO2Filtered = ComputeFilteredValue(&vO2Filter);
 
                                 xQueueOverwrite(g_vO2Queue, (void *)&vO2Filtered);
-                                LOG_DATA(LOG_VO2, VO2_LOG_ID, vO2Filtered, "%.2f", timestamp);
+                                LOG_DATA(LOG_VO2, VO2_LOG_ID, vO2Filtered, timestamp);
 
                                 if (vO2 > vO2Max) // Compute VO2max
                                 {
                                     vO2Max = vO2;
                                     xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-                                    LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, "%.2f", timestamp);
+                                    LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
                                 }
                             }
 
@@ -667,14 +670,14 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 AddValueToFilter(&vCo2Filter, vCo2);
                                 vCo2Filtered = ComputeFilteredValue(&vCo2Filter);
                                 xQueueOverwrite(g_vCo2Queue, (void *)&vCo2Filtered);
-                                LOG_DATA(LOG_VCO2, VCO2_LOG_ID, vCo2Filtered, "%.2f", timestamp);
+                                LOG_DATA(LOG_VCO2, VCO2_LOG_ID, vCo2Filtered, timestamp);
                             }
 
                             if ((true == vCo2Compute) && (true == vO2Compute))
                             {
                                 respiratoryQuotient = vCo2 / vO2;
                                 xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
-                                LOG_DATA(LOG_RQ, RQ_LOG_ID, respiratoryQuotient, "%.2f", timestamp);
+                                LOG_DATA(LOG_RQ, RQ_LOG_ID, respiratoryQuotient, timestamp);
                             }
                         }
                     }

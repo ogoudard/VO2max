@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "debug.h"
 #include "driver/uart.h"
+#include "log.h"
 
 #define MAIN_TASK_PERIOD_MS 3000
 
@@ -29,9 +30,11 @@ void app_main(void)
     ESP_LOGI(TAG, "VO2max embedded software version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
     ESP_LOGI(TAG, "Initializing system...");
 
+    esp_timer_early_init(); // For time trackin
+
     DEBUG_Initialize();
 
-    esp_timer_early_init(); // For time tracking
+    LOG_Initialize();
 
     SETTINGS_Initialize();
     SETTINGS_LoadSettings();

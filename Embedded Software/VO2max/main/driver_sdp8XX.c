@@ -270,7 +270,7 @@ bool SDP8XX_ReadDifferentialPressureRaw(int16_t *differentialPressureRaw)
     }
     else
     {
-        *differentialPressureRaw = (readBuffer[0] << 8) + readBuffer[1];
+        *differentialPressureRaw = (int16_t)(((uint16_t)readBuffer[0] << 8) + (uint16_t)readBuffer[1]);
         ret = true;
     }
 

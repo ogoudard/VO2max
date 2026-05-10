@@ -15,6 +15,7 @@
 #include "battery.h"
 #include "driver/spi_master.h"
 #include "settings.h"
+#include "esp_system.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -66,6 +67,7 @@ static Menu_t calibrationMenu;
 static Menu_t vo2maxMenu;
 static Menu_t spirometerMenu;
 static Menu_t settingsMenu;
+static Menu_t restartMenu;
 static Menu_t liveValuesMenu;
 static Menu_t o2CalibrationMenu;
 static Menu_t co2CalibrationMenu;
@@ -259,11 +261,13 @@ static void InitializeMenus(void)
     MENU_Create(&spirometerMenu, "Spirometer");
     MENU_Create(&liveValuesMenu, "Live values");
     MENU_Create(&settingsMenu, "Settings");
+    MENU_Create(&restartMenu, "Restart");
 
     MENU_AddSubmenu(&mainMenu, &vo2maxMenu);
     MENU_AddSubmenu(&mainMenu, &spirometerMenu);
     MENU_AddSubmenu(&mainMenu, &liveValuesMenu);
     MENU_AddSubmenu(&mainMenu, &settingsMenu);
+    MENU_AddSubmenu(&mainMenu, &restartMenu);
 
     // Settings menu
     MENU_Create(&bluetoothSettingsMenu, "Bluetooth");
@@ -304,6 +308,7 @@ static void InitializeMenus(void)
     // Actions
     MENU_AddAction(&liveValuesMenu, LiveValuesScreenAction);
     MENU_AddAction(&spirometerMenu, SpirometerScreenAction);
+    MENU_AddAction(&restartMenu, esp_restart);
     MENU_AddAction(&o2CalibrationMenu, O2CalibrationScreenAction);
     MENU_AddAction(&altitudeCalibrationMenu, AltitudeCalibrationScreenAction);
     MENU_AddAction(&weightMenu, UserWeightScreenAction);

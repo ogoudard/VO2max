@@ -23,22 +23,23 @@ from matplotlib.widgets import CheckButtons
 # ╚══════════════════════════════════════════════════════════════════╝
 
 CHANNELS = {
-    "0":  {"label": "Temperature",        "unit": "°C"},
-    "1":  {"label": "Humidity",           "unit": "%"},
-    "2":  {"label": "Pressure",           "unit": "Pa"},
-    "3":  {"label": "Altitude",           "unit": "m"},
-    "4":  {"label": "Flow",               "unit": "L/s"},
-    "5":  {"label": "Cycle Exhaled Vol.", "unit": "L"},
-    "6":  {"label": "Total Exhaled Vol.", "unit": "L"},
-    "7":  {"label": "O2",                 "unit": "%"},
-    "8":  {"label": "CO2",                "unit": "ppm"},
-    "9":  {"label": "VO2",                "unit": "mL/kg/min"},
-    "10": {"label": "VO2max",             "unit": "mL/kg/min"},
-    "11": {"label": "VCO2",               "unit": "mL/kg/min"},
-    "12": {"label": "RQ",                 "unit": ""},
-    "13": {"label": "RR",                 "unit": "breaths/min"},
-    "14": {"label": "Rho",                "unit": "kg/m3"},
-    "15": {"label": "Expiratory Flow",    "unit": "L/s"},
+    "0":  {"label": "Temperature",            "unit": "°C"},
+    "1":  {"label": "Humidity",               "unit": "%"},
+    "2":  {"label": "Pressure",               "unit": "Pa"},
+    "3":  {"label": "Altitude",               "unit": "m"},
+    "4":  {"label": "Flow",                   "unit": "L/s"},
+    "5":  {"label": "Cycle Exhaled Vol.",      "unit": "L"},
+    "6":  {"label": "Total Exhaled Vol.",      "unit": "L"},
+    "7":  {"label": "O2",                     "unit": "%"},
+    "8":  {"label": "CO2",                    "unit": "ppm"},
+    "9":  {"label": "VO2",                    "unit": "mL/kg/min"},
+    "10": {"label": "VO2max",                 "unit": "mL/kg/min"},
+    "11": {"label": "VCO2",                   "unit": "mL/kg/min"},
+    "12": {"label": "RQ",                     "unit": ""},
+    "13": {"label": "RR",                     "unit": "breaths/min"},
+    "14": {"label": "Rho",                    "unit": "kg/m3"},
+    "15": {"label": "Expiratory Flow",        "unit": "L/s"},
+    "16": {"label": "Differential Pressure",  "unit": "Pa"},
 }
 
 PANELS = [
@@ -46,8 +47,10 @@ PANELS = [
      "channels": ["0", "1", "2", "3", "14"],
      "axes_groups": [["0"], ["1"], ["2"], ["3"], ["14"]],
      "left_groups": [0, 1]},  # groups 0,1 on left; rest on right
-    {"title": "Flow / Cycle Exhaled Vol. / Total Exhaled Vol.",
-     "channels": ["4", "5", "6"], "multi_yaxis": True},
+    {"title": "Flow / Cycle Exhaled Vol. / Total Exhaled Vol. / Differential Pressure",
+     "channels": ["4", "5", "6", "16"],
+     "axes_groups": [["4"], ["5"], ["6"], ["16"]],
+     "left_groups": [0, 1]},  # Flow + Cycle Exhaled Vol. on left, Total Exhaled Vol. + Diff. Pressure on right
     {"title": "O2 / CO2",            "channels": ["7", "8"], "multi_yaxis": True},
     {"title": "VO2 / VO2max / VCO2 / Expiratory Flow", "channels": ["9", "10", "11", "15"],
      "axes_groups": [["9", "10", "11"], ["15"]]},  # VO2+VCO2+VO2max share left axis, Exp.Flow gets its own
@@ -57,7 +60,7 @@ PANELS = [
 DEFAULT_PORT     = "COM6"
 DEFAULT_BAUDRATE = 921600
 UPDATE_INTERVAL  = 33
-MAX_POINTS       = 10000
+MAX_POINTS       = None
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║                            STYLE                                 ║
@@ -68,6 +71,7 @@ COLORS = [
     "#cc5de8", "#ff922b", "#74c0fc", "#f783ac",
     "#20c997", "#ff8787", "#a9e34b", "#ffec99",
     "#e599f7", "#ffa94d", "#4dabf7", "#f9a8d4",
+    "#a5d8ff",  # channel 16 — light blue
 ]
 
 BG         = "#0d1117"
@@ -127,14 +131,14 @@ def serial_reader(port, baudrate):
             continue
 
         ch_id, val_str, ts_str = parts[0].strip(), parts[1].strip(), parts[2].strip()
-        val, ts_ms = float(val_str), float(ts_str)
+        val, ts_us = float(val_str), float(ts_str)
 
         if ch_id not in CHANNELS:
             continue
 
         with lock:
-            if t0 is None: t0 = ts_ms
-            t_rel = (ts_ms - t0) / 1000.0
+            if t0 is None: t0 = ts_us
+            t_rel = (ts_us - t0) / 1_000_000.0
             channel_data[ch_id]["t"].append(t_rel)
             channel_data[ch_id]["y"].append(val)
 

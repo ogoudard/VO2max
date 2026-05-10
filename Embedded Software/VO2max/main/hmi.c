@@ -1007,14 +1007,14 @@ static void SpirometerScreenAction(void)
     float previousTotalExhaledVolume = -1.0f;
     float respiratoryRate;
     float previousRespriatoryRate = -1.0f;
-    char string[8];
+    char string[9];
 
     LCD_Clear();
 
     LCD_DrawString(CENTER_X("Spirometer"), MENU_NAME_POSITION_Y, "Spirometer", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 30, "Flow =    0.0 L/min", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 52, "VOLcyc =  0.0     L", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 74, "VOLtot =  0.0     L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 30, "Flow =   0.00 L/min", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 52, "VOLcyc =    0.000 L", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 74, "VOLtot =    0.000 L", LCD_COLOR_BLACK, LCD_FONT_24);
     LCD_DrawString(10, 96, "Rate =   0.0 br/min", LCD_COLOR_BLACK, LCD_FONT_24);
 
     LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
@@ -1030,9 +1030,9 @@ static void SpirometerScreenAction(void)
         {
             if (flow != previousFlow)
             {
-                LCD_ClearString(118, 30, 4, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%3.1f", flow);
-                LCD_DrawString(118, 30, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(94, 30, 6, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%6.2f", flow);
+                LCD_DrawString(94, 30, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousFlow = flow;
             }
         }
@@ -1040,8 +1040,8 @@ static void SpirometerScreenAction(void)
         {
             if (cycleExhaledVolume != previousCycleExhaledVolume)
             {
-                LCD_ClearString(118, 52, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%7.1f", cycleExhaledVolume);
+                LCD_ClearString(118, 52, 8, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%8.3f", cycleExhaledVolume);
                 LCD_DrawString(118, 52, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousCycleExhaledVolume = cycleExhaledVolume;
             }
@@ -1050,8 +1050,8 @@ static void SpirometerScreenAction(void)
         {
             if (totalExhaledVolume != previousTotalExhaledVolume)
             {
-                LCD_ClearString(118, 74, 7, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%7.1f", totalExhaledVolume);
+                LCD_ClearString(118, 74, 8, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%8.3f", totalExhaledVolume);
                 LCD_DrawString(118, 74, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousTotalExhaledVolume = totalExhaledVolume;
             }
@@ -1060,8 +1060,8 @@ static void SpirometerScreenAction(void)
         {
             if (respiratoryRate != previousRespriatoryRate)
             {
-                LCD_ClearString(94, 96, 6, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%4.1f", respiratoryRate);
+                LCD_ClearString(94, 96, 5, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%5.1f", respiratoryRate);
                 LCD_DrawString(94, 96, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousRespriatoryRate = respiratoryRate;
             }

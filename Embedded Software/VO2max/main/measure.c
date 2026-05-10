@@ -71,18 +71,19 @@
 
 #define LOG_DATA(enable, id, value, format, timestamp) CONCAT_EXPAND(LOG_DATA_, enable)(id, value, format, timestamp)
 
-#define LOG_DATA_true(id, value, format, timestamp) printf("%d," format ",%ld\n", id, value, timestamp);
+#define LOG_DATA_true(id, value, format, timestamp) printf("%d," format ",%" PRId64 "\n", id, value, timestamp);
 #define LOG_DATA_false(id, value, format, timestamp) \
     while (0)                                        \
     {                                                \
     }
 
 /* Debug logging flags (enable/disable logs) */
+#define LOG_DIFFERENTIAL_PRESSURE true
 #define LOG_TEMPERATURE true
 #define LOG_HUMIDITY true
 #define LOG_PRESSURE true
 #define LOG_ALTITUDE true
-#define LOG_FLOW false
+#define LOG_FLOW true
 #define LOG_O2 true
 #define LOG_CO2 true
 #define LOG_CYCLE_EXHALED_VOLUME true
@@ -111,6 +112,7 @@
 #define RR_LOG_ID 13
 #define RHO_LOG_ID 14
 #define EXPIRATORY_FLOW_LOG_ID 15
+#define DIFFERENTIAL_PRESSURE_LOG_ID 16
 
 #define MAX_VALUE_FILTER_SIZE 30
 
@@ -301,7 +303,7 @@ static void O2Task(void *pvParameters)
 {
     const char *o2TaskTag = "[O2 Task]";
     float o2;
-    int32_t timestamp;
+    int64_t timestamp;
     float o2CalValue;
 
     ESP_LOGI(o2TaskTag, "Task started");
@@ -332,7 +334,7 @@ static void O2Task(void *pvParameters)
                 ME2O2_Calibrate(o2CalValue);
             }
 
-            timestamp = esp_timer_get_time() / 1000;
+            timestamp = esp_timer_get_time();
 
             if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
             {
@@ -352,7 +354,7 @@ static void CO2Task(void *pvParameters)
     float temperature;
     float humidity;
     bool dataReady;
-    int32_t timestamp;
+    int64_t timestamp;
 
     ESP_LOGI(co2TaskTag, "Task started");
 
@@ -393,7 +395,7 @@ static void CO2Task(void *pvParameters)
                 }
                 else
                 {
-                    timestamp = esp_timer_get_time() / 1000;
+                    timestamp = esp_timer_get_time();
 
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {
@@ -417,7 +419,7 @@ static void PressureTask(void *pvParameters)
     float temperature;
     float altitude;
     BMP388_Status_u bmp388Status;
-    int32_t timestamp;
+    int64_t timestamp;
 
     ESP_LOGI(pressureTaskTag, "Task started");
 
@@ -448,7 +450,7 @@ static void PressureTask(void *pvParameters)
 
             if ((0 != bmp388Status.drdyPress) && (0 != bmp388Status.drdyTemp))
             {
-                timestamp = esp_timer_get_time() / 1000;
+                timestamp = esp_timer_get_time();
 
                 BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
 
@@ -500,7 +502,7 @@ static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int6
 static void FlowVolumeAndVo2Computation(float diffPressure)
 {
     /* Timing variables */
-    int32_t timestamp;
+    int64_t timestamp;
     int64_t endExhaleTimestamp;
     static int64_t previousTimestamp = 0;
     int64_t deltaT;
@@ -535,12 +537,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     float volume;
     static bool exhale = false; // Breath detection
 
-    if (diffPressure < 0.0f)
-    {
-        diffPressure = 0.0f;
-    }
-
-    timestamp = esp_timer_get_time() / 1000;
+    timestamp = esp_timer_get_time();
     deltaT = timestamp - previousTimestamp;
     previousTimestamp = timestamp;
 
@@ -562,9 +559,19 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
         LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, "%.2f", timestamp);
     }
 
+    LOG_DATA(LOG_DIFFERENTIAL_PRESSURE, DIFFERENTIAL_PRESSURE_LOG_ID, diffPressure, "%.3f", timestamp);
+
     // Bernoulli equation Q=k⋅sqrt(ΔP)
-    flow = g_settings.flowCalibration * sqrt(diffPressure);
-    volume = (float)deltaT * (flow + previousFlow) / 120000.0f; // Integrate flow → volume (Trapezoidal rule)
+    if (diffPressure < 0.0f)
+    {
+        flow = g_settings.flowCalibration * sqrt(-diffPressure);
+    }
+    else
+    {
+        flow = g_settings.flowCalibration * sqrt(diffPressure);
+    }
+
+    volume = (float)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
     xQueueOverwrite(g_flowQueue, (void *)&flow);
     LOG_DATA(LOG_FLOW, FLOW_LOG_ID, flow, "%.2f", timestamp);
     previousFlow = flow;

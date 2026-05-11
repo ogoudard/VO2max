@@ -6,6 +6,7 @@ Serial Plotter
   QHBoxLayout — no pyqtgraph scene layout manipulation whatsoever
 - All channels in a panel share the X axis; each has its own Y axis
   that auto-scales independently every frame
+- Exception: channels listed in SHARED_AXES share a single Y axis
 """
 
 import sys, threading, collections, struct
@@ -55,6 +56,11 @@ PANELS = [
     {"title": "RQ / RR",               "channels": ["12","13"]},
 ]
 
+# Groups of channels that share a single Y axis widget.
+SHARED_AXES = [
+    ["9", "10", "11"],   # VO2, VO2max and VCO2 share one Y axis
+]
+
 COLORS = [
     "#00d4ff","#ff6b6b","#51cf66","#ffd43b",
     "#cc5de8","#ff922b","#74c0fc","#f783ac",
@@ -65,11 +71,36 @@ COLORS = [
 
 DEFAULT_ON    = {"9","11","15"}
 UPDATE_MS     = 40
-RENDER_WINDOW = 20.0
+RENDER_WINDOW = 300.0  # 5 minutes
 MAX_POINTS    = 200_000
 DEFAULT_PORT  = "COM6"
 DEFAULT_BAUD  = 921_600
 AXIS_WIDTH    = 52   # px per Y axis widget
+Y_PAD         = 0.05 # 5% padding above and below autoscale
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║ SHARED-AXIS HELPERS                                             ║
+# ╚══════════════════════════════════════════════════════════════════╝
+def build_axis_map():
+    axis_map = {}
+    for group in SHARED_AXES:
+        key = frozenset(group)
+        for ch in group:
+            axis_map[ch] = key
+    return axis_map
+
+AXIS_MAP = build_axis_map()
+
+def group_key_for(ch):
+    return AXIS_MAP.get(ch, frozenset({ch}))
+
+def axis_label_for(group_key):
+    labels = [CHANNELS[ch]["label"] for ch in sorted(group_key, key=int)]
+    return " / ".join(labels)
+
+def axis_color_for(group_key):
+    ch = min(group_key, key=int)
+    return COLORS[int(ch) % len(COLORS)]
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ DATA                                                            ║
@@ -131,10 +162,7 @@ def serial_thread(port, baud):
 # ╚══════════════════════════════════════════════════════════════════╝
 class YAxisWidget(QtWidgets.QWidget):
     """
-    A plain QPainter-drawn Y axis: ticks + labels on a fixed-width
-    strip. No pyqtgraph layout involved.
-    side = 'left'  → labels on the right of the strip
-    side = 'right' → labels on the left of the strip
+    A plain QPainter-drawn Y axis: ticks + labels on a fixed-width strip.
     """
 
     def __init__(self, color: str, label: str, side: str = "left",
@@ -146,7 +174,6 @@ class YAxisWidget(QtWidgets.QWidget):
         self._side   = side
         self._lo     = 0.0
         self._hi     = 1.0
-        self._val    = None
         self.setStyleSheet("background:#0d1117;")
 
     def set_range(self, lo: float, hi: float):
@@ -154,10 +181,6 @@ class YAxisWidget(QtWidgets.QWidget):
             self._lo = lo
             self._hi = hi
             self.update()
-
-    def set_value(self, v: float):
-        self._val = v
-        self.update()
 
     def paintEvent(self, _):
         p   = QtGui.QPainter(self)
@@ -179,13 +202,12 @@ class YAxisWidget(QtWidgets.QWidget):
         x_spine = w - 1 if self._side == "left" else 0
         p.drawLine(x_spine, 0, x_spine, h)
 
-        # Ticks and labels — ~6 ticks
+        # Ticks and labels
         n_ticks = 6
         for i in range(n_ticks + 1):
             val  = lo + (hi - lo) * i / n_ticks
             y    = int(h - (val - lo) / rng * h)
             y    = max(1, min(h - 1, y))
-
             tick_len = 5
             if self._side == "left":
                 p.drawLine(w - 1, y, w - 1 - tick_len, y)
@@ -212,62 +234,122 @@ class YAxisWidget(QtWidgets.QWidget):
         p.drawText(-lw // 2, 0, self._label)
         p.restore()
 
-        # Live value at top
-        if self._val is not None:
-            vfont = QtGui.QFont("monospace", 8, QtGui.QFont.Weight.Bold)
-            p.setFont(vfont)
-            p.setPen(QtGui.QPen(self._color))
-            txt = f"{self._val:.4g}"
-            tw  = QtGui.QFontMetrics(vfont).horizontalAdvance(txt)
-            if self._side == "left":
-                p.drawText(w - tw - 2, 12, txt)
-            else:
-                p.drawText(2, 12, txt)
+        p.end()
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║ LIVE LABEL OVERLAY (Qt widget, not pyqtgraph scene item)        ║
+# ╚══════════════════════════════════════════════════════════════════╝
+class LiveLabelOverlay(QtWidgets.QWidget):
+    """
+    A transparent Qt widget that sits on top of the PlotWidget and
+    draws one pill badge per channel, stacked in the top-right corner.
+    """
+    PAD_X   = 7
+    PAD_Y   = 3
+    SPACING = 4
+    MARGIN  = 6
+    FONT    = QtGui.QFont("monospace", 8, QtGui.QFont.Weight.Bold)
+
+    def __init__(self, channels: list, parent: QtWidgets.QWidget):
+        super().__init__(parent)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.channels = channels
+        self._values  = {ch: None for ch in channels}
+        self._colors  = {ch: QtGui.QColor(COLORS[int(ch) % len(COLORS)])
+                         for ch in channels}
+        self._bg      = QtGui.QColor(13, 17, 23, 210)
+        parent.installEventFilter(self)
+
+    def set_value(self, ch: str, value: float):
+        self._values[ch] = value
+        self.update()
+
+    def eventFilter(self, obj, event):
+        if obj is self.parent() and event.type() == QtCore.QEvent.Type.Resize:
+            self.resize(self.parent().size())
+        return False
+
+    def showEvent(self, _):
+        self.resize(self.parent().size())
+
+    def paintEvent(self, _):
+        p  = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        fm = QtGui.QFontMetrics(self.FONT)
+        th = fm.height()
+        bh = th + self.PAD_Y * 2
+
+        x_right = self.width() - self.MARGIN
+        y       = self.MARGIN
+
+        for ch in self.channels:
+            val = self._values[ch]
+            if val is None:
+                continue
+            unit = CHANNELS[ch]['unit']
+            txt  = f"{CHANNELS[ch]['label']}: {val:.4g} {unit}".strip()
+            tw   = fm.horizontalAdvance(txt)
+            bw   = tw + self.PAD_X * 2
+            rx   = x_right - bw
+            rect = QtCore.QRectF(rx, y, bw, bh)
+
+            color = self._colors[ch]
+            p.setPen(QtGui.QPen(color, 1))
+            p.setBrush(QtGui.QBrush(self._bg))
+            p.drawRoundedRect(rect, 4, 4)
+
+            p.setPen(QtGui.QPen(color))
+            p.setFont(self.FONT)
+            p.drawText(rect, QtCore.Qt.AlignmentFlag.AlignCenter, txt)
+
+            y += bh + self.SPACING
 
         p.end()
+
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ PANEL WIDGET                                                    ║
 # ╚══════════════════════════════════════════════════════════════════╝
 class PanelWidget(QtWidgets.QWidget):
-    """
-    Layout: [left-axes...] [PlotWidget] [right-axes...]
-    Half the channels get left axes, half get right axes.
-    All curves share the single PlotWidget ViewBox for X; each
-    channel has its own YAxisWidget and its data is normalised to
-    [0, 1] so curves render correctly on the shared canvas while
-    the Qt axis widgets show the real scale.
-    """
 
     def __init__(self, title: str, channels: list, show_x: bool,
                  x_link_target=None, parent=None):
         super().__init__(parent)
-        self.channels   = channels
-        self.curves     = {}
-        self.y_widgets  = {}   # ch -> YAxisWidget
-        self._ymins     = {}   # ch -> float
-        self._yrngs     = {}   # ch -> float
+        self.channels    = channels
+        self.curves      = {}
+        self.y_widgets   = {}
+        self.ch_to_group = {}
 
-        n     = len(channels)
-        n_left  = (n + 1) // 2   # ceil(n/2) on the left
-        n_right = n - n_left
+        seen_groups = []
+        seen_set    = set()
+        for ch in channels:
+            gk       = group_key_for(ch)
+            gk_local = frozenset(c for c in gk if c in channels)
+            self.ch_to_group[ch] = gk_local
+            if gk_local not in seen_set:
+                seen_set.add(gk_local)
+                seen_groups.append(gk_local)
+
+        n_axes       = len(seen_groups)
+        n_left       = (n_axes + 1) // 2
+        left_groups  = seen_groups[:n_left]
+        right_groups = seen_groups[n_left:]
 
         root = QtWidgets.QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Left axes (reversed so ch[0] is innermost)
-        left_chs = channels[:n_left]
-        for ch in reversed(left_chs):
-            color = COLORS[int(ch) % len(COLORS)]
-            label = f"{CHANNELS[ch]['label']}"
+        for gk in reversed(left_groups):
+            color = axis_color_for(gk)
+            label = axis_label_for(gk)
             yw    = YAxisWidget(color, label, side="left", parent=self)
             root.addWidget(yw)
-            self.y_widgets[ch] = yw
+            self.y_widgets[gk] = yw
 
-        # Central plot
         self.pw = pg.PlotWidget(background="#0d1117")
-        self.pw.showGrid(x=True, y=False, alpha=0.15)
+        self.pw.showGrid(x=True, y=True, alpha=0.15)
         self.pw.setMouseEnabled(x=True, y=False)
         self.pw.getAxis("left").hide()
         self.pw.getAxis("right").hide()
@@ -281,11 +363,9 @@ class PanelWidget(QtWidgets.QWidget):
         else:
             pi.getAxis("bottom").setLabel("Time (s)")
 
-        # X link
         if x_link_target is not None:
             pi.setXLink(x_link_target)
 
-        # Title inside plot
         tl = pg.TextItem(title, color="#ffffff", anchor=(0, 1))
         tl.setFont(QtGui.QFont("monospace", 8, QtGui.QFont.Weight.Bold))
         tl.setParentItem(self.pw.getPlotItem().vb)
@@ -294,16 +374,13 @@ class PanelWidget(QtWidgets.QWidget):
 
         root.addWidget(self.pw, 1)
 
-        # Right axes
-        right_chs = channels[n_left:]
-        for ch in right_chs:
-            color = COLORS[int(ch) % len(COLORS)]
-            label = f"{CHANNELS[ch]['label']}"
+        for gk in right_groups:
+            color = axis_color_for(gk)
+            label = axis_label_for(gk)
             yw    = YAxisWidget(color, label, side="right", parent=self)
             root.addWidget(yw)
-            self.y_widgets[ch] = yw
+            self.y_widgets[gk] = yw
 
-        # Curves — all on the single PlotWidget, Y normalised to [0,1]
         for ch in channels:
             color = COLORS[int(ch) % len(COLORS)]
             curve = pg.PlotCurveItem(
@@ -312,16 +389,39 @@ class PanelWidget(QtWidgets.QWidget):
             )
             self.pw.addItem(curve)
             self.curves[ch] = curve
-            self._ymins[ch] = 0.0
-            self._yrngs[ch] = 1.0
 
-        # Keep canvas Y fixed at [0, 1]
+        self.live_overlay = LiveLabelOverlay(channels, self.pw.viewport())
+        self.live_overlay.show()
+
         self.pw.setYRange(0, 1, padding=0)
 
     def get_plot_item(self):
         return self.pw.getPlotItem()
 
     def update(self, snap: dict):
+        group_ranges = {}
+        for gk in set(self.ch_to_group.values()):
+            all_y = []
+            for ch in gk:
+                t_all, y_all = snap.get(ch, ([], []))
+                if not t_all:
+                    continue
+                t_arr = np.asarray(t_all, dtype=np.float64)
+                y_arr = np.asarray(y_all, dtype=np.float32)
+                t_max = float(t_arr[-1])
+                mask  = t_arr >= (t_max - RENDER_WINDOW)
+                y_win = y_arr[mask]
+                if len(y_win):
+                    all_y.append(y_win)
+            if not all_y:
+                continue
+            combined = np.concatenate(all_y)
+            ymin = float(combined.min())
+            ymax = float(combined.max())
+            rng  = ymax - ymin if ymax != ymin else 1.0
+            pad  = rng * Y_PAD
+            group_ranges[gk] = (ymin - pad, ymax + pad)
+
         for ch in self.channels:
             t_all, y_all = snap.get(ch, ([], []))
             if not t_all:
@@ -329,7 +429,6 @@ class PanelWidget(QtWidgets.QWidget):
 
             t_arr = np.asarray(t_all, dtype=np.float64)
             y_arr = np.asarray(y_all, dtype=np.float32)
-
             t_max = float(t_arr[-1])
             mask  = t_arr >= (t_max - RENDER_WINDOW)
             t_win = t_arr[mask]
@@ -338,22 +437,16 @@ class PanelWidget(QtWidgets.QWidget):
             if len(y_win) == 0:
                 continue
 
-            ymin = float(y_win.min())
-            ymax = float(y_win.max())
-            rng  = ymax - ymin if ymax != ymin else 1.0
+            gk = self.ch_to_group[ch]
+            if gk not in group_ranges:
+                continue
 
-            # Store for axis widget
-            self._ymins[ch] = ymin
-            self._yrngs[ch] = rng
-
-            # Normalise to [0, 1] for the shared canvas
-            y_norm = (y_win - ymin) / rng
+            lo, hi = group_ranges[gk]
+            rng    = hi - lo if hi != lo else 1.0
+            y_norm = (y_win - lo) / rng
             self.curves[ch].setData(t_win, y_norm)
-
-            # Update axis widget
-            yw = self.y_widgets[ch]
-            yw.set_range(ymin, ymax)
-            yw.set_value(float(y_arr[-1]))
+            self.y_widgets[gk].set_range(lo, hi)
+            self.live_overlay.set_value(ch, float(y_arr[-1]))
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ MAIN WINDOW                                                     ║
@@ -371,7 +464,6 @@ class MainWindow(QtWidgets.QMainWindow):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
-        # Plot column
         self.plot_col = QtWidgets.QWidget()
         self.plot_col.setStyleSheet("background:#0d1117;")
         self.plot_vbox = QtWidgets.QVBoxLayout(self.plot_col)
@@ -379,7 +471,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot_vbox.setSpacing(2)
         root.addWidget(self.plot_col, 1)
 
-        # Sidebar
         side = QtWidgets.QWidget()
         side.setFixedWidth(230)
         side.setStyleSheet("background:#161b22;")
@@ -387,8 +478,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sl.setContentsMargins(8, 8, 8, 8)
         sl.setSpacing(2)
         hdr = QtWidgets.QLabel("Channels")
-        hdr.setStyleSheet(
-            "color:cyan;font-weight:bold;font-size:13px;")
+        hdr.setStyleSheet("color:cyan;font-weight:bold;font-size:13px;")
         sl.addWidget(hdr)
         self.checks = {}
         for ch in CHANNELS:
@@ -412,9 +502,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(UPDATE_MS)
 
-    # ──────────────────────────────────────────────────────────────
     def build(self):
-        # Remove old panels
         for pw in self.panel_widgets:
             self.plot_vbox.removeWidget(pw)
             pw.deleteLater()
@@ -443,11 +531,9 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             if first_pi is None:
                 first_pi = pw.get_plot_item()
-
             self.plot_vbox.addWidget(pw)
             self.panel_widgets.append(pw)
 
-    # ──────────────────────────────────────────────────────────────
     def update_plot(self):
         with lock:
             if t0 is None:

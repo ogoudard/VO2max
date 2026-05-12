@@ -569,7 +569,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     // Bernoulli equation Q=k⋅sqrt(ΔP)
     if (diffPressure < 0.0f)
     {
-        flow = g_settings.flowCalibration * sqrt(-diffPressure);
+        flow = -g_settings.flowCalibration * sqrt(-diffPressure);
     }
     else
     {

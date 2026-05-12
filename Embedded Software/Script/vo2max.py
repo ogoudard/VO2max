@@ -7,9 +7,14 @@ Serial Plotter
 - All channels in a panel share the X axis; each has its own Y axis
   that auto-scales independently every frame
 - Exception: channels listed in SHARED_AXES share a single Y axis
+- CSV logging: every new packet triggers a full-snapshot row written
+  to a timestamped CSV file via a background writer thread
+- A dashed zero line is drawn on each panel to make bipolar signals
+  (e.g. Flow) easy to read
 """
 
-import sys, threading, collections, struct
+import sys, threading, collections, struct, csv, queue
+from datetime import datetime
 import serial, serial.tools.list_ports
 from PyQt6 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
@@ -38,7 +43,7 @@ CHANNELS = {
     "6":  {"label": "CO2",                   "unit": "ppm"},
     "7":  {"label": "Differential Pressure", "unit": "Pa"},
     "8":  {"label": "Flow",                  "unit": "L/s"},
-    "9":  {"label": "Experiratory Flow",     "unit": "L/s"},
+    "9":  {"label": "Expiratory Flow",       "unit": "L/s"},
     "10": {"label": "Cycle Vol",             "unit": "L"},
     "11": {"label": "Total Vol",             "unit": "L"},
     "12": {"label": "Respiratory Rate",      "unit": "breaths/min"},
@@ -48,12 +53,15 @@ CHANNELS = {
     "16": {"label": "Respiratory Quotient",  "unit": ""}
 }
 
+# Ordered channel list for consistent CSV column ordering
+CHANNEL_ORDER = [str(i) for i in range(17)]
+
 PANELS = [
-    {"title": "Environmental",         "channels": ["0","1","2","3","4"]},
-    {"title": "Flow",                  "channels": ["7","8","10","11"]},
-    {"title": "Gas",                   "channels": ["5","6"]},
-    {"title": "Expiratory Flow / VO2 / VO2max / VCO2", "channels": ["9","13","14","15"]},
-    {"title": "Respiratory Rate / Resiratory Quotient", "channels": ["12","16"]},
+    {"title": "Environmental",                              "channels": ["0","1","2","3","4"]},
+    {"title": "Flow",                                       "channels": ["7","8","10","11"]},
+    {"title": "Gas",                                        "channels": ["5","6"]},
+    {"title": "Expiratory Flow / VO2 / VO2max / VCO2",     "channels": ["9","13","14","15"]},
+    {"title": "Respiratory Rate / Respiratory Quotient",    "channels": ["12","16"]},
 ]
 
 # Groups of channels that share a single Y axis widget.
@@ -69,14 +77,14 @@ COLORS = [
     "#a5d8ff",
 ]
 
-DEFAULT_ON    = {"9", "13","14","15"}
+DEFAULT_ON    = {"9", "13", "14", "15"}
 UPDATE_MS     = 40
-RENDER_WINDOW = 300.0  # 5 minutes
+RENDER_WINDOW = 300.0   # seconds
 MAX_POINTS    = 200_000
 DEFAULT_PORT  = "COM6"
 DEFAULT_BAUD  = 921_600
-AXIS_WIDTH    = 52   # px per Y axis widget
-Y_PAD         = 0.05 # 5% padding above and below autoscale
+AXIS_WIDTH    = 52      # px per Y axis widget
+Y_PAD         = 0.05    # 5 % padding above and below autoscale
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ SHARED-AXIS HELPERS                                             ║
@@ -110,8 +118,51 @@ channel_data = {
     ch: {"t": collections.deque(), "y": collections.deque()}
     for ch in CHANNELS
 }
+
+# Latest known value per channel for CSV snapshot rows (None = not yet received)
+latest_values = {ch: None for ch in CHANNELS}
+
 running = True
 t0      = None
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║ CSV LOGGING                                                     ║
+# ╚══════════════════════════════════════════════════════════════════╝
+csv_queue: queue.Queue = queue.Queue(maxsize=50_000)
+
+def csv_header():
+    return ["timestamp"] + [CHANNELS[ch]["label"] for ch in CHANNEL_ORDER]
+
+def csv_writer_thread(filepath: str):
+    """
+    Reads snapshot rows from csv_queue and writes them to disk.
+    Runs as a daemon thread; exits when it receives None as a sentinel.
+    """
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(csv_header())
+        while True:
+            row = csv_queue.get()
+            if row is None:      # sentinel — shut down
+                break
+            writer.writerow(row)
+            csv_queue.task_done()
+
+def enqueue_snapshot(timestamp_s: float):
+    """
+    Build a full-snapshot CSV row from latest_values and push it onto
+    the queue. Called from the serial thread (already holding `lock`).
+    Values not yet received are written as empty strings.
+    Raw values are stored unchanged.
+    """
+    row = [f"{timestamp_s:.6f}"]
+    for ch in CHANNEL_ORDER:
+        v = latest_values[ch]
+        row.append("" if v is None else repr(v))
+    try:
+        csv_queue.put_nowait(row)
+    except queue.Full:
+        pass   # drop rather than stall the serial thread
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ SERIAL                                                          ║
@@ -119,7 +170,7 @@ t0      = None
 def detect_port():
     ports = serial.tools.list_ports.comports()
     for p in ports:
-        if any(k in p.device for k in ("USB","ACM","COM")):
+        if any(k in p.device for k in ("USB", "ACM", "COM")):
             return p.device
     return ports[0].device if ports else None
 
@@ -156,6 +207,9 @@ def serial_thread(port, baud):
                 if len(d["t"]) > MAX_POINTS:
                     d["t"].popleft()
                     d["y"].popleft()
+                # Update latest snapshot and log a CSV row (raw values)
+                latest_values[ch] = val
+                enqueue_snapshot(t)
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ Y-AXIS WIDGET                                                   ║
@@ -169,11 +223,11 @@ class YAxisWidget(QtWidgets.QWidget):
                  parent=None):
         super().__init__(parent)
         self.setFixedWidth(AXIS_WIDTH)
-        self._color  = QtGui.QColor(color)
-        self._label  = label
-        self._side   = side
-        self._lo     = 0.0
-        self._hi     = 1.0
+        self._color = QtGui.QColor(color)
+        self._label = label
+        self._side  = side
+        self._lo    = 0.0
+        self._hi    = 1.0
         self.setStyleSheet("background:#0d1117;")
 
     def set_range(self, lo: float, hi: float):
@@ -205,15 +259,15 @@ class YAxisWidget(QtWidgets.QWidget):
         # Ticks and labels
         n_ticks = 6
         for i in range(n_ticks + 1):
-            val  = lo + (hi - lo) * i / n_ticks
-            y    = int(h - (val - lo) / rng * h)
-            y    = max(1, min(h - 1, y))
+            val      = lo + (hi - lo) * i / n_ticks
+            y        = int(h - (val - lo) / rng * h)
+            y        = max(1, min(h - 1, y))
             tick_len = 5
             if self._side == "left":
                 p.drawLine(w - 1, y, w - 1 - tick_len, y)
-                txt  = f"{val:.3g}"
-                tw   = fm.horizontalAdvance(txt)
-                p.drawText(w - 1 - tick_len - tw - 2,
+                txt = f"{val:.3g}"
+                tw  = fm.horizontalAdvance(txt)
+                p.drawText(w - 1 - tick_len - tw - 6,
                            y + fm.ascent() // 2, txt)
             else:
                 p.drawLine(0, y, tick_len, y)
@@ -390,6 +444,20 @@ class PanelWidget(QtWidgets.QWidget):
             self.pw.addItem(curve)
             self.curves[ch] = curve
 
+        # Zero reference line — dashed grey, hidden until data arrives.
+        # Drawn in normalised [0,1] Y space; repositioned each frame.
+        self._zero_line = pg.InfiniteLine(
+            pos=0.5, angle=0,
+            pen=pg.mkPen("#444c56", width=1,
+                         style=QtCore.Qt.PenStyle.DashLine),
+        )
+        self._zero_line.setVisible(False)
+        self.pw.addItem(self._zero_line)
+
+        # Map group_key → zero-line (one shared line; last writer wins,
+        # which is fine because all groups share the same normalised axis)
+        self._group_ranges: dict = {}
+
         self.live_overlay = LiveLabelOverlay(channels, self.pw.viewport())
         self.live_overlay.show()
 
@@ -399,6 +467,7 @@ class PanelWidget(QtWidgets.QWidget):
         return self.pw.getPlotItem()
 
     def update(self, snap: dict):
+        # ── 1. Compute autoscale range per group ─────────────────────
         group_ranges = {}
         for gk in set(self.ch_to_group.values()):
             all_y = []
@@ -422,6 +491,8 @@ class PanelWidget(QtWidgets.QWidget):
             pad  = rng * Y_PAD
             group_ranges[gk] = (ymin - pad, ymax + pad)
 
+        # ── 2. Update curves, axis labels, live overlay ───────────────
+        zero_norm = None   # will be set by whichever group contains ch 0
         for ch in self.channels:
             t_all, y_all = snap.get(ch, ([], []))
             if not t_all:
@@ -447,6 +518,20 @@ class PanelWidget(QtWidgets.QWidget):
             self.curves[ch].setData(t_win, y_norm)
             self.y_widgets[gk].set_range(lo, hi)
             self.live_overlay.set_value(ch, float(y_arr[-1]))
+
+            # Compute normalised position of zero for this group.
+            # Use the last group processed; all share the same plot space.
+            zero_norm = (0.0 - lo) / rng
+
+        # ── 3. Position the zero reference line ───────────────────────
+        if zero_norm is not None and 0.0 <= zero_norm <= 1.0:
+            self._zero_line.setPos(zero_norm)
+            self._zero_line.setVisible(True)
+        else:
+            # Zero is outside the visible range — hide the line so it
+            # doesn't clutter a panel where all values are, say, > 100.
+            self._zero_line.setVisible(False)
+
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ MAIN WINDOW                                                     ║
@@ -493,6 +578,13 @@ class MainWindow(QtWidgets.QMainWindow):
             sl.addWidget(cb)
             self.checks[ch] = cb
         sl.addStretch()
+
+        # CSV path label at the bottom of the sidebar
+        self.csv_label = QtWidgets.QLabel()
+        self.csv_label.setWordWrap(True)
+        self.csv_label.setStyleSheet("color:#8b949e;font-size:9px;")
+        sl.addWidget(self.csv_label)
+
         root.addWidget(side)
 
         self.panel_widgets: list[PanelWidget] = []
@@ -501,6 +593,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(UPDATE_MS)
+
+    def set_csv_path(self, path: str):
+        self.csv_label.setText(f"📄 {path}")
 
     def build(self):
         for pw in self.panel_widgets:
@@ -547,6 +642,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for pw in self.panel_widgets:
             pw.update(snap)
 
+
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ MAIN                                                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
@@ -557,15 +653,28 @@ def main():
     if not port:
         print("No serial port found"); return
     print(f"[serial] {port} @ {baud}")
+
+    # Start CSV writer thread
+    session_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_path = f"serial_log_{session_time}.csv"
+    writer_t = threading.Thread(
+        target=csv_writer_thread, args=(csv_path,), daemon=True)
+    writer_t.start()
+    print(f"[csv]    logging to {csv_path}")
+
     threading.Thread(target=serial_thread, args=(port, baud),
                      daemon=True).start()
+
     app = QtWidgets.QApplication(sys.argv)
     win = MainWindow()
+    win.set_csv_path(csv_path)
     win.showMaximized()
     try:
         sys.exit(app.exec())
     finally:
         running = False
+        csv_queue.put(None)      # signal writer to flush and exit
+        writer_t.join(timeout=5)
 
 if __name__ == "__main__":
     main()

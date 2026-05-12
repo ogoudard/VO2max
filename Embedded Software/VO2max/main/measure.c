@@ -18,6 +18,7 @@
 #include "debug.h"
 #include "settings.h"
 #include "log.h"
+#include "bluetooth.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -403,6 +404,7 @@ static void CO2Task(void *pvParameters)
                     {
                         xQueueOverwrite(g_co2Queue, (void *)&co2);
                         LOG_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
+
                         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
                         LOG_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
                     }
@@ -653,6 +655,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
 
                                 xQueueOverwrite(g_vO2Queue, (void *)&vO2Filtered);
                                 LOG_DATA(LOG_VO2, VO2_LOG_ID, vO2Filtered, timestamp);
+                                BLUETOOTH_SendVO2(vO2Filtered);
 
                                 if (vO2 > vO2Max) // Compute VO2max
                                 {
@@ -669,8 +672,10 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 vCo2 = ComputeVCO2(rho, co2 / 10000.0f, cycleExhaledVolume, breathDuration, g_settings.userWeight);
                                 AddValueToFilter(&vCo2Filter, vCo2);
                                 vCo2Filtered = ComputeFilteredValue(&vCo2Filter);
+
                                 xQueueOverwrite(g_vCo2Queue, (void *)&vCo2Filtered);
                                 LOG_DATA(LOG_VCO2, VCO2_LOG_ID, vCo2Filtered, timestamp);
+                                BLUETOOTH_SendVCO2(vCo2Filtered);
                             }
 
                             if ((true == vCo2Compute) && (true == vO2Compute))

@@ -27,7 +27,7 @@ bool BLUETOOTH_IsConnected(void);
  *
  * Values are transmitted as 4-byte IEEE-754 little-endian floats.
  */
-void BLUETOOTH_SendVO2Max(float vo2max);  /**< Peak VO2max      (ml/min/kg)      */
-void BLUETOOTH_SendVO2(float vo2);        /**< Current VO2      (ml/min/kg)      */
-void BLUETOOTH_SendVCO2(float vco2);      /**< Current VCO2     (ml/min/kg)      */
-void BLUETOOTH_SendRQ(float rq);          /**< Respiratory quotient              */
+void BLUETOOTH_SendVO2Max(float vo2max); /**< Peak VO2max      (ml/min/kg)      */
+void BLUETOOTH_SendVO2(float vo2);       /**< Current VO2      (ml/min/kg)      */
+void BLUETOOTH_SendVCO2(float vco2);     /**< Current VCO2     (ml/min/kg)      */
+void BLUETOOTH_SendRQ(float rq);         /**< Respiratory quotient              */

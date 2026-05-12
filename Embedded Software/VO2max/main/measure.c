@@ -81,41 +81,42 @@
     }
 
 /* Debug logging flags (enable/disable logs) */
-#define LOG_DIFFERENTIAL_PRESSURE true
+
 #define LOG_TEMPERATURE true
 #define LOG_HUMIDITY true
 #define LOG_PRESSURE true
 #define LOG_ALTITUDE true
-#define LOG_FLOW true
+#define LOG_RHO true
 #define LOG_O2 true
 #define LOG_CO2 true
+#define LOG_DIFFERENTIAL_PRESSURE true
+#define LOG_FLOW true
+#define LOG_EXPIRATORY_FLOW true
 #define LOG_CYCLE_EXHALED_VOLUME true
 #define LOG_TOTAL_EXHALED_VOLUME true
+#define LOG_RESPIRATORY_RATE true
 #define LOG_VO2 true
 #define LOG_VO2MAX true
 #define LOG_VCO2 true
-#define LOG_RQ true
-#define LOG_RR true
-#define LOG_RHO true
-#define LOG_EXPIRATORY_FLOW true
+#define LOG_RESPIRATORY_QUOTIENT true
 
 #define TEMPERATURE_LOG_ID 0
 #define HUMIDITY_LOG_ID 1
 #define PRESSURE_LOG_ID 2
 #define ALTITUDE_LOG_ID 3
-#define FLOW_LOG_ID 4
-#define CYCLE_EXHALED_VOLUME_LOG_ID 5
-#define TOTAL_EXHALED_VOLUME_LOG_ID 6
-#define O2_LOG_ID 7
-#define CO2_LOG_ID 8
-#define VO2_LOG_ID 9
-#define VO2MAX_LOG_ID 10
-#define VCO2_LOG_ID 11
-#define RQ_LOG_ID 12
-#define RR_LOG_ID 13
-#define RHO_LOG_ID 14
-#define EXPIRATORY_FLOW_LOG_ID 15
-#define DIFFERENTIAL_PRESSURE_LOG_ID 16
+#define RHO_LOG_ID 4
+#define O2_LOG_ID 5
+#define CO2_LOG_ID 6
+#define DIFFERENTIAL_PRESSURE_LOG_ID 7
+#define FLOW_LOG_ID 8
+#define EXPIRATORY_FLOW_LOG_ID 9
+#define CYCLE_EXHALED_VOLUME_LOG_ID 10
+#define TOTAL_EXHALED_VOLUME_LOG_ID 11
+#define RESPIRATORY_RATE_LOG_ID 12
+#define VO2_LOG_ID 13
+#define VO2MAX_LOG_ID 14
+#define VCO2_LOG_ID 15
+#define RESPIRATORY_QUOTIENT_LOG_ID 16
 
 #define MAX_VALUE_FILTER_SIZE 30
 
@@ -630,7 +631,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
 
                 respiratoryRate = 60000000.0f / (float)breathDuration; // Respiratory rate in breath/min
                 xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
-                LOG_DATA(LOG_RR, RR_LOG_ID, respiratoryRate, timestamp);
+                LOG_DATA(LOG_RESPIRATORY_RATE, RESPIRATORY_RATE_LOG_ID, respiratoryRate, timestamp);
 
                 expiratoryFlow = respiratoryRate * cycleExhaledVolume;
                 xQueueOverwrite(g_expiratoryFlowQueue, (void *)&expiratoryFlow);
@@ -657,12 +658,13 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 LOG_DATA(LOG_VO2, VO2_LOG_ID, vO2Filtered, timestamp);
                                 BLUETOOTH_SendVO2(vO2Filtered);
 
-                                if (vO2 > vO2Max) // Compute VO2max
+                                if (vO2Filtered > vO2Max) // Compute VO2max
                                 {
-                                    vO2Max = vO2;
-                                    xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-                                    LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
+                                    vO2Max = vO2Filtered;
                                 }
+
+                                xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
+                                LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
                             }
 
                             vCo2Compute = (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0));
@@ -682,7 +684,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                             {
                                 respiratoryQuotient = vCo2 / vO2;
                                 xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
-                                LOG_DATA(LOG_RQ, RQ_LOG_ID, respiratoryQuotient, timestamp);
+                                LOG_DATA(LOG_RESPIRATORY_QUOTIENT, RESPIRATORY_QUOTIENT_LOG_ID, respiratoryQuotient, timestamp);
                             }
                         }
                     }

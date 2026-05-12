@@ -60,10 +60,10 @@
 /*  Compile-time tunables                                               */
 /* ------------------------------------------------------------------ */
 
-#define BLE_TASK_STACK      8192   /* bumped: Bluedroid init is stack-hungry */
-#define BLE_TASK_PRIORITY   5
-#define BLE_DEVICE_NAME     "VO2-HR"
-#define SEND_QUEUE_DEPTH    8
+#define BLE_TASK_STACK 8192 /* bumped: Bluedroid init is stack-hungry */
+#define BLE_TASK_PRIORITY 5
+#define BLE_DEVICE_NAME "VO2-HR"
+#define SEND_QUEUE_DEPTH 8
 
 static const char *TAG = "BLE";
 
@@ -73,109 +73,85 @@ static const char *TAG = "BLE";
 
 /* b354cf1b-2486-4f21-b4b1-ee4cd5cc3bf0 */
 static const uint8_t SVC_UUID_VO2MAX[16] = {
-    0xf0,0x3b,0xcc,0xd5,0x4c,0xee,0xb1,0xb4,0x21,0x4f,0x86,0x24,0x1b,0xcf,0x54,0xb3
-};
+    0xf0, 0x3b, 0xcc, 0xd5, 0x4c, 0xee, 0xb1, 0xb4, 0x21, 0x4f, 0x86, 0x24, 0x1b, 0xcf, 0x54, 0xb3};
 /* c70c73fd-b5fb-4a5f-87f4-7a187590b0ef */
 static const uint8_t CHR_UUID_VO2MAX[16] = {
-    0xef,0xb0,0x90,0x75,0x18,0x7a,0xf4,0x87,0x5f,0x4a,0xfb,0xb5,0xfd,0x73,0x0c,0xc7
-};
+    0xef, 0xb0, 0x90, 0x75, 0x18, 0x7a, 0xf4, 0x87, 0x5f, 0x4a, 0xfb, 0xb5, 0xfd, 0x73, 0x0c, 0xc7};
 
 /* 231c616b-32a6-4b93-9f0c-fe728deca0a5 */
 static const uint8_t SVC_UUID_VO2[16] = {
-    0xa5,0xa0,0xec,0x8d,0x72,0xfe,0x0c,0x9f,0x93,0x4b,0xa6,0x32,0x6b,0x61,0x1c,0x23
-};
+    0xa5, 0xa0, 0xec, 0x8d, 0x72, 0xfe, 0x0c, 0x9f, 0x93, 0x4b, 0xa6, 0x32, 0x6b, 0x61, 0x1c, 0x23};
 /* 4225d51b-f1c2-419a-9acc-bd8e70d960ae */
 static const uint8_t CHR_UUID_VO2[16] = {
-    0xae,0x60,0xd9,0x70,0x8e,0xbd,0xcc,0x9a,0x9a,0x41,0xc2,0xf1,0x1b,0xd5,0x25,0x42
-};
+    0xae, 0x60, 0xd9, 0x70, 0x8e, 0xbd, 0xcc, 0x9a, 0x9a, 0x41, 0xc2, 0xf1, 0x1b, 0xd5, 0x25, 0x42};
 
 /* 196c1c76-fe53-47e7-baab-a32b404d63df */
 static const uint8_t SVC_UUID_VCO2[16] = {
-    0xdf,0x63,0x4d,0x40,0x2b,0xa3,0xab,0xba,0xe7,0x47,0x53,0xfe,0x76,0x1c,0x6c,0x19
-};
+    0xdf, 0x63, 0x4d, 0x40, 0x2b, 0xa3, 0xab, 0xba, 0xe7, 0x47, 0x53, 0xfe, 0x76, 0x1c, 0x6c, 0x19};
 /* a4534c9e-0ede-48ec-bee5-7b728ecb25df */
 static const uint8_t CHR_UUID_VCO2[16] = {
-    0xdf,0x25,0xcb,0x8e,0x72,0x7b,0xe5,0xbe,0xec,0x48,0xde,0x0e,0x9e,0x4c,0x53,0xa4
-};
+    0xdf, 0x25, 0xcb, 0x8e, 0x72, 0x7b, 0xe5, 0xbe, 0xec, 0x48, 0xde, 0x0e, 0x9e, 0x4c, 0x53, 0xa4};
 
 /* 8868ba7f-cada-4035-85d2-e0002aeb2be6 */
 static const uint8_t SVC_UUID_RQ[16] = {
-    0xe6,0x2b,0xeb,0x2a,0x00,0xe0,0xd2,0x85,0x35,0x40,0xda,0xca,0x7f,0xba,0x68,0x88
-};
+    0xe6, 0x2b, 0xeb, 0x2a, 0x00, 0xe0, 0xd2, 0x85, 0x35, 0x40, 0xda, 0xca, 0x7f, 0xba, 0x68, 0x88};
 /* b192eef4-a298-43fe-b85c-b04d934448f7 */
 static const uint8_t CHR_UUID_RQ[16] = {
-    0xf7,0x48,0x44,0x93,0x4d,0xb0,0x5c,0xb8,0xfe,0x43,0x98,0xa2,0xf4,0xee,0x92,0xb1
-};
+    0xf7, 0x48, 0x44, 0x93, 0x4d, 0xb0, 0x5c, 0xb8, 0xfe, 0x43, 0x98, 0xa2, 0xf4, 0xee, 0x92, 0xb1};
 
 /* ------------------------------------------------------------------ */
 /*  Per-service attribute table layout  (4 entries each)               */
 /*  [0] service decl  [1] char decl  [2] char value  [3] CCCD         */
 /* ------------------------------------------------------------------ */
 
-#define SVC_TABLE_SIZE  4
-#define IDX_SVC         0
-#define IDX_CHR_DECL    1
-#define IDX_CHR_VAL     2
-#define IDX_CCCD        3
+#define SVC_TABLE_SIZE 4
+#define IDX_SVC 0
+#define IDX_CHR_DECL 1
+#define IDX_CHR_VAL 2
+#define IDX_CCCD 3
 
 /* Shared GATT primitives */
 static const uint16_t UUID_PRIMARY_SERVICE = ESP_GATT_UUID_PRI_SERVICE;
-static const uint16_t UUID_CHAR_DECLARE    = ESP_GATT_UUID_CHAR_DECLARE;
-static const uint16_t UUID_CCCD            = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;
-static const uint8_t  CHAR_PROP_NOTIFY     = ESP_GATT_CHAR_PROP_BIT_NOTIFY;
+static const uint16_t UUID_CHAR_DECLARE = ESP_GATT_UUID_CHAR_DECLARE;
+static const uint16_t UUID_CCCD = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;
+static const uint8_t CHAR_PROP_NOTIFY = ESP_GATT_CHAR_PROP_BIT_NOTIFY;
 
 /* Initial characteristic values */
 static uint8_t s_val_vo2max[4] = {0};
-static uint8_t s_val_vo2[4]    = {0};
-static uint8_t s_val_vco2[4]   = {0};
-static uint8_t s_val_rq[4]     = {0};
+static uint8_t s_val_vo2[4] = {0};
+static uint8_t s_val_vco2[4] = {0};
+static uint8_t s_val_rq[4] = {0};
 
 /* Each service gets its own CCCD storage so they are independent */
 static uint8_t s_cccd_vo2max[2] = {0};
-static uint8_t s_cccd_vo2[2]    = {0};
-static uint8_t s_cccd_vco2[2]   = {0};
-static uint8_t s_cccd_rq[2]     = {0};
+static uint8_t s_cccd_vo2[2] = {0};
+static uint8_t s_cccd_vco2[2] = {0};
+static uint8_t s_cccd_rq[2] = {0};
 
 /* Macro to build a 4-entry attribute table for one notify service */
-#define MAKE_SVC_TABLE(tbl_name, svc_uuid, chr_uuid, val_buf, cccd_buf)        \
-static const esp_gatts_attr_db_t tbl_name[SVC_TABLE_SIZE] = {                 \
-    [IDX_SVC] = {                                                              \
-        {ESP_GATT_AUTO_RSP},                                                   \
-        {ESP_UUID_LEN_16, (uint8_t *)&UUID_PRIMARY_SERVICE,                   \
-         ESP_GATT_PERM_READ,                                                   \
-         ESP_UUID_LEN_128, ESP_UUID_LEN_128, (uint8_t *)(svc_uuid)}           \
-    },                                                                         \
-    [IDX_CHR_DECL] = {                                                         \
-        {ESP_GATT_AUTO_RSP},                                                   \
-        {ESP_UUID_LEN_16, (uint8_t *)&UUID_CHAR_DECLARE,                      \
-         ESP_GATT_PERM_READ,                                                   \
-         sizeof(CHAR_PROP_NOTIFY), sizeof(CHAR_PROP_NOTIFY),                  \
-         (uint8_t *)&CHAR_PROP_NOTIFY}                                         \
-    },                                                                         \
-    [IDX_CHR_VAL] = {                                                          \
-        {ESP_GATT_AUTO_RSP},                                                   \
-        {ESP_UUID_LEN_128, (uint8_t *)(chr_uuid),                             \
-         ESP_GATT_PERM_READ,                                                   \
-         sizeof(val_buf), sizeof(val_buf), (val_buf)}                          \
-    },                                                                         \
-    [IDX_CCCD] = {                                                             \
-        {ESP_GATT_AUTO_RSP},                                                   \
-        {ESP_UUID_LEN_16, (uint8_t *)&UUID_CCCD,                              \
-         ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,                            \
-         sizeof(cccd_buf), sizeof(cccd_buf), (cccd_buf)}                       \
-    },                                                                         \
-}
+#define MAKE_SVC_TABLE(tbl_name, svc_uuid, chr_uuid, val_buf, cccd_buf)                                                                                                                                 \
+    static const esp_gatts_attr_db_t tbl_name[SVC_TABLE_SIZE] = {                                                                                                                                       \
+        [IDX_SVC] = {                                                                                                                                                                                   \
+            {ESP_GATT_AUTO_RSP},                                                                                                                                                                        \
+            {ESP_UUID_LEN_16, (uint8_t *)&UUID_PRIMARY_SERVICE,                                                                                                                                         \
+             ESP_GATT_PERM_READ,                                                                                                                                                                        \
+             ESP_UUID_LEN_128, ESP_UUID_LEN_128, (uint8_t *)(svc_uuid)}},                                                                                                                               \
+        [IDX_CHR_DECL] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&UUID_CHAR_DECLARE, ESP_GATT_PERM_READ, sizeof(CHAR_PROP_NOTIFY), sizeof(CHAR_PROP_NOTIFY), (uint8_t *)&CHAR_PROP_NOTIFY}}, \
+        [IDX_CHR_VAL] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_128, (uint8_t *)(chr_uuid), ESP_GATT_PERM_READ, sizeof(val_buf), sizeof(val_buf), (val_buf)}},                                              \
+        [IDX_CCCD] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&UUID_CCCD, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(cccd_buf), sizeof(cccd_buf), (cccd_buf)}},                         \
+    }
 
 MAKE_SVC_TABLE(s_tbl_vo2max, SVC_UUID_VO2MAX, CHR_UUID_VO2MAX, s_val_vo2max, s_cccd_vo2max);
-MAKE_SVC_TABLE(s_tbl_vo2,    SVC_UUID_VO2,    CHR_UUID_VO2,    s_val_vo2,    s_cccd_vo2);
-MAKE_SVC_TABLE(s_tbl_vco2,   SVC_UUID_VCO2,   CHR_UUID_VCO2,   s_val_vco2,   s_cccd_vco2);
-MAKE_SVC_TABLE(s_tbl_rq,     SVC_UUID_RQ,     CHR_UUID_RQ,     s_val_rq,     s_cccd_rq);
+MAKE_SVC_TABLE(s_tbl_vo2, SVC_UUID_VO2, CHR_UUID_VO2, s_val_vo2, s_cccd_vo2);
+MAKE_SVC_TABLE(s_tbl_vco2, SVC_UUID_VCO2, CHR_UUID_VCO2, s_val_vco2, s_cccd_vco2);
+MAKE_SVC_TABLE(s_tbl_rq, SVC_UUID_RQ, CHR_UUID_RQ, s_val_rq, s_cccd_rq);
 
 /* ------------------------------------------------------------------ */
 /*  Handle storage                                                      */
 /* ------------------------------------------------------------------ */
 
-typedef struct {
+typedef struct
+{
     uint16_t svc;
     uint16_t chr_decl;
     uint16_t chr_val;
@@ -183,16 +159,17 @@ typedef struct {
 } svc_handles_t;
 
 static svc_handles_t s_h_vo2max = {0};
-static svc_handles_t s_h_vo2    = {0};
-static svc_handles_t s_h_vco2   = {0};
-static svc_handles_t s_h_rq     = {0};
+static svc_handles_t s_h_vo2 = {0};
+static svc_handles_t s_h_vco2 = {0};
+static svc_handles_t s_h_rq = {0};
 
 /* Registration chain state.
    FIX: s_reg_step now tracks which table to register NEXT (not the one
    just submitted). register_next_table() reads the current step, issues
    the call for that step, then advances to the next. Previously the step
    was advanced before the call, so the state was always one ahead. */
-typedef enum {
+typedef enum
+{
     REG_STEP_VO2MAX = 0,
     REG_STEP_VO2,
     REG_STEP_VCO2,
@@ -207,27 +184,29 @@ static reg_step_t s_reg_step = REG_STEP_VO2MAX;
 /* ------------------------------------------------------------------ */
 
 static uint8_t s_adv_config_done = 0;
-#define ADV_CONFIG_FLAG      (1 << 0)
+#define ADV_CONFIG_FLAG (1 << 0)
 #define SCAN_RSP_CONFIG_FLAG (1 << 1)
 
-static atomic_bool   s_connected = false;
-static uint16_t      s_conn_id   = 0;
-static esp_gatt_if_t s_gatts_if  = ESP_GATT_IF_NONE;
+static atomic_bool s_connected = false;
+static uint16_t s_conn_id = 0;
+static esp_gatt_if_t s_gatts_if = ESP_GATT_IF_NONE;
 
 /* ------------------------------------------------------------------ */
 /*  Send queue                                                          */
 /* ------------------------------------------------------------------ */
 
-typedef enum {
+typedef enum
+{
     BLE_CH_VO2MAX = 0,
     BLE_CH_VO2,
     BLE_CH_VCO2,
     BLE_CH_RQ,
 } ble_channel_t;
 
-typedef struct {
+typedef struct
+{
     ble_channel_t channel;
-    float         value;
+    float value;
 } ble_send_msg_t;
 
 static QueueHandle_t s_send_queue = NULL;
@@ -239,41 +218,41 @@ static QueueHandle_t s_send_queue = NULL;
 static uint8_t s_adv_uuid[16];
 
 static esp_ble_adv_data_t s_adv_data = {
-    .set_scan_rsp        = false,
-    .include_name        = false,
-    .include_txpower     = false,
-    .min_interval        = ESP_BLE_GAP_CONN_ITVL_MS(7.5),
-    .max_interval        = ESP_BLE_GAP_CONN_ITVL_MS(20),
-    .appearance          = 0x00,
-    .manufacturer_len    = 0,
+    .set_scan_rsp = false,
+    .include_name = false,
+    .include_txpower = false,
+    .min_interval = ESP_BLE_GAP_CONN_ITVL_MS(7.5),
+    .max_interval = ESP_BLE_GAP_CONN_ITVL_MS(20),
+    .appearance = 0x00,
+    .manufacturer_len = 0,
     .p_manufacturer_data = NULL,
-    .service_data_len    = 0,
-    .p_service_data      = NULL,
-    .service_uuid_len    = 16,
-    .p_service_uuid      = s_adv_uuid,
-    .flag                = ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT,
+    .service_data_len = 0,
+    .p_service_data = NULL,
+    .service_uuid_len = 16,
+    .p_service_uuid = s_adv_uuid,
+    .flag = ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT,
 };
 
 static esp_ble_adv_data_t s_scan_rsp_data = {
-    .set_scan_rsp        = true,
-    .include_name        = true,
-    .include_txpower     = true,
-    .appearance          = 0x00,
-    .manufacturer_len    = 0,
+    .set_scan_rsp = true,
+    .include_name = true,
+    .include_txpower = true,
+    .appearance = 0x00,
+    .manufacturer_len = 0,
     .p_manufacturer_data = NULL,
-    .service_data_len    = 0,
-    .p_service_data      = NULL,
-    .service_uuid_len    = 0,
-    .p_service_uuid      = NULL,
-    .flag                = ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT,
+    .service_data_len = 0,
+    .p_service_data = NULL,
+    .service_uuid_len = 0,
+    .p_service_uuid = NULL,
+    .flag = ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT,
 };
 
 static esp_ble_adv_params_t s_adv_params = {
-    .adv_int_min       = ESP_BLE_GAP_ADV_ITVL_MS(20),
-    .adv_int_max       = ESP_BLE_GAP_ADV_ITVL_MS(40),
-    .adv_type          = ADV_TYPE_IND,
-    .own_addr_type     = BLE_ADDR_TYPE_PUBLIC,
-    .channel_map       = ADV_CHNL_ALL,
+    .adv_int_min = ESP_BLE_GAP_ADV_ITVL_MS(20),
+    .adv_int_max = ESP_BLE_GAP_ADV_ITVL_MS(40),
+    .adv_type = ADV_TYPE_IND,
+    .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
+    .channel_map = ADV_CHNL_ALL,
     .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
 };
 
@@ -294,8 +273,8 @@ static esp_ble_adv_params_t s_adv_params = {
  *  and fragile against future changes.
  * ------------------------------------------------------------------ */
 
-static SemaphoreHandle_t s_gatts_reg_sem  = NULL;   /* REG_EVT once       */
-static SemaphoreHandle_t s_attr_tab_sem   = NULL;   /* CREAT_ATTR_TAB_EVT */
+static SemaphoreHandle_t s_gatts_reg_sem = NULL; /* REG_EVT once       */
+static SemaphoreHandle_t s_attr_tab_sem = NULL;  /* CREAT_ATTR_TAB_EVT */
 
 /* ------------------------------------------------------------------ */
 /*  Forward declarations                                                */
@@ -326,9 +305,11 @@ bool BLUETOOTH_IsConnected(void)
 
 static void enqueue(ble_channel_t ch, float value)
 {
-    if (!atomic_load(&s_connected)) return;
-    ble_send_msg_t msg = { .channel = ch, .value = value };
-    if (xQueueSend(s_send_queue, &msg, 0) == errQUEUE_FULL) {
+    if (!atomic_load(&s_connected))
+        return;
+    ble_send_msg_t msg = {.channel = ch, .value = value};
+    if (xQueueSend(s_send_queue, &msg, 0) == errQUEUE_FULL)
+    {
         ble_send_msg_t discard;
         xQueueReceive(s_send_queue, &discard, 0);
         xQueueSend(s_send_queue, &msg, 0);
@@ -336,9 +317,9 @@ static void enqueue(ble_channel_t ch, float value)
 }
 
 void BLUETOOTH_SendVO2Max(float v) { enqueue(BLE_CH_VO2MAX, v); }
-void BLUETOOTH_SendVO2(float v)    { enqueue(BLE_CH_VO2,    v); }
-void BLUETOOTH_SendVCO2(float v)   { enqueue(BLE_CH_VCO2,   v); }
-void BLUETOOTH_SendRQ(float v)     { enqueue(BLE_CH_RQ,     v); }
+void BLUETOOTH_SendVO2(float v) { enqueue(BLE_CH_VO2, v); }
+void BLUETOOTH_SendVCO2(float v) { enqueue(BLE_CH_VCO2, v); }
+void BLUETOOTH_SendRQ(float v) { enqueue(BLE_CH_RQ, v); }
 
 /* ------------------------------------------------------------------ */
 /*  BLE task                                                            */
@@ -350,7 +331,7 @@ static void ble_task(void *arg)
 
     /* FIX: two separate semaphores, one per signal type */
     s_gatts_reg_sem = xSemaphoreCreateBinary();
-    s_attr_tab_sem  = xSemaphoreCreateBinary();
+    s_attr_tab_sem = xSemaphoreCreateBinary();
     configASSERT(s_gatts_reg_sem);
     configASSERT(s_attr_tab_sem);
 
@@ -392,13 +373,15 @@ static void ble_task(void *arg)
        has actually been submitted. We wait on s_attr_tab_sem between each
        step so we never call create_attr_tab while a previous one is still
        in-flight inside Bluedroid's future mechanism. */
-    while (s_reg_step != REG_STEP_DONE) {
+    while (s_reg_step != REG_STEP_DONE)
+    {
         register_next_table(s_gatts_if);
         xSemaphoreTake(s_attr_tab_sem, portMAX_DELAY);
     }
     ESP_LOGI(TAG, "All services registered");
 
-    while (1) {
+    while (1)
+    {
         drain_send_queue();
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -415,7 +398,8 @@ static void ble_task(void *arg)
 
 static void register_next_table(esp_gatt_if_t gatts_if)
 {
-    switch (s_reg_step) {
+    switch (s_reg_step)
+    {
     case REG_STEP_VO2MAX:
         ESP_LOGI(TAG, "Registering VO2MAX service table");
         esp_ble_gatts_create_attr_tab(s_tbl_vo2max, gatts_if, SVC_TABLE_SIZE, 0);
@@ -448,21 +432,35 @@ static void register_next_table(esp_gatt_if_t gatts_if)
 
 static void drain_send_queue(void)
 {
-    if (!atomic_load(&s_connected)) return;
-    if (s_gatts_if == ESP_GATT_IF_NONE) return;
+    if (!atomic_load(&s_connected))
+        return;
+    if (s_gatts_if == ESP_GATT_IF_NONE)
+        return;
 
     ble_send_msg_t msg;
-    while (xQueueReceive(s_send_queue, &msg, 0) == pdTRUE) {
+    while (xQueueReceive(s_send_queue, &msg, 0) == pdTRUE)
+    {
         uint16_t handle = 0;
-        switch (msg.channel) {
-        case BLE_CH_VO2MAX: handle = s_h_vo2max.chr_val; break;
-        case BLE_CH_VO2:    handle = s_h_vo2.chr_val;    break;
-        case BLE_CH_VCO2:   handle = s_h_vco2.chr_val;   break;
-        case BLE_CH_RQ:     handle = s_h_rq.chr_val;     break;
-        default: continue;
+        switch (msg.channel)
+        {
+        case BLE_CH_VO2MAX:
+            handle = s_h_vo2max.chr_val;
+            break;
+        case BLE_CH_VO2:
+            handle = s_h_vo2.chr_val;
+            break;
+        case BLE_CH_VCO2:
+            handle = s_h_vco2.chr_val;
+            break;
+        case BLE_CH_RQ:
+            handle = s_h_rq.chr_val;
+            break;
+        default:
+            continue;
         }
         /* FIX: guard against zero handles (services not yet started) */
-        if (handle == 0) continue;
+        if (handle == 0)
+            continue;
         notify_float(handle, msg.value);
     }
 }
@@ -481,7 +479,8 @@ static void notify_float(uint16_t val_handle, float value)
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
-    switch (event) {
+    switch (event)
+    {
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
         s_adv_config_done &= ~ADV_CONFIG_FLAG;
         if (s_adv_config_done == 0)
@@ -521,10 +520,12 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
                                 esp_gatt_if_t gatts_if,
                                 esp_ble_gatts_cb_param_t *param)
 {
-    switch (event) {
+    switch (event)
+    {
 
     case ESP_GATTS_REG_EVT:
-        if (param->reg.status != ESP_GATT_OK) {
+        if (param->reg.status != ESP_GATT_OK)
+        {
             ESP_LOGE(TAG, "App register failed, status %d", param->reg.status);
             break;
         }
@@ -535,12 +536,14 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
         break;
 
     case ESP_GATTS_CREAT_ATTR_TAB_EVT:
-        if (param->add_attr_tab.status != ESP_GATT_OK) {
+        if (param->add_attr_tab.status != ESP_GATT_OK)
+        {
             ESP_LOGE(TAG, "Attr table create failed, status %d, srvc_inst_id %d",
                      param->add_attr_tab.status, param->add_attr_tab.svc_inst_id);
             break;
         }
-        if (param->add_attr_tab.num_handle != SVC_TABLE_SIZE) {
+        if (param->add_attr_tab.num_handle != SVC_TABLE_SIZE)
+        {
             ESP_LOGE(TAG, "Attr table size mismatch: got %d expected %d",
                      param->add_attr_tab.num_handle, SVC_TABLE_SIZE);
             break;
@@ -551,33 +554,34 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
            callback because it is fully asynchronous (posts an event, does
            not block on a future). Only create_attr_tab must not be called
            from here — that is deferred to ble_task via s_attr_tab_sem. */
-        switch (param->add_attr_tab.svc_inst_id) {
+        switch (param->add_attr_tab.svc_inst_id)
+        {
         case 0:
-            s_h_vo2max.svc      = param->add_attr_tab.handles[IDX_SVC];
+            s_h_vo2max.svc = param->add_attr_tab.handles[IDX_SVC];
             s_h_vo2max.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
-            s_h_vo2max.chr_val  = param->add_attr_tab.handles[IDX_CHR_VAL];
-            s_h_vo2max.cccd     = param->add_attr_tab.handles[IDX_CCCD];
+            s_h_vo2max.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
+            s_h_vo2max.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_h_vo2max.svc);
             break;
         case 1:
-            s_h_vo2.svc      = param->add_attr_tab.handles[IDX_SVC];
+            s_h_vo2.svc = param->add_attr_tab.handles[IDX_SVC];
             s_h_vo2.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
-            s_h_vo2.chr_val  = param->add_attr_tab.handles[IDX_CHR_VAL];
-            s_h_vo2.cccd     = param->add_attr_tab.handles[IDX_CCCD];
+            s_h_vo2.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
+            s_h_vo2.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_h_vo2.svc);
             break;
         case 2:
-            s_h_vco2.svc      = param->add_attr_tab.handles[IDX_SVC];
+            s_h_vco2.svc = param->add_attr_tab.handles[IDX_SVC];
             s_h_vco2.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
-            s_h_vco2.chr_val  = param->add_attr_tab.handles[IDX_CHR_VAL];
-            s_h_vco2.cccd     = param->add_attr_tab.handles[IDX_CCCD];
+            s_h_vco2.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
+            s_h_vco2.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_h_vco2.svc);
             break;
         case 3:
-            s_h_rq.svc      = param->add_attr_tab.handles[IDX_SVC];
+            s_h_rq.svc = param->add_attr_tab.handles[IDX_SVC];
             s_h_rq.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
-            s_h_rq.chr_val  = param->add_attr_tab.handles[IDX_CHR_VAL];
-            s_h_rq.cccd     = param->add_attr_tab.handles[IDX_CCCD];
+            s_h_rq.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
+            s_h_rq.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_h_rq.svc);
             break;
         default:

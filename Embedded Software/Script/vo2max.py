@@ -33,32 +33,32 @@ CHANNELS = {
     "1":  {"label": "Humidity",              "unit": "%"},
     "2":  {"label": "Pressure",              "unit": "Pa"},
     "3":  {"label": "Altitude",              "unit": "m"},
-    "4":  {"label": "Flow",                  "unit": "L/s"},
-    "5":  {"label": "Cycle Vol",             "unit": "L"},
-    "6":  {"label": "Total Vol",             "unit": "L"},
-    "7":  {"label": "O2",                    "unit": "%"},
-    "8":  {"label": "CO2",                   "unit": "ppm"},
-    "9":  {"label": "VO2",                   "unit": "mL/kg/min"},
-    "10": {"label": "VO2max",                "unit": "mL/kg/min"},
-    "11": {"label": "VCO2",                  "unit": "mL/kg/min"},
-    "12": {"label": "RQ",                    "unit": ""},
-    "13": {"label": "RR",                    "unit": "breaths/min"},
-    "14": {"label": "Rho",                   "unit": "kg/m³"},
-    "15": {"label": "Exp Flow",              "unit": "L/s"},
-    "16": {"label": "Differential Pressure", "unit": "Pa"},
+    "4":  {"label": "Rho",                   "unit": "kg/m³"},
+    "5":  {"label": "O2",                    "unit": "%"},
+    "6":  {"label": "CO2",                   "unit": "ppm"},
+    "7":  {"label": "Differential Pressure", "unit": "Pa"},
+    "8":  {"label": "Flow",                  "unit": "L/s"},
+    "9":  {"label": "Experiratory Flow",     "unit": "L/s"},
+    "10": {"label": "Cycle Vol",             "unit": "L"},
+    "11": {"label": "Total Vol",             "unit": "L"},
+    "12": {"label": "Respiratory Rate",      "unit": "breaths/min"},
+    "13": {"label": "VO2",                   "unit": "mL/kg/min"},
+    "14": {"label": "VO2max",                "unit": "mL/kg/min"},
+    "15": {"label": "VCO2",                  "unit": "mL/kg/min"},
+    "16": {"label": "Respiratory Quotient",  "unit": ""}
 }
 
 PANELS = [
-    {"title": "Environmental",          "channels": ["0","1","2","3","14"]},
-    {"title": "Flow",                   "channels": ["4","5","6","16"]},
-    {"title": "Gas",                    "channels": ["7","8"]},
-    {"title": "VO2 / VCO2 / Exp Flow", "channels": ["9","10","11","15"]},
-    {"title": "RQ / RR",               "channels": ["12","13"]},
+    {"title": "Environmental",         "channels": ["0","1","2","3","4"]},
+    {"title": "Flow",                  "channels": ["7","8","10","11"]},
+    {"title": "Gas",                   "channels": ["5","6"]},
+    {"title": "Expiratory Flow / VO2 / VO2max / VCO2", "channels": ["9","13","14","15"]},
+    {"title": "Respiratory Rate / Resiratory Quotient", "channels": ["12","16"]},
 ]
 
 # Groups of channels that share a single Y axis widget.
 SHARED_AXES = [
-    ["9", "10", "11"],   # VO2, VO2max and VCO2 share one Y axis
+    ["13", "14", "15"],   # VO2, VO2max and VCO2 share one Y axis
 ]
 
 COLORS = [
@@ -69,7 +69,7 @@ COLORS = [
     "#a5d8ff",
 ]
 
-DEFAULT_ON    = {"9","11","15"}
+DEFAULT_ON    = {"9", "13","14","15"}
 UPDATE_MS     = 40
 RENDER_WINDOW = 300.0  # 5 minutes
 MAX_POINTS    = 200_000

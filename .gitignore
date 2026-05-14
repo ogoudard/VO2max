@@ -1,5 +1,6 @@
 Script/build
 Script/dist
+Script/*.csv
 
 # Flutter/Dart
 Flutter/vo2max/.dart_tool/

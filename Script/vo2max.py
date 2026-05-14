@@ -1,16 +1,6 @@
 #!/usr/bin/env python3
 """
-Serial Plotter
-- Each panel is a QWidget row containing one pg.PlotWidget (canvas)
-- Extra Y axes are real Qt widgets placed beside the canvas in a
-  QHBoxLayout — no pyqtgraph scene layout manipulation whatsoever
-- All channels in a panel share the X axis; each has its own Y axis
-  that auto-scales independently every frame
-- Exception: channels listed in SHARED_AXES share a single Y axis
-- CSV logging: every new packet triggers a full-snapshot row written
-  to a timestamped CSV file via a background writer thread
-- A dashed zero line is drawn on each panel to make bipolar signals
-  (e.g. Flow) easy to read
+Serial Plotter — white background, thin curves, fixed Y-axis labels.
 """
 
 import sys, threading, collections, struct, csv, queue
@@ -21,7 +11,7 @@ import pyqtgraph as pg
 import numpy as np
 
 pg.setConfigOptions(useOpenGL=True, antialias=False,
-                    background="#0d1117", foreground="#c9d1d9")
+                    background="#ffffff", foreground="#333333")
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ PROTOCOL                                                        ║
@@ -53,7 +43,6 @@ CHANNELS = {
     "16": {"label": "Respiratory Quotient",  "unit": ""}
 }
 
-# Ordered channel list for consistent CSV column ordering
 CHANNEL_ORDER = [str(i) for i in range(17)]
 
 PANELS = [
@@ -64,65 +53,57 @@ PANELS = [
     {"title": "Respiratory Rate / Respiratory Quotient",    "channels": ["12","16"]},
 ]
 
-# Groups of channels that share a single Y axis widget.
 SHARED_AXES = [
-    ["13", "14", "15"],   # VO2, VO2max and VCO2 share one Y axis
+    ["13", "14", "15"],
 ]
 
+# Darker / more saturated colors that read well on white
 COLORS = [
-    "#00d4ff","#ff6b6b","#51cf66","#ffd43b",
-    "#cc5de8","#ff922b","#74c0fc","#f783ac",
-    "#20c997","#ff8787","#a9e34b","#ffec99",
-    "#e599f7","#ffa94d","#4dabf7","#f9a8d4",
-    "#a5d8ff",
+    "#0077cc", "#cc2200", "#007733", "#cc8800",
+    "#7700cc", "#cc5500", "#0055aa", "#aa0077",
+    "#007766", "#993300", "#336600", "#886600",
+    "#660099", "#994400", "#004488", "#882255",
+    "#003377",
 ]
 
 DEFAULT_ON    = {"9", "13", "14", "15"}
 UPDATE_MS     = 40
-RENDER_WINDOW = 300.0   # seconds
+RENDER_WINDOW = 300.0
 MAX_POINTS    = 200_000
 DEFAULT_BAUD  = 921_600
-AXIS_WIDTH    = 52      # px per Y axis widget
-Y_PAD         = 0.05    # 5 % padding above and below autoscale
+AXIS_WIDTH    = 64      # px per Y-axis widget
+Y_PAD         = 0.05
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ SHARED-AXIS HELPERS                                             ║
 # ╚══════════════════════════════════════════════════════════════════╝
 def build_axis_map():
-    axis_map = {}
+    m = {}
     for group in SHARED_AXES:
         key = frozenset(group)
         for ch in group:
-            axis_map[ch] = key
-    return axis_map
+            m[ch] = key
+    return m
 
 AXIS_MAP = build_axis_map()
 
 def group_key_for(ch):
     return AXIS_MAP.get(ch, frozenset({ch}))
 
-def axis_label_for(group_key):
-    labels = [CHANNELS[ch]["label"] for ch in sorted(group_key, key=int)]
-    return " / ".join(labels)
+def axis_label_for(gk):
+    return " / ".join(CHANNELS[ch]["label"] for ch in sorted(gk, key=int))
 
-def axis_color_for(group_key):
-    ch = min(group_key, key=int)
-    return COLORS[int(ch) % len(COLORS)]
+def axis_color_for(gk):
+    return COLORS[int(min(gk, key=int)) % len(COLORS)]
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ DATA                                                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
-lock = threading.Lock()
-channel_data = {
-    ch: {"t": collections.deque(), "y": collections.deque()}
-    for ch in CHANNELS
-}
-
-# Latest known value per channel for CSV snapshot rows (None = not yet received)
+lock         = threading.Lock()
+channel_data = {ch: {"t": collections.deque(), "y": collections.deque()} for ch in CHANNELS}
 latest_values = {ch: None for ch in CHANNELS}
-
-running = True
-t0      = None
+running      = True
+t0           = None
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ CSV LOGGING                                                     ║
@@ -133,27 +114,17 @@ def csv_header():
     return ["timestamp"] + [CHANNELS[ch]["label"] for ch in CHANNEL_ORDER]
 
 def csv_writer_thread(filepath: str):
-    """
-    Reads snapshot rows from csv_queue and writes them to disk.
-    Runs as a daemon thread; exits when it receives None as a sentinel.
-    """
     with open(filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(csv_header())
         while True:
             row = csv_queue.get()
-            if row is None:      # sentinel — shut down
+            if row is None:
                 break
             writer.writerow(row)
             csv_queue.task_done()
 
 def enqueue_snapshot(timestamp_s: float):
-    """
-    Build a full-snapshot CSV row from latest_values and push it onto
-    the queue. Called from the serial thread (already holding `lock`).
-    Values not yet received are written as empty strings.
-    Raw values are stored unchanged.
-    """
     row = [f"{timestamp_s:.6f}"]
     for ch in CHANNEL_ORDER:
         v = latest_values[ch]
@@ -161,77 +132,44 @@ def enqueue_snapshot(timestamp_s: float):
     try:
         csv_queue.put_nowait(row)
     except queue.Full:
-        pass   # drop rather than stall the serial thread
+        pass
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ PORT DETECTION                                                  ║
 # ╚══════════════════════════════════════════════════════════════════╝
-
-# USB VIDs for chips found on LilyGo T-Display boards:
-#   0x10C4  Silicon Labs CP2104  (original T-Display)
-#   0x1A86  WCH CH9102F / CH340  (later T-Display revisions)
-#   0x303A  Espressif native USB CDC  (T-Display-S3)
 LILYGO_VIDS = {0x10C4, 0x1A86, 0x303A}
-LILYGO_DESCRIPTION_KEYWORDS = (
-    "cp210", "ch910", "ch340", "esp32", "lilygo", "ttgo", "uart bridge"
-)
+LILYGO_DESCRIPTION_KEYWORDS = ("cp210","ch910","ch340","esp32","lilygo","ttgo","uart bridge")
 
 def detect_port():
-    """
-    Return the most likely LilyGo T-Display port device string, or None.
-    Priority:
-      1. Command-line argument (handled in main before this is called)
-      2. VID match against known LilyGo USB chips
-      3. Description keyword match
-      4. None  ->  caller opens PortPickerDialog
-    """
     ports = serial.tools.list_ports.comports()
-    # Priority 1 — VID match
     for p in ports:
         if p.vid in LILYGO_VIDS:
             return p.device
-    # Priority 2 — description keyword match
     for p in ports:
-        desc = (p.description or "").lower()
-        if any(kw in desc for kw in LILYGO_DESCRIPTION_KEYWORDS):
+        if any(kw in (p.description or "").lower() for kw in LILYGO_DESCRIPTION_KEYWORDS):
             return p.device
     return None
 
-
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║ PORT PICKER DIALOG                                              ║
+# ║ PORT PICKER                                                     ║
 # ╚══════════════════════════════════════════════════════════════════╝
 class PortPickerDialog(QtWidgets.QDialog):
-    """
-    Shown on startup when auto-detection fails.
-    Lists all available ports with their descriptions so the user
-    can pick the right one without restarting from the command line.
-    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Select Serial Port")
         self.setMinimumWidth(460)
         self.selected_port = None
         self.selected_baud = DEFAULT_BAUD
-
         layout = QtWidgets.QVBoxLayout(self)
-
         lbl = QtWidgets.QLabel(
-            "No LilyGo T-Display port was detected automatically.\n"
-            "Select the correct port from the list below:"
-        )
-        lbl.setStyleSheet("color:#c9d1d9;")
+            "No LilyGo T-Display port detected automatically.\n"
+            "Select the correct port from the list below:")
         layout.addWidget(lbl)
-
         self.port_list = QtWidgets.QListWidget()
-        self.port_list.setStyleSheet(
-            "background:#161b22; color:#c9d1d9; border:1px solid #30363d;"
-        )
-        ports = serial.tools.list_ports.comports()
-        for p in ports:
-            desc    = p.description or "Unknown device"
+        for p in serial.tools.list_ports.comports():
+            desc = p.description or "Unknown device"
             vid_str = f"  [VID:{p.vid:04X}]" if p.vid else ""
-            item    = QtWidgets.QListWidgetItem(f"{p.device}  —  {desc}{vid_str}")
+            item = QtWidgets.QListWidgetItem(f"{p.device}  —  {desc}{vid_str}")
             item.setData(QtCore.Qt.ItemDataRole.UserRole, p.device)
             self.port_list.addItem(item)
         if self.port_list.count():
@@ -239,29 +177,21 @@ class PortPickerDialog(QtWidgets.QDialog):
         else:
             self.port_list.addItem("No serial ports found")
         layout.addWidget(self.port_list)
-
         baud_row = QtWidgets.QHBoxLayout()
-        baud_lbl = QtWidgets.QLabel("Baud rate:")
-        baud_lbl.setStyleSheet("color:#c9d1d9;")
-        baud_row.addWidget(baud_lbl)
+        baud_row.addWidget(QtWidgets.QLabel("Baud rate:"))
         self.baud_box = QtWidgets.QComboBox()
-        self.baud_box.setStyleSheet("background:#161b22; color:#c9d1d9;")
         for b in [9600, 115200, 230400, 460800, 921600]:
             self.baud_box.addItem(str(b))
         self.baud_box.setCurrentText(str(DEFAULT_BAUD))
         baud_row.addWidget(self.baud_box)
         baud_row.addStretch()
         layout.addLayout(baud_row)
-
         btn_box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok |
-            QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        )
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel)
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
-
-        self.setStyleSheet("background:#0d1117;")
 
     def accept(self):
         item = self.port_list.currentItem()
@@ -269,7 +199,6 @@ class PortPickerDialog(QtWidgets.QDialog):
             self.selected_port = item.data(QtCore.Qt.ItemDataRole.UserRole)
         self.selected_baud = int(self.baud_box.currentText())
         super().accept()
-
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ SERIAL                                                          ║
@@ -307,7 +236,6 @@ def serial_thread(port, baud):
                 if len(d["t"]) > MAX_POINTS:
                     d["t"].popleft()
                     d["y"].popleft()
-                # Update latest snapshot and log a CSV row (raw values)
                 latest_values[ch] = val
                 enqueue_snapshot(t)
 
@@ -316,11 +244,29 @@ def serial_thread(port, baud):
 # ╚══════════════════════════════════════════════════════════════════╝
 class YAxisWidget(QtWidgets.QWidget):
     """
-    A plain QPainter-drawn Y axis: ticks + labels on a fixed-width strip.
+    Custom-painted Y axis strip.
+
+    Left  layout (right-to-left): spine | ticks | numbers | rotated-label
+    Right layout (left-to-right): spine | ticks | numbers | rotated-label
+
+    The rotated label sits in the outermost strip (farthest from the canvas).
+    Both sides rotate the text -90° (reads bottom-to-top); the translate X
+    is chosen so the glyph body lands just inside the outer edge.
+
+    Key geometry after rotate(-90°):
+      • painter +X  →  screen -Y  (text advances upward on screen)
+      • painter +Y  →  screen +X  (ascent goes rightward on screen)
+    So the baseline (painter y=0) maps to screen x = translate_x,
+    and the glyph body spans screen x ∈ [translate_x, translate_x + ascent].
+    For the label to land at the outer edge:
+      left  side: translate_x = ascent        → body in [ascent, 2*ascent] near left
+      right side: translate_x = w-2*ascent-2  → body in [w-2a-2, w-a-2] near right
     """
 
-    def __init__(self, color: str, label: str, side: str = "left",
-                 parent=None):
+    TICK    = 5
+    GAP     = 3   # px between tick end and numeric text
+
+    def __init__(self, color: str, label: str, side: str = "left", parent=None):
         super().__init__(parent)
         self.setFixedWidth(AXIS_WIDTH)
         self._color = QtGui.QColor(color)
@@ -328,63 +274,67 @@ class YAxisWidget(QtWidgets.QWidget):
         self._side  = side
         self._lo    = 0.0
         self._hi    = 1.0
-        self.setStyleSheet("background:#0d1117;")
+        self.setStyleSheet("background:#ffffff;")
 
     def set_range(self, lo: float, hi: float):
         if lo != self._lo or hi != self._hi:
-            self._lo = lo
-            self._hi = hi
+            self._lo, self._hi = lo, hi
             self.update()
 
     def paintEvent(self, _):
-        p   = QtGui.QPainter(self)
+        p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
-        w   = self.width()
-        h   = self.height()
-        lo  = self._lo
-        hi  = self._hi
-        rng = hi - lo if hi != lo else 1.0
 
-        pen = QtGui.QPen(self._color)
-        pen.setWidth(1)
-        p.setPen(pen)
-        font = QtGui.QFont("monospace", 7)
-        p.setFont(font)
-        fm   = QtGui.QFontMetrics(font)
+        w, h    = self.width(), self.height()
+        lo, hi  = self._lo, self._hi
+        rng     = hi - lo if hi != lo else 1.0
 
-        # Spine line
-        x_spine = w - 1 if self._side == "left" else 0
-        p.drawLine(x_spine, 0, x_spine, h)
-
-        # Ticks and labels
-        n_ticks = 6
-        for i in range(n_ticks + 1):
-            val      = lo + (hi - lo) * i / n_ticks
-            y        = int(h - (val - lo) / rng * h)
-            y        = max(1, min(h - 1, y))
-            tick_len = 5
-            if self._side == "left":
-                p.drawLine(w - 1, y, w - 1 - tick_len, y)
-                txt = f"{val:.3g}"
-                tw  = fm.horizontalAdvance(txt)
-                p.drawText(w - 1 - tick_len - tw - 6,
-                           y + fm.ascent() // 2, txt)
-            else:
-                p.drawLine(0, y, tick_len, y)
-                txt = f"{val:.3g}"
-                p.drawText(tick_len + 2, y + fm.ascent() // 2, txt)
-
-        # Channel label rotated vertically in centre
-        p.save()
-        p.translate(w // 2, h // 2)
-        if self._side == "left":
-            p.rotate(-90)
-        else:
-            p.rotate(90)
+        num_font = QtGui.QFont("monospace", 7)
         lbl_font = QtGui.QFont("monospace", 7, QtGui.QFont.Weight.Bold)
+        num_fm   = QtGui.QFontMetrics(num_font)
+        lbl_fm   = QtGui.QFontMetrics(lbl_font)
+        ascent   = lbl_fm.ascent()   # height of label glyph body in px
+
+        col_pen  = QtGui.QPen(self._color, 1)
+        p.setPen(col_pen)
+
+        # ── Spine ────────────────────────────────────────────────────
+        spine_x = w - 1 if self._side == "left" else 0
+        p.drawLine(spine_x, 0, spine_x, h)
+
+        # ── Ticks + numeric labels ────────────────────────────────────
+        p.setFont(num_font)
+        for i in range(7):   # 0..6 → 7 ticks
+            val  = lo + (hi - lo) * i / 6
+            y    = int(h - (val - lo) / rng * h)
+            y    = max(1, min(h - 1, y))
+            txt  = f"{val:.3g}"
+            tw   = num_fm.horizontalAdvance(txt)
+            ty   = y + num_fm.ascent() // 2
+
+            if self._side == "left":
+                p.drawLine(spine_x, y, spine_x - self.TICK, y)
+                p.drawText(spine_x - self.TICK - self.GAP - tw, ty, txt)
+            else:
+                p.drawLine(spine_x, y, spine_x + self.TICK, y)
+                p.drawText(spine_x + self.TICK + self.GAP, ty, txt)
+
+        # ── Rotated channel label ─────────────────────────────────────
+        # After rotate(-90): painter+Y → screen+X, painter+X → screen-Y
+        # baseline (py=0)   → screen x = translate_x
+        # glyph body        → screen x ∈ [translate_x, translate_x + ascent]
+        p.save()
         p.setFont(lbl_font)
-        p.setPen(QtGui.QPen(self._color))
-        lw = QtGui.QFontMetrics(lbl_font).horizontalAdvance(self._label)
+        p.setPen(col_pen)
+        lw = lbl_fm.horizontalAdvance(self._label)
+
+        if self._side == "left":
+            tx = ascent                  # body: [ascent .. 2*ascent]
+        else:
+            tx = w - 2 * ascent - 2     # body: [w-2a-2 .. w-a-2], within widget
+
+        p.translate(tx, h // 2)
+        p.rotate(-90)
         p.drawText(-lw // 2, 0, self._label)
         p.restore()
 
@@ -392,13 +342,9 @@ class YAxisWidget(QtWidgets.QWidget):
 
 
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║ LIVE LABEL OVERLAY (Qt widget, not pyqtgraph scene item)        ║
+# ║ LIVE LABEL OVERLAY                                              ║
 # ╚══════════════════════════════════════════════════════════════════╝
 class LiveLabelOverlay(QtWidgets.QWidget):
-    """
-    A transparent Qt widget that sits on top of the PlotWidget and
-    draws one pill badge per channel, stacked in the top-right corner.
-    """
     PAD_X   = 7
     PAD_Y   = 3
     SPACING = 4
@@ -411,9 +357,8 @@ class LiveLabelOverlay(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_NoSystemBackground)
         self.channels = channels
         self._values  = {ch: None for ch in channels}
-        self._colors  = {ch: QtGui.QColor(COLORS[int(ch) % len(COLORS)])
-                         for ch in channels}
-        self._bg      = QtGui.QColor(13, 17, 23, 210)
+        self._colors  = {ch: QtGui.QColor(COLORS[int(ch) % len(COLORS)]) for ch in channels}
+        self._bg      = QtGui.QColor(255, 255, 255, 200)
         parent.installEventFilter(self)
 
     def set_value(self, ch: str, value: float):
@@ -432,34 +377,25 @@ class LiveLabelOverlay(QtWidgets.QWidget):
         p  = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         fm = QtGui.QFontMetrics(self.FONT)
-        th = fm.height()
-        bh = th + self.PAD_Y * 2
-
+        bh = fm.height() + self.PAD_Y * 2
         x_right = self.width() - self.MARGIN
-        y       = self.MARGIN
-
+        y = self.MARGIN
         for ch in self.channels:
             val = self._values[ch]
             if val is None:
                 continue
             unit = CHANNELS[ch]['unit']
             txt  = f"{CHANNELS[ch]['label']}: {val:.4g} {unit}".strip()
-            tw   = fm.horizontalAdvance(txt)
-            bw   = tw + self.PAD_X * 2
-            rx   = x_right - bw
-            rect = QtCore.QRectF(rx, y, bw, bh)
-
+            bw   = fm.horizontalAdvance(txt) + self.PAD_X * 2
+            rect = QtCore.QRectF(x_right - bw, y, bw, bh)
             color = self._colors[ch]
             p.setPen(QtGui.QPen(color, 1))
             p.setBrush(QtGui.QBrush(self._bg))
             p.drawRoundedRect(rect, 4, 4)
-
             p.setPen(QtGui.QPen(color))
             p.setFont(self.FONT)
             p.drawText(rect, QtCore.Qt.AlignmentFlag.AlignCenter, txt)
-
             y += bh + self.SPACING
-
         p.end()
 
 
@@ -476,18 +412,16 @@ class PanelWidget(QtWidgets.QWidget):
         self.y_widgets   = {}
         self.ch_to_group = {}
 
-        seen_groups = []
-        seen_set    = set()
+        # Build local group keys (restricted to channels present in this panel)
+        seen_groups, seen_set = [], set()
         for ch in channels:
-            gk       = group_key_for(ch)
-            gk_local = frozenset(c for c in gk if c in channels)
+            gk_local = frozenset(c for c in group_key_for(ch) if c in channels)
             self.ch_to_group[ch] = gk_local
             if gk_local not in seen_set:
                 seen_set.add(gk_local)
                 seen_groups.append(gk_local)
 
-        n_axes       = len(seen_groups)
-        n_left       = (n_axes + 1) // 2
+        n_left       = (len(seen_groups) + 1) // 2
         left_groups  = seen_groups[:n_left]
         right_groups = seen_groups[n_left:]
 
@@ -496,22 +430,27 @@ class PanelWidget(QtWidgets.QWidget):
         root.setSpacing(0)
 
         for gk in reversed(left_groups):
-            color = axis_color_for(gk)
-            label = axis_label_for(gk)
-            yw    = YAxisWidget(color, label, side="left", parent=self)
+            yw = YAxisWidget(axis_color_for(gk), axis_label_for(gk), "left", self)
             root.addWidget(yw)
             self.y_widgets[gk] = yw
 
-        self.pw = pg.PlotWidget(background="#0d1117")
-        self.pw.showGrid(x=True, y=True, alpha=0.15)
+        # Plot canvas
+        self.pw = pg.PlotWidget(background="#ffffff")
+        self.pw.showGrid(x=True, y=True, alpha=0.2)
         self.pw.setMouseEnabled(x=True, y=False)
-        self.pw.getAxis("left").hide()
+        # Keep left axis ticks at fixed normalized positions so the
+        # horizontal grid lines are drawn, but hide the axis visually.
+        left_ax = self.pw.getAxis("left")
+        left_ax.setTicks([[(i/6, "") for i in range(7)], []])
+        left_ax.setStyle(tickLength=0)
+        left_ax.setPen(pg.mkPen(None))
+        left_ax.setTextPen(pg.mkPen(None))
         self.pw.getAxis("right").hide()
         self.pw.setClipToView(True)
         self.pw.setDownsampling(auto=True, mode='peak')
         pi = self.pw.getPlotItem()
-        pi.getAxis("bottom").setPen(pg.mkPen("#30363d"))
-        pi.getAxis("bottom").setTextPen(pg.mkPen("#8b949e"))
+        pi.getAxis("bottom").setPen(pg.mkPen("#aaaaaa"))
+        pi.getAxis("bottom").setTextPen(pg.mkPen("#444444"))
         if not show_x:
             pi.getAxis("bottom").setStyle(showValues=False)
         else:
@@ -520,51 +459,42 @@ class PanelWidget(QtWidgets.QWidget):
         if x_link_target is not None:
             pi.setXLink(x_link_target)
 
-        tl = pg.TextItem(title, color="#ffffff", anchor=(0, 1))
+        tl = pg.TextItem(title, color="#222222", anchor=(0, 1))
         tl.setFont(QtGui.QFont("monospace", 8, QtGui.QFont.Weight.Bold))
-        tl.setParentItem(self.pw.getPlotItem().vb)
+        tl.setParentItem(pi.vb)
         tl.setFlag(tl.GraphicsItemFlag.ItemIgnoresTransformations)
         tl.setPos(6, 18)
 
         root.addWidget(self.pw, 1)
 
         for gk in right_groups:
-            color = axis_color_for(gk)
-            label = axis_label_for(gk)
-            yw    = YAxisWidget(color, label, side="right", parent=self)
+            yw = YAxisWidget(axis_color_for(gk), axis_label_for(gk), "right", self)
             root.addWidget(yw)
             self.y_widgets[gk] = yw
 
         for ch in channels:
-            color = COLORS[int(ch) % len(COLORS)]
             curve = pg.PlotCurveItem(
-                pen=pg.mkPen(color, width=1.5),
+                pen=pg.mkPen(COLORS[int(ch) % len(COLORS)], width=0.8),
                 skipFiniteCheck=True,
             )
             self.pw.addItem(curve)
             self.curves[ch] = curve
 
-        # Zero reference line — dashed grey, hidden until data arrives.
         self._zero_line = pg.InfiniteLine(
             pos=0.5, angle=0,
-            pen=pg.mkPen("#444c56", width=1,
-                         style=QtCore.Qt.PenStyle.DashLine),
+            pen=pg.mkPen("#bbbbbb", width=1, style=QtCore.Qt.PenStyle.DashLine),
         )
         self._zero_line.setVisible(False)
         self.pw.addItem(self._zero_line)
 
-        self._group_ranges: dict = {}
-
         self.live_overlay = LiveLabelOverlay(channels, self.pw.viewport())
         self.live_overlay.show()
-
         self.pw.setYRange(0, 1, padding=0)
 
     def get_plot_item(self):
         return self.pw.getPlotItem()
 
     def update(self, snap: dict):
-        # ── 1. Compute autoscale range per group ─────────────────────
         group_ranges = {}
         for gk in set(self.ch_to_group.values()):
             all_y = []
@@ -574,51 +504,39 @@ class PanelWidget(QtWidgets.QWidget):
                     continue
                 t_arr = np.asarray(t_all, dtype=np.float64)
                 y_arr = np.asarray(y_all, dtype=np.float32)
-                t_max = float(t_arr[-1])
-                mask  = t_arr >= (t_max - RENDER_WINDOW)
+                mask  = t_arr >= (float(t_arr[-1]) - RENDER_WINDOW)
                 y_win = y_arr[mask]
                 if len(y_win):
                     all_y.append(y_win)
             if not all_y:
                 continue
             combined = np.concatenate(all_y)
-            ymin = float(combined.min())
-            ymax = float(combined.max())
-            rng  = ymax - ymin if ymax != ymin else 1.0
-            pad  = rng * Y_PAD
+            ymin, ymax = float(combined.min()), float(combined.max())
+            pad = (ymax - ymin if ymax != ymin else 1.0) * Y_PAD
             group_ranges[gk] = (ymin - pad, ymax + pad)
 
-        # ── 2. Update curves, axis labels, live overlay ───────────────
         zero_norm = None
         for ch in self.channels:
             t_all, y_all = snap.get(ch, ([], []))
             if not t_all:
                 continue
-
             t_arr = np.asarray(t_all, dtype=np.float64)
             y_arr = np.asarray(y_all, dtype=np.float32)
             t_max = float(t_arr[-1])
             mask  = t_arr >= (t_max - RENDER_WINDOW)
-            t_win = t_arr[mask]
-            y_win = y_arr[mask]
-
-            if len(y_win) == 0:
+            t_win, y_win = t_arr[mask], y_arr[mask]
+            if not len(y_win):
                 continue
-
             gk = self.ch_to_group[ch]
             if gk not in group_ranges:
                 continue
-
             lo, hi = group_ranges[gk]
             rng    = hi - lo if hi != lo else 1.0
-            y_norm = (y_win - lo) / rng
-            self.curves[ch].setData(t_win, y_norm)
+            self.curves[ch].setData(t_win, (y_win - lo) / rng)
             self.y_widgets[gk].set_range(lo, hi)
             self.live_overlay.set_value(ch, float(y_arr[-1]))
-
             zero_norm = (0.0 - lo) / rng
 
-        # ── 3. Position the zero reference line ───────────────────────
         if zero_norm is not None and 0.0 <= zero_norm <= 1.0:
             self._zero_line.setPos(zero_norm)
             self._zero_line.setVisible(True)
@@ -637,13 +555,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1800, 1000)
 
         central = QtWidgets.QWidget()
+        central.setStyleSheet("background:#ffffff;")
         self.setCentralWidget(central)
         root = QtWidgets.QHBoxLayout(central)
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
         self.plot_col = QtWidgets.QWidget()
-        self.plot_col.setStyleSheet("background:#0d1117;")
+        self.plot_col.setStyleSheet("background:#ffffff;")
         self.plot_vbox = QtWidgets.QVBoxLayout(self.plot_col)
         self.plot_vbox.setContentsMargins(0, 0, 0, 0)
         self.plot_vbox.setSpacing(2)
@@ -651,12 +570,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         side = QtWidgets.QWidget()
         side.setFixedWidth(230)
-        side.setStyleSheet("background:#161b22;")
+        side.setStyleSheet("background:#f0f0f0;")
         sl = QtWidgets.QVBoxLayout(side)
         sl.setContentsMargins(8, 8, 8, 8)
         sl.setSpacing(2)
         hdr = QtWidgets.QLabel("Channels")
-        hdr.setStyleSheet("color:cyan;font-weight:bold;font-size:13px;")
+        hdr.setStyleSheet("color:#0055aa;font-weight:bold;font-size:13px;")
         sl.addWidget(hdr)
         self.checks = {}
         for ch in CHANNELS:
@@ -671,13 +590,10 @@ class MainWindow(QtWidgets.QMainWindow):
             sl.addWidget(cb)
             self.checks[ch] = cb
         sl.addStretch()
-
-        # CSV path label at the bottom of the sidebar
         self.csv_label = QtWidgets.QLabel()
         self.csv_label.setWordWrap(True)
-        self.csv_label.setStyleSheet("color:#8b949e;font-size:9px;")
+        self.csv_label.setStyleSheet("color:#555555;font-size:9px;")
         sl.addWidget(self.csv_label)
-
         root.addWidget(side)
 
         self.panel_widgets: list[PanelWidget] = []
@@ -696,24 +612,21 @@ class MainWindow(QtWidgets.QMainWindow):
             pw.deleteLater()
         self.panel_widgets.clear()
 
-        active = []
-        for pdef in PANELS:
-            chs = [ch for ch in pdef["channels"]
-                   if self.checks[ch].isChecked()]
-            if chs:
-                active.append({"title": pdef["title"], "channels": chs})
-
-        n = len(active)
-        if n == 0:
+        active = [
+            {"title": p["title"],
+             "channels": [ch for ch in p["channels"] if self.checks[ch].isChecked()]}
+            for p in PANELS
+            if any(self.checks[ch].isChecked() for ch in p["channels"])
+        ]
+        if not active:
             return
 
         first_pi = None
         for i, pdef in enumerate(active):
-            show_x = (i == n - 1)
             pw = PanelWidget(
                 title=pdef["title"],
                 channels=pdef["channels"],
-                show_x=show_x,
+                show_x=(i == len(active) - 1),
                 x_link_target=first_pi,
                 parent=self.plot_col,
             )
@@ -727,11 +640,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if t0 is None:
                 return
             all_ch = [ch for p in self.panel_widgets for ch in p.channels]
-            snap = {
-                ch: (list(channel_data[ch]["t"]),
-                     list(channel_data[ch]["y"]))
-                for ch in all_ch
-            }
+            snap = {ch: (list(channel_data[ch]["t"]), list(channel_data[ch]["y"]))
+                    for ch in all_ch}
         for pw in self.panel_widgets:
             pw.update(snap)
 
@@ -741,12 +651,9 @@ class MainWindow(QtWidgets.QMainWindow):
 # ╚══════════════════════════════════════════════════════════════════╝
 def main():
     global running
-
-    # QApplication must exist before any dialog or widget is created
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    # Port / baud resolution
     port = sys.argv[1] if len(sys.argv) > 1 else detect_port()
     baud = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_BAUD
 
@@ -755,21 +662,17 @@ def main():
         if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted or not dlg.selected_port:
             print("No port selected — exiting.")
             sys.exit(0)
-        port = dlg.selected_port
-        baud = dlg.selected_baud
+        port, baud = dlg.selected_port, dlg.selected_baud
 
     print(f"[serial] {port} @ {baud}")
 
-    # Start CSV writer thread
     session_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path = f"serial_log_{session_time}.csv"
-    writer_t = threading.Thread(
-        target=csv_writer_thread, args=(csv_path,), daemon=True)
+    writer_t = threading.Thread(target=csv_writer_thread, args=(csv_path,), daemon=True)
     writer_t.start()
     print(f"[csv]    logging to {csv_path}")
 
-    threading.Thread(target=serial_thread, args=(port, baud),
-                     daemon=True).start()
+    threading.Thread(target=serial_thread, args=(port, baud), daemon=True).start()
 
     win = MainWindow()
     win.set_csv_path(csv_path)
@@ -778,7 +681,7 @@ def main():
         sys.exit(app.exec())
     finally:
         running = False
-        csv_queue.put(None)      # signal writer to flush and exit
+        csv_queue.put(None)
         writer_t.join(timeout=5)
 
 

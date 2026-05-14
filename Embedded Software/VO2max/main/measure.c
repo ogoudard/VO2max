@@ -661,11 +661,11 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 if (vO2Filtered > vO2Max) // Compute VO2max
                                 {
                                     vO2Max = vO2Filtered;
-                                    BLUETOOTH_SendVO2Max(vO2Max);
                                 }
 
                                 xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
                                 LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
+                                BLUETOOTH_SendVO2Max(vO2Max);
                             }
 
                             vCo2Compute = (pdPASS == xQueuePeek(g_co2Queue, (void *)&co2, (TickType_t)0));

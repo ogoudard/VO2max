@@ -95,10 +95,10 @@ TaskHandle_t g_hmiTaskHandle = NULL;
 
 static void HmiTask(void *pvParameters);
 static void InitializeMenus(void);
-static void NormalOperation(void);
+static void NormalOperation(bool error);
 static void DisplayBatterySoc(void);
 static void DisplaySelected(uint8_t selected);
-static void DisplayMenuName(Menu_t *menu);
+static void DisplayMenuNameAndStatus(Menu_t *menu, bool error);
 static void DisplayPage(Menu_t *menu, uint8_t page);
 static PushButtonState_e GetPushButton1State(void);
 static PushButtonState_e GetPushButton2State(void);
@@ -168,12 +168,12 @@ static void HmiTask(void *pvParameters)
 
     LCD_DrawPicture16bits(0, 0, 239, 134, cyclist_image);
 
-    LCD_DrawString(10, 10, "VO2max", LCD_COLOR_WHITE, LCD_FONT_24);
+    LCD_DrawString(10, 10, "VO2max", LCD_COLOR_YELLOW, LCD_FONT_24);
 
     snprintf(versionString, sizeof(versionString), "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
-    LCD_DrawString(10, 34, versionString, LCD_COLOR_WHITE, LCD_FONT_24);
+    LCD_DrawString(10, 34, versionString, LCD_COLOR_YELLOW, LCD_FONT_24);
 
-    LCD_DrawString(10, 58, "Initializing...", LCD_COLOR_WHITE, LCD_FONT_24);
+    LCD_DrawString(10, 58, "Initializing", LCD_COLOR_YELLOW, LCD_FONT_24);
 
     waitNotification &= xSemaphoreTake(g_flowInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
@@ -182,23 +182,17 @@ static void HmiTask(void *pvParameters)
 
     if (pdFALSE == waitNotification)
     {
-        LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("Error!")) / 2, 90, "Error!", LCD_COLOR_RED, LCD_FONT_24);
-
-        vTaskSuspend(g_hmiTaskHandle);
-
-        while (1)
-        {
-            vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
-        }
+        LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("ERROR")) / 2, 90, "ERROR", LCD_COLOR_RED, LCD_FONT_24);
     }
     else
     {
-        LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("Success!")) / 2, 90, "Success!", LCD_COLOR_GREEN, LCD_FONT_24);
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        InitializeMenus();
-        LCD_Clear();
-        NormalOperation();
+        LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("SUCCESS")) / 2, 90, "SUCCESS", LCD_COLOR_GREEN, LCD_FONT_24);
     }
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    InitializeMenus();
+    LCD_Clear();
+    NormalOperation(!(bool)waitNotification);
 }
 
 static void MenuNavigate(Menu_t **menu, uint8_t *selected)
@@ -321,7 +315,7 @@ static void InitializeMenus(void)
     MENU_AddAction(&co2CalibrationMenu, Co2CalibrationScreenAction);
 }
 
-static void NormalOperation(void)
+static void NormalOperation(bool error)
 {
     Menu_t *currentMenu;
     Menu_t *previousMenu;
@@ -354,7 +348,7 @@ static void NormalOperation(void)
         }
         else
         {
-            DisplayMenuName(currentMenu);
+            DisplayMenuNameAndStatus(currentMenu, error);
             DisplayPage(currentMenu, 0);
             DisplaySelected(selected);
 
@@ -420,9 +414,15 @@ static void DisplayBatterySoc(void)
     }
 }
 
-static void DisplayMenuName(Menu_t *menu)
+static void DisplayMenuNameAndStatus(Menu_t *menu, bool error)
 {
-    LCD_ClearString(10, MENU_NAME_POSITION_Y, 18, LCD_COLOR_WHITE, LCD_FONT_24);
+    LCD_ClearString(0, MENU_NAME_POSITION_Y, 17, LCD_COLOR_WHITE, LCD_FONT_24);
+
+    if (true == error)
+    {
+        LCD_DrawString(5, 5, "ERROR", LCD_COLOR_RED, LCD_FONT_16);
+    }
+
     LCD_DrawString(CENTER_X(menu->name), MENU_NAME_POSITION_Y, menu->name, LCD_COLOR_BLACK, LCD_FONT_24);
 }
 
@@ -944,8 +944,8 @@ static void LiveValuesScreenAction(void)
         {
             if (o2 != previousO2)
             {
-                snprintf(string, sizeof(string), "%2.2f", o2);
-                LCD_ClearString(80, 0, 8, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%5.2f", o2);
+                LCD_ClearString(80, 0, 5, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 0, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousO2 = o2;
             }
@@ -955,7 +955,7 @@ static void LiveValuesScreenAction(void)
             if (co2 != previousCo2)
             {
                 snprintf(string, sizeof(string), "%-5.0f", co2);
-                LCD_ClearString(80, 22, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(80, 22, 5, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 22, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousCo2 = co2;
             }
@@ -964,8 +964,8 @@ static void LiveValuesScreenAction(void)
         {
             if (temperature != previousTemperature)
             {
-                snprintf(string, sizeof(string), "%-5.1f", temperature);
-                LCD_ClearString(80, 44, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%-4.1f", temperature);
+                LCD_ClearString(80, 44, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 44, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousTemperature = temperature;
             }
@@ -974,8 +974,8 @@ static void LiveValuesScreenAction(void)
         {
             if (humidity != previousHumidity)
             {
-                snprintf(string, sizeof(string), "%-5.0f", humidity);
-                LCD_ClearString(80, 66, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%-4.1f", humidity);
+                LCD_ClearString(80, 66, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 66, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousHumidity = humidity;
             }
@@ -984,8 +984,8 @@ static void LiveValuesScreenAction(void)
         {
             if (pressure != previousPressure)
             {
-                snprintf(string, sizeof(string), "%-5.1f", pressure);
-                LCD_ClearString(80, 88, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%-8.1f", pressure);
+                LCD_ClearString(80, 88, 8, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousPressure = pressure;
             }
@@ -994,8 +994,8 @@ static void LiveValuesScreenAction(void)
         {
             if (altitude != previousAltitude)
             {
-                snprintf(string, sizeof(string), "%-4.1f", altitude);
-                LCD_ClearString(80, 110, 7, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%-6.1f", altitude);
+                LCD_ClearString(80, 110, 6, LCD_COLOR_WHITE, LCD_FONT_24);
                 LCD_DrawString(80, 110, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousAltitude = altitude;
             }

@@ -318,6 +318,12 @@ static void O2Task(void *pvParameters)
     {
         ESP_LOGE(o2TaskTag, "ME2-O2 initialization failed, suspending task");
 
+        // Default O2 value
+        timestamp = esp_timer_get_time();
+        o2 = 20.95f;
+        xQueueOverwrite(g_o2Queue, (void *)&o2);
+        LOG_DATA(LOG_O2, O2_LOG_ID, o2, timestamp);
+
         vTaskSuspend(o2TaskHandle);
 
         while (1)
@@ -367,6 +373,18 @@ static void CO2Task(void *pvParameters)
     if (!SCD30_Initialize(i2cHandle))
     {
         ESP_LOGE(co2TaskTag, "SCD30 initialization failed, suspending task");
+
+        timestamp = esp_timer_get_time();
+
+        // Default CO2 value
+        co2 = 432.0f;
+        xQueueOverwrite(g_co2Queue, (void *)&co2);
+        LOG_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
+
+        // Default humidity value
+        humidity = 50.0f;
+        xQueueOverwrite(g_humidityQueue, (void *)&humidity);
+        LOG_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
 
         vTaskSuspend(co2TaskHandle);
 
@@ -433,6 +451,23 @@ static void PressureTask(void *pvParameters)
     if (!BMP388_Initialize(i2cHandle, BMP388_I2C_ADDRESS))
     {
         ESP_LOGE(pressureTaskTag, "BMP280 initialization failed, suspending task");
+
+        timestamp = esp_timer_get_time();
+
+        // Default temperature
+        temperature = 25.0f;
+        xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
+        LOG_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, timestamp);
+
+        // Default pressure
+        pressure = 101325.0f;
+        xQueueOverwrite(g_pressureQueue, (void *)&pressure);
+        LOG_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, pressure, timestamp);
+
+        // Default altitude
+        altitude = CalculateAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
+        xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
+        LOG_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, altitude, timestamp);
 
         vTaskSuspend(pressureTaskHandle);
 

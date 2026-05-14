@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:win_ble/win_ble.dart';
-import 'package:win_ble/win_file.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 // ─────────────────────────────────────────────
 //  UUIDs — correspondent au firmware ESP32
@@ -17,9 +16,8 @@ const String SVC_VO2    = '231c616b-32a6-4b93-9f0c-fe728deca0a5';
 const String SVC_VCO2   = '196c1c76-fe53-47e7-baab-a32b404d63df';
 const String SVC_RQ     = '8868ba7f-cada-4035-85d2-e0002aeb2be6';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await WinBle.initialize(serverPath: await WinServer.path(), enableLog: false);
   runApp(const BleTestApp());
 }
 
@@ -43,40 +41,40 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final List<BleDevice> _devices = [];
+  final List<ScanResult> _results = [];
   bool _scanning = false;
   StreamSubscription? _scanSub;
 
   @override
   void dispose() {
     _scanSub?.cancel();
-    WinBle.dispose();
+    FlutterBluePlus.stopScan();
     super.dispose();
   }
 
   Future<void> _startScan() async {
     setState(() {
-      _devices.clear();
+      _results.clear();
       _scanning = true;
     });
 
-    _scanSub = WinBle.scanStream.listen((device) {
+    _scanSub = FlutterBluePlus.scanResults.listen((results) {
       setState(() {
-        if (!_devices.any((d) => d.address == device.address)) {
-          _devices.add(device);
+        for (final r in results) {
+          final exists = _results.any(
+              (e) => e.device.remoteId == r.device.remoteId);
+          if (!exists) _results.add(r);
         }
       });
     });
 
-    WinBle.startScanning();
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
 
-    await Future.delayed(const Duration(seconds: 6));
-    WinBle.stopScanning();
     _scanSub?.cancel();
     setState(() => _scanning = false);
   }
 
-  void _connect(BleDevice device) {
+  void _connect(BluetoothDevice device) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => DevicePage(device: device)),
@@ -87,7 +85,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('VO2 BLE — Scan')),
-      body: _devices.isEmpty
+      body: _results.isEmpty
           ? Center(
               child: _scanning
                   ? const Column(
@@ -101,11 +99,13 @@ class _HomePageState extends State<HomePage> {
                   : const Text('Appuie sur Scan pour chercher VO2-HR'),
             )
           : ListView.builder(
-              itemCount: _devices.length,
+              itemCount: _results.length,
               itemBuilder: (_, i) {
-                final d = _devices[i];
-                final name = d.name.isEmpty ? '(sans nom)' : d.name;
-                final isTarget = d.name == 'VO2-HR';
+                final r = _results[i];
+                final name = r.device.platformName.isEmpty
+                    ? '(sans nom)'
+                    : r.device.platformName;
+                final isTarget = r.device.platformName == 'VO2-HR';
                 return ListTile(
                   leading: Icon(Icons.bluetooth,
                       color: isTarget ? Colors.greenAccent : Colors.grey),
@@ -114,9 +114,9 @@ class _HomePageState extends State<HomePage> {
                           fontWeight: isTarget
                               ? FontWeight.bold
                               : FontWeight.normal)),
-                  subtitle: Text(d.address),
-                  trailing: Text('${d.rssi} dBm'),
-                  onTap: () => _connect(d),
+                  subtitle: Text(r.device.remoteId.toString()),
+                  trailing: Text('${r.rssi} dBm'),
+                  onTap: () => _connect(r.device),
                 );
               },
             ),
@@ -138,7 +138,7 @@ class _HomePageState extends State<HomePage> {
 //  Device page — connexion + notifications
 // ─────────────────────────────────────────────
 class DevicePage extends StatefulWidget {
-  final BleDevice device;
+  final BluetoothDevice device;
   const DevicePage({super.key, required this.device});
   @override
   State<DevicePage> createState() => _DevicePageState();
@@ -156,67 +156,72 @@ class _DevicePageState extends State<DevicePage> {
   @override
   void dispose() {
     for (final s in _subs) s.cancel();
-    WinBle.disconnect(widget.device.address);
+    widget.device.disconnect();
     super.dispose();
   }
 
-  void _addLog(String msg) =>
-      setState(() => _log = '$msg\n$_log');
+  void _addLog(String msg) => setState(() => _log = '$msg\n$_log');
+
+  ({String chrId, String label})? _serviceMapping(String svcId) {
+    final id = svcId.toLowerCase();
+    if (id == SVC_VO2MAX.toLowerCase()) return (chrId: CHR_VO2MAX, label: 'VO2Max');
+    if (id == SVC_VO2.toLowerCase())    return (chrId: CHR_VO2,    label: 'VO2');
+    if (id == SVC_VCO2.toLowerCase())   return (chrId: CHR_VCO2,   label: 'VCO2');
+    if (id == SVC_RQ.toLowerCase())     return (chrId: CHR_RQ,     label: 'RQ');
+    return null;
+  }
+
+  void _handleValue(List<int> value, String label) {
+    if (value.length >= 4) {
+      final f = ByteData.sublistView(Uint8List.fromList(value))
+          .getFloat32(0, Endian.little);
+      setState(() {
+        switch (label) {
+          case 'VO2Max': vo2max = f;
+          case 'VO2':    vo2    = f;
+          case 'VCO2':   vco2   = f;
+          case 'RQ':     rq     = f;
+        }
+      });
+    }
+  }
 
   Future<void> _connectAndSubscribe() async {
     setState(() => _connecting = true);
     try {
-      await WinBle.connect(widget.device.address);
+      await widget.device.connect(autoConnect: false);
       _addLog('✅ Connecté');
       setState(() => _connected = true);
 
-      // Découverte des services
-      final services = await WinBle.discoverServices(widget.device.address);
+      final services = await widget.device.discoverServices();
       _addLog('🔍 ${services.length} service(s) trouvé(s)');
 
-      for (final svc in services) {
-        final svcId = svc.toLowerCase();
+      for (final service in services) {
+        final svcId = service.serviceUuid.toString();
+        final mapping = _serviceMapping(svcId);
+        if (mapping == null) continue;
 
-        // Caractéristiques à souscrire selon le service
-        String? chrId;
-        String? label;
+        final chr = service.characteristics.where((c) =>
+            c.characteristicUuid.toString().toLowerCase() ==
+            mapping.chrId.toLowerCase()).firstOrNull;
 
-        if (svcId == SVC_VO2MAX.toLowerCase()) {
-          chrId = CHR_VO2MAX; label = 'VO2Max';
-        } else if (svcId == SVC_VO2.toLowerCase()) {
-          chrId = CHR_VO2; label = 'VO2';
-        } else if (svcId == SVC_VCO2.toLowerCase()) {
-          chrId = CHR_VCO2; label = 'VCO2';
-        } else if (svcId == SVC_RQ.toLowerCase()) {
-          chrId = CHR_RQ; label = 'RQ';
+        if (chr == null) {
+          _addLog('⚠️ Caractéristique introuvable : ${mapping.label}');
+          continue;
         }
 
-        if (chrId == null) continue;
+        await chr.setNotifyValue(true);
+        _addLog('🔔 Notif activée : ${mapping.label}');
 
-        await WinBle.subscribeToCharacteristic(
-          address: widget.device.address,
-          serviceId: svc,
-          characteristicId: chrId,
-        );
-        _addLog('🔔 Notif activée : $label');
-
-        final sub = WinBle.characteristicValueStream.listen((data) {
-          if (data.address != widget.device.address) return;
-          if (data.characteristicId.toLowerCase() != chrId!.toLowerCase()) return;
-          if (data.value.length >= 4) {
-            final f = ByteData.sublistView(Uint8List.fromList(data.value))
-                .getFloat32(0, Endian.little);
-            setState(() {
-              switch (label) {
-                case 'VO2Max': vo2max = f;
-                case 'VO2':    vo2    = f;
-                case 'VCO2':   vco2   = f;
-                case 'RQ':     rq     = f;
-              }
-            });
-          }
+        final sub = chr.onValueReceived.listen((value) {
+          _handleValue(value, mapping.label);
         });
         _subs.add(sub);
+
+        if (chr.properties.read) {
+          final initial = await chr.read();
+          _handleValue(initial, mapping.label);
+        }
       }
     } catch (e) {
       _addLog('❌ Erreur : $e');
@@ -253,9 +258,9 @@ class _DevicePageState extends State<DevicePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.device.name.isEmpty
-            ? widget.device.address
-            : widget.device.name),
+        title: Text(widget.device.platformName.isEmpty
+            ? widget.device.remoteId.toString()
+            : widget.device.platformName),
         actions: [
           if (_connected)
             const Padding(
@@ -274,8 +279,8 @@ class _DevicePageState extends State<DevicePage> {
               alignment: WrapAlignment.center,
               children: [
                 _valueCard('VO2 Max', vo2max, 'mL/min/kg'),
-                _valueCard('VO2',     vo2,    'mL/min'),
-                _valueCard('VCO2',    vco2,   'mL/min'),
+                _valueCard('VO2',     vo2,    'mL/min/kg'),
+                _valueCard('VCO2',    vco2,   'mL/min/kg'),
                 _valueCard('RQ',      rq,     'ratio'),
               ],
             ),

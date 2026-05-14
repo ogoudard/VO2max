@@ -1,8 +1,8 @@
 #ifndef __VERSION_H__
 #define __VERSION_H__
 
-#define VO2MAX_VERSION_MAJOR 2
-#define VO2MAX_VERSION_MINOR 17
+#define VO2MAX_VERSION_MAJOR 3
+#define VO2MAX_VERSION_MINOR 0
 #define VO2MAX_VERSION_PATCH 0
 
 #endif

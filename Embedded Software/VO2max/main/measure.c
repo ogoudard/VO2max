@@ -661,6 +661,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 if (vO2Filtered > vO2Max) // Compute VO2max
                                 {
                                     vO2Max = vO2Filtered;
+                                    BLUETOOTH_SendVO2Max(vO2Max);
                                 }
 
                                 xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
@@ -685,6 +686,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 respiratoryQuotient = vCo2 / vO2;
                                 xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
                                 LOG_DATA(LOG_RESPIRATORY_QUOTIENT, RESPIRATORY_QUOTIENT_LOG_ID, respiratoryQuotient, timestamp);
+                                BLUETOOTH_SendRQ(respiratoryQuotient);
                             }
                         }
                     }

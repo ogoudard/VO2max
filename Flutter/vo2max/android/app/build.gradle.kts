@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.vo2max"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
+    buildToolsVersion = "35.0.0"
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

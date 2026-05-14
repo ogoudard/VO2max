@@ -854,17 +854,14 @@ void LCD_FillRectangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint3
     }
 }
 
-void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image)
+void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, const uint16_t *image)
 {
-    uint8_t buf[4];
     uint32_t i;
     uint32_t j;
+    uint32_t point;
+    uint16_t color;
     uint32_t m;
     uint32_t n;
-    uint32_t point;
-    uint16_t r;
-    uint16_t c;
-    uint16_t color;
     uint16_t col0;
     uint16_t row0;
     uint16_t col1;
@@ -874,42 +871,36 @@ void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t
     transform(right, bottom, &col1, &row1);
 
     SetAddrWindow(col0, row0, col1, row1);
-
     WriteByte(ST7789_CMD_RAMWR, ST7789_CMD);
 
-    c = right - left + 1; /* column */
-    r = bottom - top + 1; /* row */
-    point = 0;            /* image point init 0 */
+    uint32_t total_pixels = (uint32_t)(right - left + 1) * (bottom - top + 1);
+    uint32_t total_bytes = total_pixels * 2;
 
-    m = ((uint32_t)(right - left + 1) * (bottom - top + 1) * 2) /
-        ST7789_BUFFER_SIZE; /* total times */
-    n = ((uint32_t)(right - left + 1) * (bottom - top + 1) * 2) %
-        ST7789_BUFFER_SIZE; /* the last */
+    m = total_bytes / ST7789_BUFFER_SIZE;
+    n = total_bytes % ST7789_BUFFER_SIZE;
+
+    point = 0;
 
     for (i = 0; i < m; i++)
     {
-        for (j = 0; j < ST7789_BUFFER_SIZE; j += 2) /* fill the buffer */
+        for (j = 0; j < ST7789_BUFFER_SIZE; j += 2)
         {
-            color = image[(point % c) * r + (point / c)]; /* set color */
-            buffer[j] = (color >> 8) & 0xFF;              /* set the color */
-            buffer[j + 1] = (color >> 0) & 0xFF;          /* set the color */
-            point++;                                      /* point++ */
+            color = image[point++];
+            buffer[j] = (color >> 8) & 0xFF;
+            buffer[j + 1] = (color) & 0xFF;
         }
-
-        WriteBytes(buf, ST7789_BUFFER_SIZE, ST7789_DATA); /* write data */
+        WriteBytes(buffer, ST7789_BUFFER_SIZE, ST7789_DATA);
     }
 
-    if (n != 0) /* not end */
+    if (n != 0)
     {
-        for (j = 0; j < n; j += 2) /* fill the buffer */
+        for (j = 0; j < n; j += 2)
         {
-            color = image[(point % c) * r + (point / c)]; /* set color */
-            buffer[j] = (color >> 8) & 0xFF;              /* set the color */
-            buffer[j + 1] = (color >> 0) & 0xFF;          /* set the color */
-            point++;                                      /* point++ */
+            color = image[point++];
+            buffer[j] = (color >> 8) & 0xFF;
+            buffer[j + 1] = (color) & 0xFF;
         }
-
-        WriteBytes(buf, n, ST7789_DATA); /* write data */
+        WriteBytes(buffer, n, ST7789_DATA);
     }
 }
 

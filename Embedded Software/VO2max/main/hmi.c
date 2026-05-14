@@ -16,6 +16,7 @@
 #include "driver/spi_master.h"
 #include "settings.h"
 #include "esp_system.h"
+#include "cyclist_vo2max_rgb565.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -165,12 +166,14 @@ static void HmiTask(void *pvParameters)
     LCD_DisplayOn();
     LCD_Clear();
 
-    LCD_DrawString(10, 10, "VO2max", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawPicture16bits(0, 0, 239, 134, cyclist_image);
+
+    LCD_DrawString(10, 10, "VO2max", LCD_COLOR_WHITE, LCD_FONT_24);
 
     snprintf(versionString, sizeof(versionString), "Version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
-    LCD_DrawString(10, 34, versionString, LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 34, versionString, LCD_COLOR_WHITE, LCD_FONT_24);
 
-    LCD_DrawString(10, 58, "Initializing...", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 58, "Initializing...", LCD_COLOR_WHITE, LCD_FONT_24);
 
     waitNotification &= xSemaphoreTake(g_flowInitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
     waitNotification &= xSemaphoreTake(g_o2InitializationSemaphore, pdMS_TO_TICKS(INITIALIZATION_TIMEOUT_MS));
@@ -191,7 +194,7 @@ static void HmiTask(void *pvParameters)
     else
     {
         LCD_DrawString((SCREEN_HEIGHT - 12 * strlen("Success!")) / 2, 90, "Success!", LCD_COLOR_GREEN, LCD_FONT_24);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(2000));
         InitializeMenus();
         LCD_Clear();
         NormalOperation();

@@ -532,7 +532,7 @@ void LCD_DrawPoint(uint16_t x, uint16_t y, uint32_t color);
 void LCD_DrawString(uint16_t x, uint16_t y, const char *str, uint32_t color, LCD_Font_t font);
 void LCD_ClearString(uint16_t x, uint16_t y, uint8_t length, uint32_t color, LCD_Font_t font);
 void LCD_FillRectangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint32_t color);
-void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, uint16_t *image);
+void LCD_DrawPicture16bits(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, const uint16_t *image);
 void LCD_DisplayOff();
 void LCD_DisplayOn();
 void LCD_DisplayInversionOff();

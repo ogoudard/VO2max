@@ -1,0 +1,40 @@
+Script/build
+Script/dist
+
+# Flutter/Dart
+Flutter/vo2max/.dart_tool/
+Flutter/vo2max/.flutter-plugins
+Flutter/vo2max/.flutter-plugins-dependencies
+Flutter/vo2max/.packages
+Flutter/vo2max/pubspec.lock          # omit this line if it's a library (keep for apps)
+
+# Build outputs
+Flutter/vo2max/build/
+
+# IDE
+Flutter/vo2max/.idea/
+Flutter/vo2max/.vscode/
+Flutter/vo2max/*.iml
+
+# iOS
+Flutter/vo2max/ios/Pods/
+Flutter/vo2max/ios/.symlinks/
+Flutter/vo2max/ios/Flutter/Flutter.framework
+Flutter/vo2max/ios/Flutter/Flutter.podspec
+
+# Android
+Flutter/vo2max/android/.gradle/
+Flutter/vo2max/android/local.properties
+Flutter/vo2max/android/captures/
+Flutter/vo2max/*.keystore
+Flutter/vo2max/*.jks
+
+# macOS
+Flutter/vo2max/macos/Pods/
+Flutter/vo2max/macos/.symlinks/
+
+# Web
+Flutter/vo2max/web/index.html        # only if auto-generated; delete this line if you've customised it
+
+# Coverage / test
+Flutter/vo2max/coverage/

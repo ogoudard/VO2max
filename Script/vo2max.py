@@ -81,7 +81,6 @@ DEFAULT_ON    = {"9", "13", "14", "15"}
 UPDATE_MS     = 40
 RENDER_WINDOW = 300.0   # seconds
 MAX_POINTS    = 200_000
-DEFAULT_PORT  = "COM6"
 DEFAULT_BAUD  = 921_600
 AXIS_WIDTH    = 52      # px per Y axis widget
 Y_PAD         = 0.05    # 5 % padding above and below autoscale
@@ -165,15 +164,116 @@ def enqueue_snapshot(timestamp_s: float):
         pass   # drop rather than stall the serial thread
 
 # ╔══════════════════════════════════════════════════════════════════╗
+# ║ PORT DETECTION                                                  ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+# USB VIDs for chips found on LilyGo T-Display boards:
+#   0x10C4  Silicon Labs CP2104  (original T-Display)
+#   0x1A86  WCH CH9102F / CH340  (later T-Display revisions)
+#   0x303A  Espressif native USB CDC  (T-Display-S3)
+LILYGO_VIDS = {0x10C4, 0x1A86, 0x303A}
+LILYGO_DESCRIPTION_KEYWORDS = (
+    "cp210", "ch910", "ch340", "esp32", "lilygo", "ttgo", "uart bridge"
+)
+
+def detect_port():
+    """
+    Return the most likely LilyGo T-Display port device string, or None.
+    Priority:
+      1. Command-line argument (handled in main before this is called)
+      2. VID match against known LilyGo USB chips
+      3. Description keyword match
+      4. None  ->  caller opens PortPickerDialog
+    """
+    ports = serial.tools.list_ports.comports()
+    # Priority 1 — VID match
+    for p in ports:
+        if p.vid in LILYGO_VIDS:
+            return p.device
+    # Priority 2 — description keyword match
+    for p in ports:
+        desc = (p.description or "").lower()
+        if any(kw in desc for kw in LILYGO_DESCRIPTION_KEYWORDS):
+            return p.device
+    return None
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║ PORT PICKER DIALOG                                              ║
+# ╚══════════════════════════════════════════════════════════════════╝
+class PortPickerDialog(QtWidgets.QDialog):
+    """
+    Shown on startup when auto-detection fails.
+    Lists all available ports with their descriptions so the user
+    can pick the right one without restarting from the command line.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Serial Port")
+        self.setMinimumWidth(460)
+        self.selected_port = None
+        self.selected_baud = DEFAULT_BAUD
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        lbl = QtWidgets.QLabel(
+            "No LilyGo T-Display port was detected automatically.\n"
+            "Select the correct port from the list below:"
+        )
+        lbl.setStyleSheet("color:#c9d1d9;")
+        layout.addWidget(lbl)
+
+        self.port_list = QtWidgets.QListWidget()
+        self.port_list.setStyleSheet(
+            "background:#161b22; color:#c9d1d9; border:1px solid #30363d;"
+        )
+        ports = serial.tools.list_ports.comports()
+        for p in ports:
+            desc    = p.description or "Unknown device"
+            vid_str = f"  [VID:{p.vid:04X}]" if p.vid else ""
+            item    = QtWidgets.QListWidgetItem(f"{p.device}  —  {desc}{vid_str}")
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, p.device)
+            self.port_list.addItem(item)
+        if self.port_list.count():
+            self.port_list.setCurrentRow(0)
+        else:
+            self.port_list.addItem("No serial ports found")
+        layout.addWidget(self.port_list)
+
+        baud_row = QtWidgets.QHBoxLayout()
+        baud_lbl = QtWidgets.QLabel("Baud rate:")
+        baud_lbl.setStyleSheet("color:#c9d1d9;")
+        baud_row.addWidget(baud_lbl)
+        self.baud_box = QtWidgets.QComboBox()
+        self.baud_box.setStyleSheet("background:#161b22; color:#c9d1d9;")
+        for b in [9600, 115200, 230400, 460800, 921600]:
+            self.baud_box.addItem(str(b))
+        self.baud_box.setCurrentText(str(DEFAULT_BAUD))
+        baud_row.addWidget(self.baud_box)
+        baud_row.addStretch()
+        layout.addLayout(baud_row)
+
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+        self.setStyleSheet("background:#0d1117;")
+
+    def accept(self):
+        item = self.port_list.currentItem()
+        if item:
+            self.selected_port = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        self.selected_baud = int(self.baud_box.currentText())
+        super().accept()
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
 # ║ SERIAL                                                          ║
 # ╚══════════════════════════════════════════════════════════════════╝
-def detect_port():
-    ports = serial.tools.list_ports.comports()
-    for p in ports:
-        if any(k in p.device for k in ("USB", "ACM", "COM")):
-            return p.device
-    return ports[0].device if ports else None
-
 def serial_thread(port, baud):
     global running, t0
     ser = serial.Serial(port, baud, timeout=1)
@@ -445,7 +545,6 @@ class PanelWidget(QtWidgets.QWidget):
             self.curves[ch] = curve
 
         # Zero reference line — dashed grey, hidden until data arrives.
-        # Drawn in normalised [0,1] Y space; repositioned each frame.
         self._zero_line = pg.InfiniteLine(
             pos=0.5, angle=0,
             pen=pg.mkPen("#444c56", width=1,
@@ -454,8 +553,6 @@ class PanelWidget(QtWidgets.QWidget):
         self._zero_line.setVisible(False)
         self.pw.addItem(self._zero_line)
 
-        # Map group_key → zero-line (one shared line; last writer wins,
-        # which is fine because all groups share the same normalised axis)
         self._group_ranges: dict = {}
 
         self.live_overlay = LiveLabelOverlay(channels, self.pw.viewport())
@@ -492,7 +589,7 @@ class PanelWidget(QtWidgets.QWidget):
             group_ranges[gk] = (ymin - pad, ymax + pad)
 
         # ── 2. Update curves, axis labels, live overlay ───────────────
-        zero_norm = None   # will be set by whichever group contains ch 0
+        zero_norm = None
         for ch in self.channels:
             t_all, y_all = snap.get(ch, ([], []))
             if not t_all:
@@ -519,8 +616,6 @@ class PanelWidget(QtWidgets.QWidget):
             self.y_widgets[gk].set_range(lo, hi)
             self.live_overlay.set_value(ch, float(y_arr[-1]))
 
-            # Compute normalised position of zero for this group.
-            # Use the last group processed; all share the same plot space.
             zero_norm = (0.0 - lo) / rng
 
         # ── 3. Position the zero reference line ───────────────────────
@@ -528,8 +623,6 @@ class PanelWidget(QtWidgets.QWidget):
             self._zero_line.setPos(zero_norm)
             self._zero_line.setVisible(True)
         else:
-            # Zero is outside the visible range — hide the line so it
-            # doesn't clutter a panel where all values are, say, > 100.
             self._zero_line.setVisible(False)
 
 
@@ -540,7 +633,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Serial Plotter")
+        self.setWindowTitle("VO2max Plotter")
         self.resize(1800, 1000)
 
         central = QtWidgets.QWidget()
@@ -648,10 +741,23 @@ class MainWindow(QtWidgets.QMainWindow):
 # ╚══════════════════════════════════════════════════════════════════╝
 def main():
     global running
+
+    # QApplication must exist before any dialog or widget is created
+    app = QtWidgets.QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    # Port / baud resolution
     port = sys.argv[1] if len(sys.argv) > 1 else detect_port()
     baud = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_BAUD
+
     if not port:
-        print("No serial port found"); return
+        dlg = PortPickerDialog()
+        if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted or not dlg.selected_port:
+            print("No port selected — exiting.")
+            sys.exit(0)
+        port = dlg.selected_port
+        baud = dlg.selected_baud
+
     print(f"[serial] {port} @ {baud}")
 
     # Start CSV writer thread
@@ -665,7 +771,6 @@ def main():
     threading.Thread(target=serial_thread, args=(port, baud),
                      daemon=True).start()
 
-    app = QtWidgets.QApplication(sys.argv)
     win = MainWindow()
     win.set_csv_path(csv_path)
     win.showMaximized()
@@ -675,6 +780,7 @@ def main():
         running = False
         csv_queue.put(None)      # signal writer to flush and exit
         writer_t.join(timeout=5)
+
 
 if __name__ == "__main__":
     main()

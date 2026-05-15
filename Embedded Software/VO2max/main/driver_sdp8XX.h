@@ -33,6 +33,6 @@ bool SDP8XX_ReadDifferentialPressureRaw(int16_t *differentialPressureRaw);
 bool SDP8XX_ReadMeasurementsRaw(int16_t *differentialPressureRaw,
                                 int16_t *temperatureRaw,
                                 int16_t *scalingFactor);
-bool SDP8XX_ReadMeasurements(float *differentialPressure, float *temperature);
+bool SDP8XX_ReadMeasurements(double *differentialPressure, float *temperature);
 
 #endif /* __DRIVER_SDP8XX_H__ */

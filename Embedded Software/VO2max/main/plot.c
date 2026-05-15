@@ -1,4 +1,4 @@
-#include "log.h"
+#include "plot.h"
 #include "driver/uart.h"
 
 #define UART_NUM_DEBUG UART_NUM_1
@@ -12,17 +12,17 @@ typedef union
 
 QueueHandle_t uartQueue;
 
-void LOG_Initialize(void)
+void PLOT_Initialize(void)
 {
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_DEBUG, 1024, 1024, 10, &uartQueue, 0));
 }
 
-void LOG_SendData(uint8_t id, double value, int64_t timestamp)
+void PLOT_SendData(uint8_t id, double value, int64_t timestamp)
 {
     uint8_t buffer[18];
     uint8_t *ts;
     DoubleValue_u d;
-    
+
     d.value = value;
 
     buffer[0] = START_BYTE;

@@ -17,7 +17,7 @@
 #include "settings.h"
 #include "debug.h"
 #include "driver/uart.h"
-#include "log.h"
+#include "plot.h"
 
 #define MAIN_TASK_PERIOD_MS 3000
 
@@ -38,7 +38,7 @@ void app_main(void)
 
     DEBUG_Initialize();
 
-    LOG_Initialize();
+    PLOT_Initialize();
 
     SETTINGS_Initialize();
     SETTINGS_LoadSettings();

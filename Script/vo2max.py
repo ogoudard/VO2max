@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Serial Plotter — white background, thin curves, fixed Y-axis labels.
+Serial Plotter — white background, thin curves, fixed Y-axis labels,
+                  crosshair with X (time) and Y (real-unit) readout.
 """
 
 import sys, threading, collections, struct, csv, queue
@@ -57,7 +58,6 @@ SHARED_AXES = [
     ["13", "14", "15"],
 ]
 
-# Darker / more saturated colors that read well on white
 COLORS = [
     "#0077cc", "#cc2200", "#007733", "#cc8800",
     "#7700cc", "#cc5500", "#0055aa", "#aa0077",
@@ -71,7 +71,7 @@ UPDATE_MS     = 40
 RENDER_WINDOW = 300.0
 MAX_POINTS    = 200_000
 DEFAULT_BAUD  = 921_600
-AXIS_WIDTH    = 64      # px per Y-axis widget
+AXIS_WIDTH    = 64
 Y_PAD         = 0.05
 
 # ╔══════════════════════════════════════════════════════════════════╗
@@ -99,11 +99,11 @@ def axis_color_for(gk):
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ DATA                                                            ║
 # ╚══════════════════════════════════════════════════════════════════╝
-lock         = threading.Lock()
-channel_data = {ch: {"t": collections.deque(), "y": collections.deque()} for ch in CHANNELS}
+lock          = threading.Lock()
+channel_data  = {ch: {"t": collections.deque(), "y": collections.deque()} for ch in CHANNELS}
 latest_values = {ch: None for ch in CHANNELS}
-running      = True
-t0           = None
+running       = True
+t0            = None
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ CSV LOGGING                                                     ║
@@ -240,31 +240,22 @@ def serial_thread(port, baud):
                 enqueue_snapshot(t)
 
 # ╔══════════════════════════════════════════════════════════════════╗
+# ║ CROSSHAIR MANAGER  (broadcasts X position to all panels)       ║
+# ╚══════════════════════════════════════════════════════════════════╝
+class CrosshairManager(QtCore.QObject):
+    """Emits the current time-axis X when any panel moves the crosshair."""
+    x_changed = QtCore.pyqtSignal(float)   # real time value
+    hidden    = QtCore.pyqtSignal()         # mouse left all panels
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+# ╔══════════════════════════════════════════════════════════════════╗
 # ║ Y-AXIS WIDGET                                                   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 class YAxisWidget(QtWidgets.QWidget):
-    """
-    Custom-painted Y axis strip.
-
-    Left  layout (right-to-left): spine | ticks | numbers | rotated-label
-    Right layout (left-to-right): spine | ticks | numbers | rotated-label
-
-    The rotated label sits in the outermost strip (farthest from the canvas).
-    Both sides rotate the text -90° (reads bottom-to-top); the translate X
-    is chosen so the glyph body lands just inside the outer edge.
-
-    Key geometry after rotate(-90°):
-      • painter +X  →  screen -Y  (text advances upward on screen)
-      • painter +Y  →  screen +X  (ascent goes rightward on screen)
-    So the baseline (painter y=0) maps to screen x = translate_x,
-    and the glyph body spans screen x ∈ [translate_x, translate_x + ascent].
-    For the label to land at the outer edge:
-      left  side: translate_x = ascent        → body in [ascent, 2*ascent] near left
-      right side: translate_x = w-2*ascent-2  → body in [w-2a-2, w-a-2] near right
-    """
-
-    TICK    = 5
-    GAP     = 3   # px between tick end and numeric text
+    TICK = 5
+    GAP  = 3
 
     def __init__(self, color: str, label: str, side: str = "left", parent=None):
         super().__init__(parent)
@@ -285,32 +276,30 @@ class YAxisWidget(QtWidgets.QWidget):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
 
-        w, h    = self.width(), self.height()
-        lo, hi  = self._lo, self._hi
-        rng     = hi - lo if hi != lo else 1.0
+        w, h   = self.width(), self.height()
+        lo, hi = self._lo, self._hi
+        rng    = hi - lo if hi != lo else 1.0
 
         num_font = QtGui.QFont("monospace", 7)
         lbl_font = QtGui.QFont("monospace", 7, QtGui.QFont.Weight.Bold)
         num_fm   = QtGui.QFontMetrics(num_font)
         lbl_fm   = QtGui.QFontMetrics(lbl_font)
-        ascent   = lbl_fm.ascent()   # height of label glyph body in px
+        ascent   = lbl_fm.ascent()
 
-        col_pen  = QtGui.QPen(self._color, 1)
+        col_pen = QtGui.QPen(self._color, 1)
         p.setPen(col_pen)
 
-        # ── Spine ────────────────────────────────────────────────────
         spine_x = w - 1 if self._side == "left" else 0
         p.drawLine(spine_x, 0, spine_x, h)
 
-        # ── Ticks + numeric labels ────────────────────────────────────
         p.setFont(num_font)
-        for i in range(7):   # 0..6 → 7 ticks
-            val  = lo + (hi - lo) * i / 6
-            y    = int(h - (val - lo) / rng * h)
-            y    = max(1, min(h - 1, y))
-            txt  = f"{val:.3g}"
-            tw   = num_fm.horizontalAdvance(txt)
-            ty   = y + num_fm.ascent() // 2
+        for i in range(7):
+            val = lo + (hi - lo) * i / 6
+            y   = int(h - (val - lo) / rng * h)
+            y   = max(1, min(h - 1, y))
+            txt = f"{val:.3g}"
+            tw  = num_fm.horizontalAdvance(txt)
+            ty  = y + num_fm.ascent() // 2
 
             if self._side == "left":
                 p.drawLine(spine_x, y, spine_x - self.TICK, y)
@@ -319,25 +308,20 @@ class YAxisWidget(QtWidgets.QWidget):
                 p.drawLine(spine_x, y, spine_x + self.TICK, y)
                 p.drawText(spine_x + self.TICK + self.GAP, ty, txt)
 
-        # ── Rotated channel label ─────────────────────────────────────
-        # After rotate(-90): painter+Y → screen+X, painter+X → screen-Y
-        # baseline (py=0)   → screen x = translate_x
-        # glyph body        → screen x ∈ [translate_x, translate_x + ascent]
         p.save()
         p.setFont(lbl_font)
         p.setPen(col_pen)
         lw = lbl_fm.horizontalAdvance(self._label)
 
         if self._side == "left":
-            tx = ascent                  # body: [ascent .. 2*ascent]
+            tx = ascent
         else:
-            tx = w - 2 * ascent - 2     # body: [w-2a-2 .. w-a-2], within widget
+            tx = w - 2 * ascent - 2
 
         p.translate(tx, h // 2)
         p.rotate(-90)
         p.drawText(-lw // 2, 0, self._label)
         p.restore()
-
         p.end()
 
 
@@ -405,14 +389,18 @@ class LiveLabelOverlay(QtWidgets.QWidget):
 class PanelWidget(QtWidgets.QWidget):
 
     def __init__(self, title: str, channels: list, show_x: bool,
-                 x_link_target=None, parent=None):
+                 x_link_target=None, crosshair_mgr: CrosshairManager = None,
+                 parent=None):
         super().__init__(parent)
         self.channels    = channels
         self.curves      = {}
         self.y_widgets   = {}
         self.ch_to_group = {}
+        self._snap_data  = {}   # ch -> (t_arr, y_arr) for crosshair interpolation
+        self._group_ranges: dict = {}  # gk -> (lo, hi)
+        self._xhair_mgr  = crosshair_mgr
 
-        # Build local group keys (restricted to channels present in this panel)
+        # Build local group keys
         seen_groups, seen_set = [], set()
         for ch in channels:
             gk_local = frozenset(c for c in group_key_for(ch) if c in channels)
@@ -434,12 +422,10 @@ class PanelWidget(QtWidgets.QWidget):
             root.addWidget(yw)
             self.y_widgets[gk] = yw
 
-        # Plot canvas
+        # ── Plot canvas ────────────────────────────────────────────
         self.pw = pg.PlotWidget(background="#ffffff")
         self.pw.showGrid(x=True, y=True, alpha=0.2)
         self.pw.setMouseEnabled(x=True, y=False)
-        # Keep left axis ticks at fixed normalized positions so the
-        # horizontal grid lines are drawn, but hide the axis visually.
         left_ax = self.pw.getAxis("left")
         left_ax.setTicks([[(i/6, "") for i in range(7)], []])
         left_ax.setStyle(tickLength=0)
@@ -491,9 +477,175 @@ class PanelWidget(QtWidgets.QWidget):
         self.live_overlay.show()
         self.pw.setYRange(0, 1, padding=0)
 
+        # ── Crosshair lines ────────────────────────────────────────
+        self._vline = pg.InfiniteLine(
+            angle=90,
+            pen=pg.mkPen("#555555", width=1, style=QtCore.Qt.PenStyle.DashLine),
+            movable=False,
+        )
+        self._hline = pg.InfiniteLine(
+            angle=0,
+            pen=pg.mkPen("#555555", width=1, style=QtCore.Qt.PenStyle.DashLine),
+            movable=False,
+        )
+        self._vline.setVisible(False)
+        self._hline.setVisible(False)
+        self.pw.addItem(self._vline, ignoreBounds=True)
+        self.pw.addItem(self._hline, ignoreBounds=True)
+
+        # Crosshair tooltip: a rounded-rect + text drawn in scene-pixel space
+        # so it floats right next to the cursor regardless of zoom/pan.
+        scene = self.pw.scene()
+        self._tip_bg   = QtWidgets.QGraphicsRectItem()
+        self._tip_text = QtWidgets.QGraphicsTextItem()
+        self._tip_text.setFont(QtGui.QFont("monospace", 8))
+        self._tip_bg.setPen(QtGui.QPen(QtGui.QColor("#888888"), 0.5))
+        self._tip_bg.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 255, 220)))
+        self._tip_bg.setZValue(100)
+        self._tip_text.setZValue(101)
+        scene.addItem(self._tip_bg)
+        scene.addItem(self._tip_text)
+        self._tip_bg.setVisible(False)
+        self._tip_text.setVisible(False)
+        self._last_scene_pos: QtCore.QPointF | None = None  # updated on mouse move
+
+        # Throttled mouse-move proxy (50 ms rate limit)
+        self._proxy = pg.SignalProxy(
+            self.pw.scene().sigMouseMoved,
+            rateLimit=50,
+            slot=self._on_mouse_moved,
+        )
+
+        # Connect leave event by subclassing viewport filter
+        self.pw.viewport().installEventFilter(self)
+
+        # Connect to manager signals
+        if self._xhair_mgr is not None:
+            self._xhair_mgr.x_changed.connect(self._on_x_broadcast)
+            self._xhair_mgr.hidden.connect(self._hide_crosshair)
+
+    # ── event filter: hide crosshair when mouse leaves viewport ───
+    def eventFilter(self, obj, event):
+        if obj is self.pw.viewport():
+            if event.type() == QtCore.QEvent.Type.Leave:
+                if self._xhair_mgr is not None:
+                    self._xhair_mgr.hidden.emit()
+                else:
+                    self._hide_crosshair()
+        return False
+
     def get_plot_item(self):
         return self.pw.getPlotItem()
 
+    # ── Mouse moved (local panel) ──────────────────────────────────
+    def _on_mouse_moved(self, args):
+        pos = args[0]
+        vb  = self.pw.getPlotItem().vb
+        if not self.pw.sceneBoundingRect().contains(pos):
+            return
+        mouse_point = vb.mapSceneToView(pos)
+        x_val  = mouse_point.x()
+        y_norm = mouse_point.y()
+
+        # Remember scene position so the tooltip can follow the cursor
+        self._last_scene_pos = pos
+
+        # Update horizontal line immediately from local mouse Y
+        self._hline.setPos(y_norm)
+        self._hline.setVisible(True)
+
+        # Broadcast X to all panels (including self via signal)
+        if self._xhair_mgr is not None:
+            self._xhair_mgr.x_changed.emit(x_val)
+        else:
+            self._update_crosshair_at_x(x_val, y_norm)
+
+    # ── Receive broadcast X from manager ──────────────────────────
+    def _on_x_broadcast(self, x_val: float):
+        self._vline.setPos(x_val)
+        self._vline.setVisible(True)
+        self._update_crosshair_label(x_val)
+
+    def _hide_crosshair(self):
+        self._vline.setVisible(False)
+        self._hline.setVisible(False)
+        self._tip_bg.setVisible(False)
+        self._tip_text.setVisible(False)
+
+    def _update_crosshair_at_x(self, x_val: float, y_norm: float = None):
+        """Used when no CrosshairManager is provided (single panel)."""
+        self._vline.setPos(x_val)
+        self._vline.setVisible(True)
+        self._update_crosshair_label(x_val)
+
+    # ── Build the text label at the given time X ───────────────────
+    def _update_crosshair_label(self, x_val: float):
+        # Only draw the tooltip on the panel the mouse is currently over
+        if self._last_scene_pos is None:
+            return
+        if not self.pw.sceneBoundingRect().contains(self._last_scene_pos):
+            self._tip_bg.setVisible(False)
+            self._tip_text.setVisible(False)
+            return
+
+        # Build text: time on first line, then one line per channel
+        lines = [f"t = {x_val:.3f} s"]
+        for ch in self.channels:
+            if ch not in self._snap_data:
+                continue
+            t_arr, y_arr = self._snap_data[ch]
+            if len(t_arr) < 2:
+                continue
+            idx = np.searchsorted(t_arr, x_val)
+            if idx <= 0 or idx >= len(t_arr):
+                continue
+            t0_, t1_ = t_arr[idx - 1], t_arr[idx]
+            y0_, y1_ = y_arr[idx - 1], y_arr[idx]
+            dt   = t1_ - t0_
+            frac = (x_val - t0_) / dt if dt != 0 else 0.0
+            y_real = float(y0_ + frac * (y1_ - y0_))
+            unit  = CHANNELS[ch]["unit"]
+            label = CHANNELS[ch]["label"]
+            lines.append(f"{label}: {y_real:.4g} {unit}".strip())
+
+        html = "<br>".join(lines)
+        self._tip_text.setHtml(
+            f'<span style="font-family:monospace;font-size:8pt;">{html}</span>'
+        )
+
+        # ── Position tooltip in scene pixels, offset from cursor ──
+        OFFSET_X = 12   # px right of cursor
+        OFFSET_Y = -8   # px above cursor
+        PAD      = 5    # inner padding of background rect
+
+        br    = self._tip_text.boundingRect()
+        tw    = br.width()
+        th    = br.height()
+        scene_rect = self.pw.sceneBoundingRect()
+
+        sx = self._last_scene_pos.x()
+        sy = self._last_scene_pos.y()
+
+        # Flip to left if too close to right edge
+        if sx + OFFSET_X + tw + PAD * 2 > scene_rect.right():
+            tx = sx - OFFSET_X - tw - PAD * 2
+        else:
+            tx = sx + OFFSET_X
+
+        # Flip downward if too close to top edge
+        if sy + OFFSET_Y - th - PAD * 2 < scene_rect.top():
+            ty = sy + abs(OFFSET_Y)
+        else:
+            ty = sy + OFFSET_Y - th - PAD * 2
+
+        bg_rect = QtCore.QRectF(tx, ty, tw + PAD * 2, th + PAD * 2)
+        self._tip_bg.setRect(bg_rect)
+        self._tip_text.setPos(tx + PAD, ty + PAD)
+
+        self._tip_bg.setVisible(True)
+        self._tip_text.setVisible(True)
+
+    # ── Data update ────────────────────────────────────────────────
     def update(self, snap: dict):
         group_ranges = {}
         for gk in set(self.ch_to_group.values()):
@@ -514,6 +666,8 @@ class PanelWidget(QtWidgets.QWidget):
             ymin, ymax = float(combined.min()), float(combined.max())
             pad = (ymax - ymin if ymax != ymin else 1.0) * Y_PAD
             group_ranges[gk] = (ymin - pad, ymax + pad)
+
+        self._group_ranges = group_ranges
 
         zero_norm = None
         for ch in self.channels:
@@ -537,6 +691,9 @@ class PanelWidget(QtWidgets.QWidget):
             self.live_overlay.set_value(ch, float(y_arr[-1]))
             zero_norm = (0.0 - lo) / rng
 
+            # Cache windowed arrays for crosshair interpolation
+            self._snap_data[ch] = (t_win, y_win)
+
         if zero_norm is not None and 0.0 <= zero_norm <= 1.0:
             self._zero_line.setPos(zero_norm)
             self._zero_line.setVisible(True)
@@ -553,6 +710,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("VO2max Plotter")
         self.resize(1800, 1000)
+
+        self._xhair_mgr = CrosshairManager(self)
 
         central = QtWidgets.QWidget()
         central.setStyleSheet("background:#ffffff;")
@@ -628,6 +787,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 channels=pdef["channels"],
                 show_x=(i == len(active) - 1),
                 x_link_target=first_pi,
+                crosshair_mgr=self._xhair_mgr,
                 parent=self.plot_col,
             )
             if first_pi is None:

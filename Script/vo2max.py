@@ -124,15 +124,34 @@ def csv_writer_thread(filepath: str):
             writer.writerow(row)
             csv_queue.task_done()
 
-def enqueue_snapshot(timestamp_s: float):
-    row = [f"{timestamp_s:.6f}"]
-    for ch in CHANNEL_ORDER:
-        v = latest_values[ch]
+# Pending row accumulator — groups channels that share the same timestamp.
+# Accessed only from the serial thread (no extra lock needed).
+_csv_pending_ts:  float | None = None          # timestamp of the open row
+_csv_pending_row: dict         = {}            # ch -> val for the open row
+
+def _flush_pending_row():
+    """Serialise the current pending row and push it onto the write queue."""
+    global _csv_pending_ts, _csv_pending_row
+    if _csv_pending_ts is None:
+        return
+    row = [f"{_csv_pending_ts:.6f}"]
+    for c in CHANNEL_ORDER:
+        v = _csv_pending_row.get(c)
         row.append("" if v is None else repr(v))
     try:
         csv_queue.put_nowait(row)
     except queue.Full:
         pass
+    _csv_pending_ts  = None
+    _csv_pending_row = {}
+
+def enqueue_sample(timestamp_s: float, ch: str, val: float):
+    """Accumulate ch/val into the pending row; flush when the timestamp changes."""
+    global _csv_pending_ts, _csv_pending_row
+    if _csv_pending_ts is not None and timestamp_s != _csv_pending_ts:
+        _flush_pending_row()
+    _csv_pending_ts      = timestamp_s
+    _csv_pending_row[ch] = val
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ PORT DETECTION                                                  ║
@@ -237,7 +256,9 @@ def serial_thread(port, baud):
                     d["t"].popleft()
                     d["y"].popleft()
                 latest_values[ch] = val
-                enqueue_snapshot(t)
+                enqueue_sample(t, ch, val)
+    # Flush the last partial row (may never arrive if stream cuts mid-burst)
+    _flush_pending_row()
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ CROSSHAIR MANAGER  (broadcasts X position to all panels)       ║

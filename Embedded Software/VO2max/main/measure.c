@@ -72,12 +72,19 @@
 #define CONCAT(A, B) A##B
 #define CONCAT_EXPAND(A, B) CONCAT(A, B)
 
-#define LOG_DATA(enable, id, value, timestamp) CONCAT_EXPAND(LOG_DATA_, enable)(id, value, timestamp)
+#define PLOT_DATA(enable, id, value, timestamp) CONCAT_EXPAND(PLOT_DATA_, enable)(id, value, timestamp)
 
-#define LOG_DATA_true(id, value, timestamp) LOG_SendData(id, value, timestamp)
-#define LOG_DATA_false(id, value, timestamp) \
+#if PLOT_ENABLE
+#define PLOT_DATA_true(id, value, timestamp) LOG_SendData(id, value, timestamp)
+#else
+#define PLOT_DATA_true(id, value, timestamp) \
     while (0)                                \
     {                                        \
+    }
+#endif
+#define PLOT_DATA_false(id, value, timestamp) \
+    while (0)                                 \
+    {                                         \
     }
 
 /* Debug logging flags (enable/disable logs) */
@@ -122,7 +129,7 @@
 
 typedef struct
 {
-    float values[MAX_VALUE_FILTER_SIZE];
+    double values[MAX_VALUE_FILTER_SIZE];
     uint8_t index;
     uint8_t size;
 } ValueFilter_t;
@@ -179,14 +186,13 @@ static void FlowTask(void *pvParameters);
 static void O2Task(void *pvParameters);
 static void CO2Task(void *pvParameters);
 static void PressureTask(void *pvParameters);
-static void ComputeAirDensity(float temperature, float pressure, float humidity, float *rho);
-static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_t durationUs, float weight);
-static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int64_t durationUs, float weight);
-static void FlowVolumeAndVo2Computation(float diffPressure);
-static float CalculateAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure);
-
-static void AddValueToFilter(ValueFilter_t *filter, float value);
-static float ComputeFilteredValue(ValueFilter_t *filter);
+static float ComputeAirDensity(float temperature, float pressure, float humidity);
+static double ComputeVO2(double rho, double o2percent, double exhaledVol, int64_t durationUs, double weight);
+static double ComputeVCO2(double rho, double co2percent, double exhaledVol, int64_t durationUs, double weight);
+static void FlowVolumeAndVo2Computation(double diffPressure);
+static float ComputeAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure);
+static void AddValueToFilter(ValueFilter_t *filter, double value);
+static double ComputeFilteredValue(ValueFilter_t *filter);
 
 /************************************
  * PUBLIC FUNCTION DEFINITIONS
@@ -219,22 +225,22 @@ void MEASURE_Initialize()
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2cMasterConfig, &i2cHandle));
 
     /* Create queues (size = 1 → always keep latest value) */
-    g_flowQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_flowQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
     g_o2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_co2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_cycleExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_totalExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_cycleExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
+    g_totalExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
     g_humidityQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_temperatureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_pressureQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_altitudeQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_respiratoryRateQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_vO2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_vO2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_vCo2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_respiratoryQuotientQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_respiratoryRateQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
+    g_vO2Queue = xQueueCreate((UBaseType_t)1, sizeof(double));
+    g_vO2MaxQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
+    g_vCo2Queue = xQueueCreate((UBaseType_t)1, sizeof(double));
+    g_respiratoryQuotientQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
     g_o2CalibrationQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
-    g_expiratoryFlowQueue = xQueueCreate((UBaseType_t)1, sizeof(float));
+    g_expiratoryFlowQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
 
     /* Create semaphores (used to signal initialization complete) */
     g_flowInitializationSemaphore = xSemaphoreCreateBinary();
@@ -259,7 +265,7 @@ static void FlowTask(void *pvParameters)
 {
     int16_t scalingFactor;
     int16_t diffPressureRaw;
-    float diffPressure;
+    double diffPressure;
 
     ESP_LOGI(flowTaskTag, "Task started");
 
@@ -294,7 +300,7 @@ static void FlowTask(void *pvParameters)
                 /* The sensor is calibrated for air and N2 at T = 25 °C and p = 966 mbar.
                 If the properties of the system gas deviate from the properties of the calibration gas,
                 a correction of the sensor reading may be applied. */
-                diffPressure = (float)diffPressureRaw / (float)scalingFactor;
+                diffPressure = (double)diffPressureRaw / (double)scalingFactor;
                 FlowVolumeAndVo2Computation(diffPressure);
             }
 
@@ -322,7 +328,7 @@ static void O2Task(void *pvParameters)
         timestamp = esp_timer_get_time();
         o2 = 20.95f;
         xQueueOverwrite(g_o2Queue, (void *)&o2);
-        LOG_DATA(LOG_O2, O2_LOG_ID, o2, timestamp);
+        PLOT_DATA(LOG_O2, O2_LOG_ID, o2, timestamp);
 
         vTaskSuspend(o2TaskHandle);
 
@@ -349,7 +355,7 @@ static void O2Task(void *pvParameters)
             if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
             {
                 xQueueOverwrite(g_o2Queue, (void *)&o2);
-                LOG_DATA(LOG_O2, O2_LOG_ID, o2, timestamp);
+                PLOT_DATA(LOG_O2, O2_LOG_ID, o2, timestamp);
             }
 
             vTaskDelay(pdMS_TO_TICKS(O2_TASK_PERIOD_MS));
@@ -379,12 +385,12 @@ static void CO2Task(void *pvParameters)
         // Default CO2 value
         co2 = 432.0f;
         xQueueOverwrite(g_co2Queue, (void *)&co2);
-        LOG_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
+        PLOT_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
 
         // Default humidity value
         humidity = 50.0f;
         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
-        LOG_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
+        PLOT_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
 
         vTaskSuspend(co2TaskHandle);
 
@@ -422,10 +428,10 @@ static void CO2Task(void *pvParameters)
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {
                         xQueueOverwrite(g_co2Queue, (void *)&co2);
-                        LOG_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
+                        PLOT_DATA(LOG_CO2, CO2_LOG_ID, co2, timestamp);
 
                         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
-                        LOG_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
+                        PLOT_DATA(LOG_HUMIDITY, HUMIDITY_LOG_ID, humidity, timestamp);
                     }
                 }
             }
@@ -457,17 +463,17 @@ static void PressureTask(void *pvParameters)
         // Default temperature
         temperature = 25.0f;
         xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-        LOG_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, timestamp);
+        PLOT_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, timestamp);
 
         // Default pressure
         pressure = 101325.0f;
         xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-        LOG_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, pressure, timestamp);
+        PLOT_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, pressure, timestamp);
 
         // Default altitude
-        altitude = CalculateAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
+        altitude = ComputeAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
         xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
-        LOG_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, altitude, timestamp);
+        PLOT_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, altitude, timestamp);
 
         vTaskSuspend(pressureTaskHandle);
 
@@ -495,14 +501,14 @@ static void PressureTask(void *pvParameters)
                 BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
 
                 xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-                LOG_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, timestamp);
+                PLOT_DATA(LOG_TEMPERATURE, TEMPERATURE_LOG_ID, temperature, timestamp);
 
                 xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-                LOG_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, pressure, timestamp);
+                PLOT_DATA(LOG_PRESSURE, PRESSURE_LOG_ID, pressure, timestamp);
 
-                altitude = CalculateAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
+                altitude = ComputeAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
                 xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
-                LOG_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, altitude, timestamp);
+                PLOT_DATA(LOG_ALTITUDE, ALTITUDE_LOG_ID, altitude, timestamp);
             }
 
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
@@ -510,7 +516,7 @@ static void PressureTask(void *pvParameters)
     }
 }
 
-static void ComputeAirDensity(float temperature, float pressure, float humidity, float *rho)
+static float ComputeAirDensity(float temperature, float pressure, float humidity)
 {
     float pSat;
     float pV;
@@ -518,28 +524,28 @@ static void ComputeAirDensity(float temperature, float pressure, float humidity,
     pSat = 611.21f * expf(17.502 * temperature / (240.97 + temperature));
     pV = pSat * humidity / 100.0f;
 
-    *rho = pressure / (287.058f * (temperature + 273.15f)) + pV / (461.495f * (temperature + 273.15f));
+    return pressure / (287.058f * (temperature + 273.15f)) + pV / (461.495f * (temperature + 273.15f));
 }
 
-static float ComputeVO2(float rhoBtps, float o2percent, float exhaledVol, int64_t durationUs, float weight)
+static double ComputeVO2(double rho, double o2percent, double exhaledVol, int64_t durationUs, double weight)
 {
-    float o2Consumed;
+    double o2Consumed;
 
     o2Consumed = 20.95f - o2percent;
 
-    return (exhaledVol * rhoBtps * o2Consumed * 600000000) / (durationUs * RHO_STPD * weight);
+    return (exhaledVol * rho * o2Consumed * 600000000.0f) / ((double)durationUs * RHO_STPD * weight);
 }
 
-static float ComputeVCO2(float rhoBtps, float co2percent, float exhaledVol, int64_t durationUs, float weight)
+static double ComputeVCO2(double rho, double co2percent, double exhaledVol, int64_t durationUs, double weight)
 {
-    float co2Produced;
+    double co2Produced;
 
     co2Produced = co2percent - 0.0043f; // Substract CO2 concentration in the atmosphere
 
-    return (exhaledVol * rhoBtps * co2Produced * 600000000) / (durationUs * RHO_STPD * weight);
+    return (exhaledVol * rho * co2Produced * 600000000.0f) / ((double)durationUs * RHO_STPD * weight);
 }
 
-static void FlowVolumeAndVo2Computation(float diffPressure)
+static void FlowVolumeAndVo2Computation(double diffPressure)
 {
     /* Timing variables */
     int64_t timestamp;
@@ -548,33 +554,33 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     int64_t deltaT;
     static int64_t previousExhaleTimestamp = 0;
     int64_t breathDuration;
-    float respiratoryRate; // breath/minute
+    double respiratoryRate; // breath/minute
 
     /* Variables for flow computation */
-    float flow = 0.0f;
-    static float cycleExhaledVolume = 0.0f;
-    static float totalExhaledVolume = 0.0f;
-    static float previousFlow = 0.0f;
+    double flow = 0.0f;
+    static double cycleExhaledVolume = 0.0f;
+    static double totalExhaledVolume = 0.0f;
+    static double previousFlow = 0.0f;
 
     /* Variables for VO2 computation */
-    static float vO2Max = 0.0f;
-    float vO2 = 0.0f;
+    static double vO2Max = 0.0f;
+    double vO2 = 0.0f;
     static ValueFilter_t vO2Filter = {.index = 0, .size = 10, .values = {0.0f}};
-    float vO2Filtered = 0.0f;
-    float vCo2 = 0.0f;
+    double vO2Filtered = 0.0f;
+    double vCo2 = 0.0f;
     static ValueFilter_t vCo2Filter = {.index = 0, .size = 10, .values = {0.0f}};
-    float vCo2Filtered = 0.0f;
+    double vCo2Filtered = 0.0f;
     float o2;
     float co2;
     float temperature;
     float pressure;
     float humidity;
-    float rho;
+    double rho;
     bool vO2Compute;
     bool vCo2Compute;
-    float respiratoryQuotient;
-    float expiratoryFlow;
-    float volume;
+    double respiratoryQuotient;
+    double expiratoryFlow;
+    double volume;
     static bool exhale = false; // Breath detection
 
     timestamp = esp_timer_get_time();
@@ -585,21 +591,21 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     {
         totalExhaledVolume = 0.0f;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-        LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+        PLOT_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 
         cycleExhaledVolume = 0.0f;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-        LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+        PLOT_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
     }
 
     if (xSemaphoreTake(g_resetVo2MaxSemaphore, (TickType_t)0))
     {
         vO2Max = 0.0f;
         xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-        LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
+        PLOT_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
     }
 
-    LOG_DATA(LOG_DIFFERENTIAL_PRESSURE, DIFFERENTIAL_PRESSURE_LOG_ID, diffPressure, timestamp);
+    PLOT_DATA(LOG_DIFFERENTIAL_PRESSURE, DIFFERENTIAL_PRESSURE_LOG_ID, diffPressure, timestamp);
 
     // Bernoulli equation Q=k⋅sqrt(ΔP)
     if (diffPressure < 0.0f)
@@ -612,10 +618,10 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     }
 
     xQueueOverwrite(g_flowQueue, (void *)&flow);
-    LOG_DATA(LOG_FLOW, FLOW_LOG_ID, flow, timestamp);
+    PLOT_DATA(LOG_FLOW, FLOW_LOG_ID, flow, timestamp);
     previousFlow = flow;
 
-    volume = (float)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
+    volume = (double)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
 
     /* Detect exhalation using threshold + hysteresis */
     if ((DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) < diffPressure)
@@ -625,23 +631,23 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             exhale = true;
 
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-            LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+            PLOT_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-            LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+            PLOT_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 
             cycleExhaledVolume = 0.0f;
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-            LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+            PLOT_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
         }
 
         cycleExhaledVolume += volume;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-        LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+        PLOT_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 
         totalExhaledVolume += volume;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-        LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+        PLOT_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
     }
     else if ((DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) > diffPressure)
     {
@@ -658,19 +664,19 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
             {
                 cycleExhaledVolume += volume;
                 xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-                LOG_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
+                PLOT_DATA(LOG_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_LOG_ID, cycleExhaledVolume, timestamp);
 
                 totalExhaledVolume += volume;
                 xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-                LOG_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
+                PLOT_DATA(LOG_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_LOG_ID, totalExhaledVolume, timestamp);
 
-                respiratoryRate = 60000000.0f / (float)breathDuration; // Respiratory rate in breath/min
+                respiratoryRate = 60000000.0f / (double)breathDuration; // Respiratory rate in breath/min
                 xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
-                LOG_DATA(LOG_RESPIRATORY_RATE, RESPIRATORY_RATE_LOG_ID, respiratoryRate, timestamp);
+                PLOT_DATA(LOG_RESPIRATORY_RATE, RESPIRATORY_RATE_LOG_ID, respiratoryRate, timestamp);
 
                 expiratoryFlow = respiratoryRate * cycleExhaledVolume;
                 xQueueOverwrite(g_expiratoryFlowQueue, (void *)&expiratoryFlow);
-                LOG_DATA(LOG_EXPIRATORY_FLOW, EXPIRATORY_FLOW_LOG_ID, expiratoryFlow, timestamp);
+                PLOT_DATA(LOG_EXPIRATORY_FLOW, EXPIRATORY_FLOW_LOG_ID, expiratoryFlow, timestamp);
 
                 if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
                 {
@@ -678,8 +684,8 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                     {
                         if (pdPASS == xQueuePeek(g_humidityQueue, (void *)&humidity, (TickType_t)0))
                         {
-                            ComputeAirDensity(temperature, pressure, humidity, &rho);
-                            LOG_DATA(LOG_RHO, RHO_LOG_ID, rho, timestamp);
+                            rho = ComputeAirDensity(temperature, pressure, humidity);
+                            PLOT_DATA(LOG_RHO, RHO_LOG_ID, rho, timestamp);
 
                             vO2Compute = (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0));
 
@@ -690,7 +696,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 vO2Filtered = ComputeFilteredValue(&vO2Filter);
 
                                 xQueueOverwrite(g_vO2Queue, (void *)&vO2Filtered);
-                                LOG_DATA(LOG_VO2, VO2_LOG_ID, vO2Filtered, timestamp);
+                                PLOT_DATA(LOG_VO2, VO2_LOG_ID, vO2Filtered, timestamp);
                                 BLUETOOTH_SendVO2(vO2Filtered);
 
                                 if (vO2Filtered > vO2Max) // Compute VO2max
@@ -699,7 +705,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 }
 
                                 xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-                                LOG_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
+                                PLOT_DATA(LOG_VO2MAX, VO2MAX_LOG_ID, vO2Max, timestamp);
                                 BLUETOOTH_SendVO2Max(vO2Max);
                             }
 
@@ -712,7 +718,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                                 vCo2Filtered = ComputeFilteredValue(&vCo2Filter);
 
                                 xQueueOverwrite(g_vCo2Queue, (void *)&vCo2Filtered);
-                                LOG_DATA(LOG_VCO2, VCO2_LOG_ID, vCo2Filtered, timestamp);
+                                PLOT_DATA(LOG_VCO2, VCO2_LOG_ID, vCo2Filtered, timestamp);
                                 BLUETOOTH_SendVCO2(vCo2Filtered);
                             }
 
@@ -720,7 +726,7 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
                             {
                                 respiratoryQuotient = vCo2 / vO2;
                                 xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
-                                LOG_DATA(LOG_RESPIRATORY_QUOTIENT, RESPIRATORY_QUOTIENT_LOG_ID, respiratoryQuotient, timestamp);
+                                PLOT_DATA(LOG_RESPIRATORY_QUOTIENT, RESPIRATORY_QUOTIENT_LOG_ID, respiratoryQuotient, timestamp);
                                 BLUETOOTH_SendRQ(respiratoryQuotient);
                             }
                         }
@@ -731,26 +737,26 @@ static void FlowVolumeAndVo2Computation(float diffPressure)
     }
 }
 
-static float CalculateAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure)
+static float ComputeAltitude(float altitudeReference, float pressureReference, float temperatureReference, float pressure)
 {
     // Hypsometric equation
-    return altitudeReference + (temperatureReference + 273.15f) / 0.0065f * (1 - powf(pressure / pressureReference, 0.190263));
+    return altitudeReference + (temperatureReference + 273.15f) / 0.0065f * (1 - powf(pressure / pressureReference, 0.190263f));
 }
 
-static void AddValueToFilter(ValueFilter_t *filter, float value)
+static void AddValueToFilter(ValueFilter_t *filter, double value)
 {
     filter->index = (filter->index + 1) % filter->size;
     filter->values[filter->index] = value;
 }
 
-static float ComputeFilteredValue(ValueFilter_t *filter)
+static double ComputeFilteredValue(ValueFilter_t *filter)
 {
-    float sum = 0.0f;
+    double sum = 0.0f;
 
     for (uint16_t i = 0; i < filter->size; i++)
     {
         sum += filter->values[i];
     }
 
-    return sum / (float)filter->size;
+    return sum / (double)filter->size;
 }

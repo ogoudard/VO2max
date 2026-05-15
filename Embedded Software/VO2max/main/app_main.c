@@ -27,6 +27,10 @@ void app_main(void)
 {
     int8_t batterySoc;
 
+#if PLOT_ENABLE
+    esp_log_level_set("*", ESP_LOG_NONE);
+#endif
+
     ESP_LOGI(TAG, "VO2max embedded software version: %d.%d.%d", VO2MAX_VERSION_MAJOR, VO2MAX_VERSION_MINOR, VO2MAX_VERSION_PATCH);
     ESP_LOGI(TAG, "Initializing system...");
 

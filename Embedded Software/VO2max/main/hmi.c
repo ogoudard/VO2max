@@ -695,8 +695,8 @@ static void FlowCalibrationScreenAction(void)
     PushButtonState_e pushButton2State;
     float refVolume = 3.0f;
     char refVolumeString[4];
-    float volume;
-    float previousVolume = -1.0f;
+    double volume;
+    double previousVolume = -1.0f;
     char volumeString[7];
     float newCalValue;
     char calString[20];
@@ -1007,14 +1007,14 @@ static void LiveValuesScreenAction(void)
 
 static void SpirometerScreenAction(void)
 {
-    float flow;
-    float previousFlow = -1.0f;
-    float cycleExhaledVolume;
-    float previousCycleExhaledVolume = -1.0f;
-    float totalExhaledVolume;
-    float previousTotalExhaledVolume = -1.0f;
-    float respiratoryRate;
-    float previousRespriatoryRate = -1.0f;
+    double flow;
+    double previousFlow = -1.0f;
+    double cycleExhaledVolume;
+    double previousCycleExhaledVolume = -1.0f;
+    double totalExhaledVolume;
+    double previousTotalExhaledVolume = -1.0f;
+    double respiratoryRate;
+    double previousRespriatoryRate = -1.0f;
     char string[9];
 
     LCD_Clear();
@@ -1081,14 +1081,14 @@ static void SpirometerScreenAction(void)
 
 static void Vo2MaxScreenAction(void)
 {
-    float vO2;
-    float previousVO2 = -1.0f;
-    float vO2Max;
-    float previousVO2Max = -1.0f;
-    float vCo2;
-    float previousVCo2 = -1.0f;
-    float respiratoryQuotient;
-    float previousRespiratoryQuotient = -1.0f;
+    double vO2;
+    double previousVO2 = -1.0f;
+    double vO2Max;
+    double previousVO2Max = -1.0f;
+    double vCo2;
+    double previousVCo2 = -1.0f;
+    double respiratoryQuotient;
+    double previousRespiratoryQuotient = -1.0f;
     char string[8];
 
     LCD_Clear();

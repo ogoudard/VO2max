@@ -28,6 +28,8 @@ extern SemaphoreHandle_t g_pressureInitializationSemaphore;
 extern SemaphoreHandle_t g_resetExhaledVolumeSemaphore;
 extern SemaphoreHandle_t g_resetVo2MaxSemaphore;
 
+#define PLOT_ENABLE true
+
 void MEASURE_Initialize(void);
 
 #endif

@@ -17,8 +17,8 @@ pg.setConfigOptions(useOpenGL=True, antialias=False,
 # ║ PROTOCOL                                                        ║
 # ╚══════════════════════════════════════════════════════════════════╝
 SYNC_BYTE   = 0xAA
-PACKET_SIZE = 14
-FMT         = "<BfQ"
+PACKET_SIZE = 18
+FMT         = "<BdQ"
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║ CONFIG                                                          ║

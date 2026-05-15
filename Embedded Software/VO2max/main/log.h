@@ -4,6 +4,6 @@
 #include <stdint.h>
 
 void LOG_Initialize(void);
-void LOG_SendData(uint8_t id, float value, int64_t timestamp);
+void LOG_SendData(uint8_t id, double value, int64_t timestamp);
 
 #endif

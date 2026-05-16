@@ -327,7 +327,7 @@ bool SDP8XX_ReadMeasurementsRaw(int16_t *differentialPressureRaw,
     return ret;
 }
 
-bool SDP8XX_ReadMeasurements(float *differentialPressure,
+bool SDP8XX_ReadMeasurements(double *differentialPressure,
                              float *temperature)
 {
     bool ret = false;
@@ -339,7 +339,7 @@ bool SDP8XX_ReadMeasurements(float *differentialPressure,
                                    &temperatureRaw,
                                    &scalingFactor))
     {
-        *differentialPressure = (float)differentialPressureRaw / scalingFactor;
+        *differentialPressure = (double)differentialPressureRaw / (double)scalingFactor;
         *temperature = ConvertTemperatureRawToCelsius(temperatureRaw);
         ret = true;
     }

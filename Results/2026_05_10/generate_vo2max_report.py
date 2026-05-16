@@ -25,12 +25,12 @@ from reportlab.lib.colors import HexColor
 
 # ── Patient info (à adapter ou passer en paramètre) ──────────────────────────
 PATIENT = {
-    "nom": "Arthur",
-    "age": 25,
-    "taille_cm": 175,
-    "poids_kg": 70,
+    "nom": "Oliv",
+    "age": 48,
+    "taille_cm": 183,
+    "poids_kg": 76,
     "genre": "M",
-    "date": "15/05/2026",
+    "date": "10/05/2026",
 }
 
 # ── Colors ────────────────────────────────────────────────────────────────────

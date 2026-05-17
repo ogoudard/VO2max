@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "esp_system.h"
 #include "cyclist_vo2max_rgb565.h"
+#include "bluetooth.h"
 
 /************************************
  * PRIVATE MACROS AND DEFINES
@@ -1089,21 +1090,29 @@ static void Vo2MaxScreenAction(void)
     double previousVCo2 = -1.0f;
     double respiratoryQuotient;
     double previousRespiratoryQuotient = -1.0f;
+    uint16_t heartRate;
+    uint16_t previousHeartRate = 0;
+    uint16_t power;
+    uint16_t previousPower = 0;
+
     char string[8];
 
     LCD_Clear();
 
-    LCD_DrawString(CENTER_X("VO2max"), MENU_NAME_POSITION_Y, "VO2max", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(10, 30, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 36, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 0, "VO2 =     0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 6, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
 
-    LCD_DrawString(10, 52, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 58, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 22, "VO2max =  0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 28, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
 
-    LCD_DrawString(10, 74, "VCO2 =    0.0", LCD_COLOR_BLACK, LCD_FONT_24);
-    LCD_DrawString(168, 80, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
+    LCD_DrawString(10, 44, "VCO2 =    0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(168, 50, "mL/min/kg", LCD_COLOR_BLACK, LCD_FONT_16);
 
-    LCD_DrawString(10, 96, "RQ =      0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+    LCD_DrawString(10, 66, "RQ =      0.0", LCD_COLOR_BLACK, LCD_FONT_24);
+
+    LCD_DrawString(10, 88, "HR =   0 bpm", LCD_COLOR_BLACK, LCD_FONT_24);
+
+    LCD_DrawString(10, 110, "PWR =   0 W", LCD_COLOR_BLACK, LCD_FONT_24);
 
     LCD_DrawString(180, 120, "RESET >", LCD_COLOR_BLACK, LCD_FONT_16);
 
@@ -1119,9 +1128,9 @@ static void Vo2MaxScreenAction(void)
         {
             if (vO2 != previousVO2)
             {
-                LCD_ClearString(118, 30, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 0, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%4.1f", vO2);
-                LCD_DrawString(118, 30, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 0, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousVO2 = vO2;
             }
         }
@@ -1129,9 +1138,9 @@ static void Vo2MaxScreenAction(void)
         {
             if (vO2Max != previousVO2Max)
             {
-                LCD_ClearString(118, 52, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 22, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%4.1f", vO2Max);
-                LCD_DrawString(118, 52, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 22, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousVO2Max = vO2Max;
             }
         }
@@ -1139,9 +1148,9 @@ static void Vo2MaxScreenAction(void)
         {
             if (vCo2 != previousVCo2)
             {
-                LCD_ClearString(118, 74, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(118, 44, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%4.1f", vCo2);
-                LCD_DrawString(118, 74, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(118, 44, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousVCo2 = vCo2;
             }
         }
@@ -1149,13 +1158,32 @@ static void Vo2MaxScreenAction(void)
         {
             if (respiratoryQuotient != previousRespiratoryQuotient)
             {
-                LCD_ClearString(130, 96, 4, LCD_COLOR_WHITE, LCD_FONT_24);
+                LCD_ClearString(130, 66, 4, LCD_COLOR_WHITE, LCD_FONT_24);
                 snprintf(string, sizeof(string), "%1.2f", respiratoryQuotient);
-                LCD_DrawString(130, 96, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_DrawString(130, 66, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousRespiratoryQuotient = respiratoryQuotient;
             }
         }
-
+        if (pdPASS == xQueuePeek(g_heartRateQueue, &heartRate, (TickType_t)0))
+        {
+            if (heartRate != previousHeartRate)
+            {
+                LCD_ClearString(70, 88, 3, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%3d", heartRate);
+                LCD_DrawString(70, 88, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousHeartRate = heartRate;
+            }
+        }
+        if (pdPASS == xQueuePeek(g_powerQueue, &power, (TickType_t)0))
+        {
+            if (power != previousPower)
+            {
+                LCD_ClearString(70, 110, 3, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%3d", heartRate);
+                LCD_DrawString(70, 110, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                previousPower = power;
+            }
+        }
         vTaskDelay(pdMS_TO_TICKS(HMI_TASK_PERIOD_MS));
     }
 }

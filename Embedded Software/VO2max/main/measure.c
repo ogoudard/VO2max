@@ -225,7 +225,6 @@ void MEASURE_Initialize()
 
 static void FlowTask(void *pvParameters)
 {
-    int16_t scalingFactor;
     double diffPressure;
     float temperature;
 

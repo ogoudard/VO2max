@@ -60,5 +60,4 @@ void BLUETOOTH_OnHeartRate(uint16_t bpm);
 /** Called with the instantaneous power in watts. */
 void BLUETOOTH_OnPower(int16_t watts);
 
-
 #endif

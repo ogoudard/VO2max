@@ -110,7 +110,7 @@ SemaphoreHandle_t g_resetExhaledVolumeSemaphore;
 SemaphoreHandle_t g_resetVo2MaxSemaphore;
 
 /* Queues for intertask communication */
-QueueHandle_t g_flowQueue;
+QueueHandle_t g_instantFlowQueue;
 QueueHandle_t g_o2Queue;
 QueueHandle_t g_co2Queue;
 QueueHandle_t g_temperatureQueue;
@@ -173,7 +173,7 @@ void MEASURE_Initialize()
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2cMasterConfig, &i2cHandle));
 
     /* Create queues (size = 1 → always keep latest value) */
-    g_flowQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
+    g_instantFlowQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
     g_o2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_co2Queue = xQueueCreate((UBaseType_t)1, sizeof(float));
     g_cycleExhaledVolumeQueue = xQueueCreate((UBaseType_t)1, sizeof(double));
@@ -483,10 +483,10 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
     double respiratoryRate; // breath/minute
 
     /* Variables for flow computation */
-    double flow = 0.0f;
+    double instantFlow = 0.0f;
     static double cycleExhaledVolume = 0.0f;
     static double totalExhaledVolume = 0.0f;
-    static double previousFlow = 0.0f;
+    static double previousInstantFlow = 0.0f;
 
     /* Variables for VO2 computation */
     static double vO2Max = 0.0f;
@@ -536,18 +536,18 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
     // Bernoulli equation Q=k⋅sqrt(ΔP)
     if (diffPressure < 0.0f)
     {
-        flow = -g_settings.flowCalibration * sqrt(-diffPressure);
+        instantFlow = -g_settings.flowCalibration * sqrt(-diffPressure);
     }
     else
     {
-        flow = g_settings.flowCalibration * sqrt(diffPressure);
+        instantFlow = g_settings.flowCalibration * sqrt(diffPressure);
     }
 
-    xQueueOverwrite(g_flowQueue, (void *)&flow);
-    PLOT_DATA(FLOW_PLOT_ID, flow);
-    previousFlow = flow;
+    xQueueOverwrite(g_instantFlowQueue, (void *)&instantFlow);
+    PLOT_DATA(INSTANT_FLOW_PLOT_ID, instantFlow);
+    previousInstantFlow = instantFlow;
 
-    volume = (double)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
+    volume = (double)deltaT * (instantFlow + previousInstantFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
 
     /* Detect exhalation using threshold + hysteresis */
     if ((DIFFERENTIAL_PRESSURE_THRESHOLD + DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) < diffPressure)

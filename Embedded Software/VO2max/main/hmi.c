@@ -1008,8 +1008,8 @@ static void LiveValuesScreenAction(void)
 
 static void SpirometerScreenAction(void)
 {
-    double flow;
-    double previousFlow = -1.0f;
+    double instantFlow;
+    double previousInstantFlow = -1.0f;
     double cycleExhaledVolume;
     double previousCycleExhaledVolume = -1.0f;
     double totalExhaledVolume;
@@ -1035,14 +1035,14 @@ static void SpirometerScreenAction(void)
             xSemaphoreGive(g_resetExhaledVolumeSemaphore);
         }
 
-        if (pdPASS == xQueuePeek(g_flowQueue, (void *)&flow, (TickType_t)0))
+        if (pdPASS == xQueuePeek(g_instantFlowQueue, (void *)&instantFlow, (TickType_t)0))
         {
-            if (flow != previousFlow)
+            if (instantFlow != previousInstantFlow)
             {
                 LCD_ClearString(94, 30, 6, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%6.2f", flow);
+                snprintf(string, sizeof(string), "%6.2f", instantFlow);
                 LCD_DrawString(94, 30, string, LCD_COLOR_BLACK, LCD_FONT_24);
-                previousFlow = flow;
+                previousInstantFlow = instantFlow;
             }
         }
         if (pdPASS == xQueuePeek(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume, (TickType_t)0))

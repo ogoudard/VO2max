@@ -1,5 +1,6 @@
 #include "plot.h"
 #include "driver/uart.h"
+#include "esp_timer.h"
 
 #define UART_NUM_DEBUG UART_NUM_1
 #define START_BYTE 0xAA
@@ -17,11 +18,14 @@ void PLOT_Initialize(void)
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_DEBUG, 1024, 1024, 10, &uartQueue, 0));
 }
 
-void PLOT_SendData(uint8_t id, double value, int64_t timestamp)
+void PLOT_SendData(uint8_t id, double value)
 {
     uint8_t buffer[18];
     uint8_t *ts;
     DoubleValue_u d;
+    int64_t timestamp;
+
+    timestamp = esp_timer_get_time();
 
     d.value = value;
 
@@ -29,14 +33,10 @@ void PLOT_SendData(uint8_t id, double value, int64_t timestamp)
     buffer[1] = id;
 
     // float32
-    buffer[2] = d.bytes[0];
-    buffer[3] = d.bytes[1];
-    buffer[4] = d.bytes[2];
-    buffer[5] = d.bytes[3];
-    buffer[6] = d.bytes[4];
-    buffer[7] = d.bytes[5];
-    buffer[8] = d.bytes[6];
-    buffer[9] = d.bytes[7];
+    for (uint8_t i = 0; i < sizeof(d.value); i++)
+    {
+        buffer[2 + i] = d.bytes[i];
+    }
 
     // int64_t timestamp (raw bytes, little-endian ESP32)
     ts = (uint8_t *)&timestamp;

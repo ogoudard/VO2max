@@ -41,7 +41,8 @@ CHANNELS = {
     "13": {"label": "VO2",                   "unit": "mL/kg/min"},
     "14": {"label": "VO2max",                "unit": "mL/kg/min"},
     "15": {"label": "VCO2",                  "unit": "mL/kg/min"},
-    "16": {"label": "Respiratory Quotient",  "unit": ""}
+    "16": {"label": "Respiratory Quotient",  "unit": ""},
+    "17": {"label": "Power",                 "unit": "W"}
 }
 
 CHANNEL_ORDER = [str(i) for i in range(17)]
@@ -50,8 +51,9 @@ PANELS = [
     {"title": "Environmental",                              "channels": ["0","1","2","3","4"]},
     {"title": "Flow",                                       "channels": ["7","8","10","11"]},
     {"title": "Gas",                                        "channels": ["5","6"]},
-    {"title": "Expiratory Flow / VO2 / VO2max / VCO2",     "channels": ["9","13","14","15"]},
+    {"title": "Expiratory Flow / VO2 / VO2max / VCO2",      "channels": ["9","13","14","15"]},
     {"title": "Respiratory Rate / Respiratory Quotient",    "channels": ["12","16"]},
+    {"title": "Power / Cadence / Torque",                   "channels": ["17"]}
 ]
 
 SHARED_AXES = [
@@ -66,7 +68,7 @@ COLORS = [
     "#003377",
 ]
 
-DEFAULT_ON    = {"9", "13", "14", "15"}
+DEFAULT_ON    = {"9", "13", "14", "15", "17"}
 UPDATE_MS     = 40
 RENDER_WINDOW = 300.0
 MAX_POINTS    = 200_000

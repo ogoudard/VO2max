@@ -14,7 +14,8 @@
  *
  * ── GATTC (central / client) ────────────────────────────────────────
  *  Two app registrations (GATTC_APP_HR=0, GATTC_APP_POWER=1).
- *  GAP scan parser identifies HRS/CPS by 16-bit UUID in adv payload.
+ *  GAP scan parser identifies HRS/CPS by 16-bit UUID in adv payload
+ *  AND scan response payload.
  *  After discovery the CCCD is written to enable notifications.
  *  On disconnect the state resets and scanning resumes automatically.
  *
@@ -30,11 +31,24 @@
  *  notify callback (already inside the Bluedroid task) so they call
  *  esp_ble_gatts_send_indicate() directly — no queue needed.
  *
- * Key fixes inherited from bluetooth.c v2:
+ * Key fixes:
  *   • Two separate semaphores (reg vs attr_tab) — no cross-signalling.
  *   • register_next_server_table() advances state AFTER the API call.
  *   • Zero-handle guard before every send_indicate call.
  *   • Stack size 8192 for Bluedroid init headroom.
+ *   • No security params set — ESP_GAP_BLE_SEC_REQ_EVT accepted freely.
+ *   • Char + CCCD lookup moved to SEARCH_CMPL_EVT (cache valid then).
+ *   • Scan response bytes parsed from ble_adv + adv_data_len offset.
+ *   • [FIX] adv config triggered after device name set with short delay
+ *     instead of ESP_GAP_BLE_LOCAL_NAME_SET_COMPLETE_EVT (not available
+ *     in all IDF v6 builds) — eliminates 0x102 (ESP_ERR_INVALID_STATE).
+ *   • [FIX] s_adv_config_done flags set on completion (not pre-cleared)
+ *     so advertising only starts once BOTH configs are confirmed.
+ *   • [FIX] Scanning starts after service registration, not gated on
+ *     downstream connection, so sensors can be found independently.
+ *   • [FIX] esp_ble_gattc_register_for_notify() called before writing
+ *     the CCCD so Bluedroid actually routes ESP_GATTC_NOTIFY_EVT to the
+ *     callback. Without this call notifications are silently discarded.
  */
 
 #include "bluetooth.h"
@@ -55,7 +69,10 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
-static const char *TAG = "BLE_BRIDGE";
+#include "plot.h"
+#include "esp_timer.h"
+
+static const char *TAG = "[BLUETOOTH]";
 
 /* ================================================================== */
 /*  Compile-time tunables                                               */
@@ -123,7 +140,6 @@ static const uint16_t s_uuid_primary = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t s_uuid_char_decl = ESP_GATT_UUID_CHAR_DECLARE;
 static const uint16_t s_uuid_cccd = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;
 
-/* 16-bit service UUIDs for the standard proxied services */
 static const uint16_t s_uuid16_hrs = UUID16_HRS;
 static const uint16_t s_uuid16_hr_meas = UUID16_HR_MEAS;
 static const uint16_t s_uuid16_cps = UUID16_CPS;
@@ -148,7 +164,7 @@ static uint8_t s_cccd_rq[2] = {0};
 
 /* ---- Attribute tables ---- */
 
-/* HR  (16-bit UUIDs) */
+/* HR (16-bit UUIDs) */
 static const esp_gatts_attr_db_t s_tbl_hr[SVC_TABLE_SIZE] = {
     [IDX_SVC] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&s_uuid_primary, ESP_GATT_PERM_READ, ESP_UUID_LEN_16, ESP_UUID_LEN_16, (uint8_t *)&s_uuid16_hrs}},
     [IDX_CHR_DECL] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&s_uuid_char_decl, ESP_GATT_PERM_READ, sizeof(s_prop_notify), sizeof(s_prop_notify), (uint8_t *)&s_prop_notify}},
@@ -156,7 +172,7 @@ static const esp_gatts_attr_db_t s_tbl_hr[SVC_TABLE_SIZE] = {
     [IDX_CCCD] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&s_uuid_cccd, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(s_cccd_hr), sizeof(s_cccd_hr), s_cccd_hr}},
 };
 
-/* Power  (16-bit UUIDs) */
+/* Power (16-bit UUIDs) */
 static const esp_gatts_attr_db_t s_tbl_power[SVC_TABLE_SIZE] = {
     [IDX_SVC] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&s_uuid_primary, ESP_GATT_PERM_READ, ESP_UUID_LEN_16, ESP_UUID_LEN_16, (uint8_t *)&s_uuid16_cps}},
     [IDX_CHR_DECL] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&s_uuid_char_decl, ESP_GATT_PERM_READ, sizeof(s_prop_notify), sizeof(s_prop_notify), (uint8_t *)&s_prop_notify}},
@@ -266,6 +282,10 @@ static atomic_bool s_srv_connected = false;
 static SemaphoreHandle_t s_gatts_reg_sem = NULL;
 static SemaphoreHandle_t s_attr_tab_sem = NULL;
 
+/*
+ * s_adv_config_done starts at 0 and bits are SET as each config
+ * completes — advertising only fires once both bits are set.
+ */
 static uint8_t s_adv_config_done = 0;
 #define ADV_CONFIG_FLAG (1 << 0)
 #define SCAN_RSP_CONFIG_FLAG (1 << 1)
@@ -294,7 +314,6 @@ QueueHandle_t g_powerQueue = NULL;
 
 /* ================================================================== */
 /*  Advertising data                                                    */
-/*  Advertise HRS + CPS so head units recognise us immediately.        */
 /* ================================================================== */
 
 static uint8_t s_adv_uuids[4] = {
@@ -310,7 +329,7 @@ static esp_ble_adv_data_t s_adv_data = {
     .include_txpower = false,
     .min_interval = 0x0006,
     .max_interval = 0x0010,
-    .appearance = 0x0480, /* Cycling: Speed and Cadence Sensor */
+    .appearance = 0x0480,
     .manufacturer_len = 0,
     .p_manufacturer_data = NULL,
     .service_data_len = 0,
@@ -368,7 +387,7 @@ static void do_notify_float(uint16_t val_handle, float value);
 static sensor_ctx_t *ctx_by_gattc_if(esp_gatt_if_t gattc_if);
 
 /* ================================================================== */
-/*  Weak application callbacks                                          */
+/*  Application callbacks                                               */
 /* ================================================================== */
 
 void BLUETOOTH_OnHeartRate(uint16_t bpm)
@@ -379,6 +398,8 @@ void BLUETOOTH_OnHeartRate(uint16_t bpm)
 void BLUETOOTH_OnPower(int16_t watts)
 {
     xQueueOverwrite(g_powerQueue, (void *)&watts);
+
+    PLOT_DATA(POWER_PLOT_ID, (double)watts);
 }
 
 /* ================================================================== */
@@ -387,8 +408,8 @@ void BLUETOOTH_OnPower(int16_t watts)
 
 void BLUETOOTH_Initialize(void)
 {
-    g_heartRateQueue = xQueueCreate(1, sizeof(uint16_t));
-    g_powerQueue = xQueueCreate(1, sizeof(uint16_t));
+    g_heartRateQueue = xQueueCreate(1, sizeof(int16_t));
+    g_powerQueue = xQueueCreate(1, sizeof(int16_t));
     s_send_queue = xQueueCreate(SEND_QUEUE_DEPTH, sizeof(send_msg_t));
     configASSERT(s_send_queue);
     xTaskCreate(bridge_task, "bridge_task", BRIDGE_TASK_STACK, NULL,
@@ -405,7 +426,6 @@ static void enqueue(send_channel_t ch, float value)
     if (!atomic_load(&s_srv_connected))
         return;
     send_msg_t msg = {.channel = ch, .value = value};
-    /* If queue is full, drop the oldest sample and insert the fresh one. */
     if (xQueueSend(s_send_queue, &msg, 0) == errQUEUE_FULL)
     {
         send_msg_t discard;
@@ -458,21 +478,14 @@ static void bridge_task(void *arg)
     /* ---- MTU ---- */
     ESP_ERROR_CHECK(esp_ble_gatt_set_local_mtu(247));
 
-    /* ---- Security: bond with downstream, no-bond with sensors ---- */
-    esp_ble_auth_req_t auth = ESP_LE_AUTH_BOND;
-    esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;
-    uint8_t key_size = 16;
-    uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth, sizeof(auth));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(iocap));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(key_size));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(init_key));
-    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(rsp_key));
-
-    /* ---- Advertising ---- */
-    esp_ble_gap_set_device_name(BLE_DEVICE_NAME);
-    s_adv_config_done = ADV_CONFIG_FLAG | SCAN_RSP_CONFIG_FLAG;
+    /*
+     * Set device name then give the GAP stack a moment to settle before
+     * configuring adv data. Using a short delay here is more portable
+     * than relying on ESP_GAP_BLE_LOCAL_NAME_SET_COMPLETE_EVT which is
+     * not present in all IDF v6 builds.
+     */
+    ESP_ERROR_CHECK(esp_ble_gap_set_device_name(BLE_DEVICE_NAME));
+    vTaskDelay(pdMS_TO_TICKS(100));
     esp_ble_gap_config_adv_data(&s_adv_data);
     esp_ble_gap_config_adv_data(&s_scan_rsp_data);
 
@@ -484,32 +497,25 @@ static void bridge_task(void *arg)
     }
     ESP_LOGI(TAG, "All 6 server services registered");
 
-    /* ---- Start scanning for sensors ---- */
-    ESP_ERROR_CHECK(esp_ble_gap_set_scan_params(&s_scan_params));
-    /* Scanning kicks off in ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT */
+    /*
+     * Start scanning unconditionally after services are up.
+     * Sensors connect on their own conn_ids; the downstream advertising
+     * slot remains available for incoming connections in parallel.
+     */
+    ESP_LOGI(TAG, "Starting sensor scan");
+    esp_ble_gap_set_scan_params(&s_scan_params);
 
     /* ---- Main loop: drain outbound queue + periodic status log ---- */
-    TickType_t last_log = xTaskGetTickCount();
+
     while (1)
     {
         drain_send_queue();
         vTaskDelay(pdMS_TO_TICKS(DRAIN_PERIOD_MS));
-
-        /* Status log every 5 s */
-        if ((xTaskGetTickCount() - last_log) >= pdMS_TO_TICKS(5000))
-        {
-            last_log = xTaskGetTickCount();
-            ESP_LOGI(TAG, "Status — HR:%s  Power:%s  Downstream:%s",
-                     s_hr_ctx.state == SENSOR_SUBSCRIBED ? "OK" : "searching",
-                     s_pwr_ctx.state == SENSOR_SUBSCRIBED ? "OK" : "searching",
-                     atomic_load(&s_srv_connected) ? "connected" : "idle");
-        }
     }
 }
 
 /* ================================================================== */
 /*  Server service registration chain                                   */
-/*  State is advanced AFTER the API call (fix from bluetooth.c v2).    */
 /* ================================================================== */
 
 static void register_next_server_table(esp_gatt_if_t gatts_if)
@@ -552,7 +558,7 @@ static void register_next_server_table(esp_gatt_if_t gatts_if)
 }
 
 /* ================================================================== */
-/*  Outbound queue drain (runs in bridge_task context)                  */
+/*  Outbound queue drain                                                */
 /* ================================================================== */
 
 static void drain_send_queue(void)
@@ -584,12 +590,11 @@ static void drain_send_queue(void)
             continue;
         }
         if (handle == 0)
-            continue; /* service not yet started */
+            continue;
         do_notify_float(handle, msg.value);
     }
 }
 
-/* Serialise a float to 4 bytes and send a BLE indication. */
 static void do_notify_float(uint16_t val_handle, float value)
 {
     uint8_t buf[4];
@@ -602,22 +607,58 @@ static void do_notify_float(uint16_t val_handle, float value)
 /*  GAP event handler                                                   */
 /* ================================================================== */
 
+/*
+ * Helper: walk one AD payload buffer looking for 16-bit service UUIDs.
+ * Sets *found_hrs / *found_cps if 0x180D / 0x1818 is present.
+ */
+static void parse_adv_uuids(const uint8_t *buf, uint8_t buflen,
+                            bool *found_hrs, bool *found_cps)
+{
+    for (uint8_t i = 0; i + 1 < buflen;)
+    {
+        uint8_t len = buf[i];
+        uint8_t type = buf[i + 1];
+        if (len == 0)
+        {
+            i++;
+            continue;
+        }
+        if (type == 0x02 || type == 0x03)
+        {
+            for (uint8_t j = 2; j + 1 <= len && i + j + 1 < buflen; j += 2)
+            {
+                uint16_t uuid = buf[i + j] | ((uint16_t)buf[i + j + 1] << 8);
+                if (uuid == UUID16_HRS)
+                    *found_hrs = true;
+                if (uuid == UUID16_CPS)
+                    *found_cps = true;
+            }
+        }
+        i += len + 1;
+    }
+}
+
 static void gap_event_handler(esp_gap_ble_cb_event_t event,
                               esp_ble_gap_cb_param_t *param)
 {
     switch (event)
     {
-
     /* ── Advertising side ── */
+
+    /*
+     * Set the bit on completion; start advertising only when BOTH
+     * configs are done. adv config is initiated from bridge_task after
+     * the device name is set, so the stack is guaranteed ready by then.
+     */
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-        s_adv_config_done &= ~ADV_CONFIG_FLAG;
-        if (s_adv_config_done == 0)
+        s_adv_config_done |= ADV_CONFIG_FLAG;
+        if (s_adv_config_done == (ADV_CONFIG_FLAG | SCAN_RSP_CONFIG_FLAG))
             esp_ble_gap_start_advertising(&s_adv_params);
         break;
 
     case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
-        s_adv_config_done &= ~SCAN_RSP_CONFIG_FLAG;
-        if (s_adv_config_done == 0)
+        s_adv_config_done |= SCAN_RSP_CONFIG_FLAG;
+        if (s_adv_config_done == (ADV_CONFIG_FLAG | SCAN_RSP_CONFIG_FLAG))
             esp_ble_gap_start_advertising(&s_adv_params);
         break;
 
@@ -633,10 +674,15 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
             ESP_LOGE(TAG, "Adv stop failed: %d", param->adv_stop_cmpl.status);
         break;
 
+    /* ── Security: accept pairing requests from the downstream device ── */
+    case ESP_GAP_BLE_SEC_REQ_EVT:
+        esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+        break;
+
     /* ── Scanning side ── */
     case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
         ESP_LOGI(TAG, "Scan params set — starting scan");
-        esp_ble_gap_start_scanning(0); /* 0 = continuous */
+        esp_ble_gap_start_scanning(0);
         break;
 
     case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
@@ -649,38 +695,22 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
         if (param->scan_rst.search_evt != ESP_GAP_SEARCH_INQ_RES_EVT)
             break;
 
-        /*
-         * Walk the advertising payload looking for AD type 0x02/0x03
-         * (16-bit UUID list, incomplete/complete).
-         */
-        const uint8_t *adv = param->scan_rst.ble_adv;
-        uint8_t alen = param->scan_rst.adv_data_len;
         bool found_hrs = false, found_cps = false;
 
-        for (uint8_t i = 0; i + 1 < alen;)
+        /* Primary advertising payload */
+        parse_adv_uuids(param->scan_rst.ble_adv,
+                        param->scan_rst.adv_data_len,
+                        &found_hrs, &found_cps);
+
+        /* Scan response payload — concatenated after primary adv bytes */
+        if (param->scan_rst.scan_rsp_len > 0)
         {
-            uint8_t len = adv[i];
-            uint8_t type = adv[i + 1];
-            if (len == 0)
-            {
-                i++;
-                continue;
-            }
-            if (type == 0x02 || type == 0x03)
-            {
-                for (uint8_t j = 2; j + 1 <= len && i + j + 1 < alen; j += 2)
-                {
-                    uint16_t uuid = adv[i + j] | ((uint16_t)adv[i + j + 1] << 8);
-                    if (uuid == UUID16_HRS)
-                        found_hrs = true;
-                    if (uuid == UUID16_CPS)
-                        found_cps = true;
-                }
-            }
-            i += len + 1;
+            parse_adv_uuids(param->scan_rst.ble_adv + param->scan_rst.adv_data_len,
+                            param->scan_rst.scan_rsp_len,
+                            &found_hrs, &found_cps);
         }
 
-        if (found_hrs && s_hr_ctx.state == SENSOR_IDLE)
+        if (found_hrs && s_hr_ctx.state == SENSOR_IDLE && s_hr_ctx.gattc_if != ESP_GATT_IF_NONE)
         {
             ESP_LOGI(TAG, "Found HR monitor — connecting");
             s_hr_ctx.state = SENSOR_CONNECTING;
@@ -690,7 +720,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
                                param->scan_rst.bda,
                                param->scan_rst.ble_addr_type, true);
         }
-        else if (found_cps && s_pwr_ctx.state == SENSOR_IDLE)
+        else if (found_cps && s_pwr_ctx.state == SENSOR_IDLE && s_pwr_ctx.gattc_if != ESP_GATT_IF_NONE)
         {
             ESP_LOGI(TAG, "Found power meter — connecting");
             s_pwr_ctx.state = SENSOR_CONNECTING;
@@ -704,10 +734,6 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event,
     }
 
     case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
-        /*
-         * Scan was stopped either by us (before connecting) or by the
-         * stack.  Resume if at least one sensor is still not connected.
-         */
         if (s_hr_ctx.state < SENSOR_CONNECTED ||
             s_pwr_ctx.state < SENSOR_CONNECTED)
         {
@@ -738,7 +764,6 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
 {
     switch (event)
     {
-
     case ESP_GATTS_REG_EVT:
         if (param->reg.status != ESP_GATT_OK)
         {
@@ -765,49 +790,44 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
             break;
         }
 
-        /*
-         * Store handles and start the service.
-         * esp_ble_gatts_start_service() is safe here (async, no future).
-         * The next create_attr_tab is deferred to bridge_task via the semaphore.
-         */
         switch (param->add_attr_tab.svc_inst_id)
         {
-        case 0: /* HR */
+        case 0:
             s_srv_hr.svc = param->add_attr_tab.handles[IDX_SVC];
             s_srv_hr.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
             s_srv_hr.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
             s_srv_hr.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_srv_hr.svc);
             break;
-        case 1: /* Power */
+        case 1:
             s_srv_power.svc = param->add_attr_tab.handles[IDX_SVC];
             s_srv_power.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
             s_srv_power.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
             s_srv_power.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_srv_power.svc);
             break;
-        case 2: /* VO2Max */
+        case 2:
             s_srv_vo2max.svc = param->add_attr_tab.handles[IDX_SVC];
             s_srv_vo2max.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
             s_srv_vo2max.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
             s_srv_vo2max.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_srv_vo2max.svc);
             break;
-        case 3: /* VO2 */
+        case 3:
             s_srv_vo2.svc = param->add_attr_tab.handles[IDX_SVC];
             s_srv_vo2.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
             s_srv_vo2.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
             s_srv_vo2.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_srv_vo2.svc);
             break;
-        case 4: /* VCO2 */
+        case 4:
             s_srv_vco2.svc = param->add_attr_tab.handles[IDX_SVC];
             s_srv_vco2.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
             s_srv_vco2.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
             s_srv_vco2.cccd = param->add_attr_tab.handles[IDX_CCCD];
             esp_ble_gatts_start_service(s_srv_vco2.svc);
             break;
-        case 5: /* RQ */
+        case 5:
             s_srv_rq.svc = param->add_attr_tab.handles[IDX_SVC];
             s_srv_rq.chr_decl = param->add_attr_tab.handles[IDX_CHR_DECL];
             s_srv_rq.chr_val = param->add_attr_tab.handles[IDX_CHR_VAL];
@@ -818,7 +838,6 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
             ESP_LOGW(TAG, "Unknown svc_inst_id %d", param->add_attr_tab.svc_inst_id);
             break;
         }
-
         xSemaphoreGive(s_attr_tab_sem);
         break;
 
@@ -830,7 +849,6 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
         ESP_LOGI(TAG, "Downstream connected, conn_id=%d", param->connect.conn_id);
         s_srv_conn_id = param->connect.conn_id;
         atomic_store(&s_srv_connected, true);
-        esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_MITM);
         {
             esp_ble_conn_update_params_t cp = {0};
             memcpy(cp.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
@@ -850,7 +868,6 @@ static void gatts_event_handler(esp_gatts_cb_event_t event,
         break;
 
     case ESP_GATTS_WRITE_EVT:
-        /* Downstream writing a CCCD to subscribe — just ACK */
         if (param->write.need_rsp)
             esp_ble_gatts_send_response(gatts_if, param->write.conn_id,
                                         param->write.trans_id, ESP_GATT_OK, NULL);
@@ -890,8 +907,6 @@ static void gattc_event_handler(esp_gattc_cb_event_t event,
 {
     switch (event)
     {
-
-    /* ── App registered: remember the gattc_if for each sensor ── */
     case ESP_GATTC_REG_EVT:
         if (param->reg.status != ESP_GATT_OK)
         {
@@ -906,7 +921,6 @@ static void gattc_event_handler(esp_gattc_cb_event_t event,
                  param->reg.app_id, gattc_if);
         break;
 
-    /* ── Connected to sensor: kick off service discovery ── */
     case ESP_GATTC_CONNECT_EVT:
     {
         sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
@@ -919,17 +933,41 @@ static void gattc_event_handler(esp_gattc_cb_event_t event,
         break;
     }
 
-    /* ── Service found: extract char and CCCD handles ── */
+    /*
+     * SEARCH_RES_EVT: just note that the target service was seen.
+     * Do NOT call get_char_by_uuid here — the cache is not yet valid.
+     */
     case ESP_GATTC_SEARCH_RES_EVT:
     {
         sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
         if (!ctx)
             break;
-        if (param->search_res.srvc_id.uuid.len != ESP_UUID_LEN_16 ||
-            param->search_res.srvc_id.uuid.uuid.uuid16 != ctx->target_svc_uuid)
+        ESP_LOGI(TAG, "%s: service found uuid_len=%d uuid16=0x%04x",
+                 ctx->name,
+                 param->search_res.srvc_id.uuid.len,
+                 param->search_res.srvc_id.uuid.uuid.uuid16);
+        break;
+    }
+
+    /*
+     * SEARCH_CMPL_EVT: cache is now valid — look up char and CCCD here.
+     */
+    case ESP_GATTC_SEARCH_CMPL_EVT:
+    {
+        sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
+        ESP_LOGI(TAG, "SEARCH_CMPL if=%d ctx=%s status=%d",
+                 gattc_if,
+                 ctx ? ctx->name : "NULL",
+                 param->search_cmpl.status);
+        if (!ctx)
             break;
 
-        ESP_LOGI(TAG, "%s: target service found", ctx->name);
+        if (param->search_cmpl.status != ESP_GATT_OK)
+        {
+            ESP_LOGE(TAG, "%s: service discovery failed status=%d",
+                     ctx->name, param->search_cmpl.status);
+            break;
+        }
 
         uint16_t count = 10;
         esp_gattc_char_elem_t chars[10];
@@ -937,54 +975,48 @@ static void gattc_event_handler(esp_gattc_cb_event_t event,
             .len = ESP_UUID_LEN_16,
             .uuid.uuid16 = ctx->target_chr_uuid,
         };
-        esp_ble_gattc_get_char_by_uuid(
+
+        esp_gatt_status_t st = esp_ble_gattc_get_char_by_uuid(
             gattc_if, ctx->conn_id,
-            param->search_res.start_handle,
-            param->search_res.end_handle,
+            0x0001, 0xFFFF,
             chr_uuid, chars, &count);
 
-        if (count > 0)
+        ESP_LOGI(TAG, "%s: get_char_by_uuid st=%d count=%d", ctx->name, st, count);
+        for (int i = 0; i < count; i++)
+            ESP_LOGI(TAG, "  char[%d] handle=%d prop=0x%02x",
+                     i, chars[i].char_handle, chars[i].properties);
+
+        if (st != ESP_GATT_OK || count == 0)
         {
-            ctx->char_handle = chars[0].char_handle;
-            ESP_LOGI(TAG, "%s: char handle=%d", ctx->name, ctx->char_handle);
-
-            /* Locate the CCCD descriptor */
-            uint16_t desc_count = 1;
-            esp_gattc_descr_elem_t desc;
-            esp_bt_uuid_t cccd_uuid = {
-                .len = ESP_UUID_LEN_16,
-                .uuid.uuid16 = UUID16_CCCD,
-            };
-            if (esp_ble_gattc_get_descr_by_char_handle(
-                    gattc_if, ctx->conn_id, ctx->char_handle,
-                    cccd_uuid, &desc, &desc_count) == ESP_OK &&
-                desc_count > 0)
-            {
-                ctx->cccd_handle = desc.handle;
-                ESP_LOGI(TAG, "%s: CCCD handle=%d", ctx->name, ctx->cccd_handle);
-            }
-        }
-        break;
-    }
-
-    /* ── Discovery complete: write CCCD to enable notifications ── */
-    case ESP_GATTC_SEARCH_CMPL_EVT:
-    {
-        sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
-        if (!ctx)
+            ESP_LOGW(TAG, "%s: characteristic not found st=%d", ctx->name, st);
             break;
-        if (ctx->char_handle != 0)
-        {
-            subscribe_to_sensor(ctx);
         }
-        else
+
+        ctx->char_handle = chars[0].char_handle;
+        ESP_LOGI(TAG, "%s: char handle=%d", ctx->name, ctx->char_handle);
+
+        /* Locate the CCCD descriptor */
+        uint16_t desc_count = 1;
+        esp_gattc_descr_elem_t desc;
+        esp_bt_uuid_t cccd_uuid = {
+            .len = ESP_UUID_LEN_16,
+            .uuid.uuid16 = UUID16_CCCD,
+        };
+        esp_gatt_status_t dsc_st = esp_ble_gattc_get_descr_by_char_handle(
+            gattc_if, ctx->conn_id, ctx->char_handle,
+            cccd_uuid, &desc, &desc_count);
+        ESP_LOGI(TAG, "%s: get_descr st=%d count=%d", ctx->name, dsc_st, desc_count);
+
+        if (dsc_st == ESP_GATT_OK && desc_count > 0)
         {
-            ESP_LOGW(TAG, "%s: target characteristic not found", ctx->name);
+            ctx->cccd_handle = desc.handle;
+            ESP_LOGI(TAG, "%s: CCCD handle=%d", ctx->name, ctx->cccd_handle);
         }
+
+        subscribe_to_sensor(ctx);
         break;
     }
 
-    /* ── Incoming notification from sensor ── */
     case ESP_GATTC_NOTIFY_EVT:
     {
         sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
@@ -997,7 +1029,6 @@ static void gattc_event_handler(esp_gattc_cb_event_t event,
         break;
     }
 
-    /* ── CCCD write confirmed: we are now subscribed ── */
     case ESP_GATTC_WRITE_DESCR_EVT:
     {
         sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
@@ -1016,7 +1047,6 @@ static void gattc_event_handler(esp_gattc_cb_event_t event,
         break;
     }
 
-    /* ── Sensor disconnected: reset and let scan find it again ── */
     case ESP_GATTC_DISCONNECT_EVT:
     {
         sensor_ctx_t *ctx = ctx_by_gattc_if(gattc_if);
@@ -1044,16 +1074,25 @@ static void subscribe_to_sensor(sensor_ctx_t *ctx)
 {
     if (ctx->cccd_handle == 0)
     {
-        /*
-         * CCCD not found via descriptor discovery.
-         * Most BLE sensors place the CCCD immediately after the value
-         * handle, so char_handle+1 is a reliable fallback.
-         */
         ctx->cccd_handle = ctx->char_handle + 1;
         ESP_LOGW(TAG, "%s: CCCD not found by discovery, trying handle %d",
                  ctx->name, ctx->cccd_handle);
     }
 
+    /*
+     * [FIX] Register with Bluedroid's internal notify dispatch table
+     * BEFORE writing the CCCD. Without this call Bluedroid silently
+     * discards incoming ATT notifications and ESP_GATTC_NOTIFY_EVT
+     * never fires, even though the peripheral is sending data and the
+     * CCCD write succeeds.
+     */
+    esp_err_t ret = esp_ble_gattc_register_for_notify(
+        ctx->gattc_if, ctx->remote_bda, ctx->char_handle);
+    if (ret != ESP_OK)
+        ESP_LOGE(TAG, "%s: register_for_notify failed: %s",
+                 ctx->name, esp_err_to_name(ret));
+
+    /* Tell the peripheral to start sending notifications */
     uint8_t notify_en[2] = {0x01, 0x00};
     esp_ble_gattc_write_char_descr(
         ctx->gattc_if, ctx->conn_id, ctx->cccd_handle,
@@ -1063,29 +1102,14 @@ static void subscribe_to_sensor(sensor_ctx_t *ctx)
 }
 
 /* ================================================================== */
-/*  Relay: sensor notification → GATTS indication to downstream        */
-/*                                                                      */
-/*  Both functions run inside the Bluedroid callback task, so it is    */
-/*  safe to call esp_ble_gatts_send_indicate() directly here without   */
-/*  going through the send queue.                                       */
+/*  Relay functions                                                     */
 /* ================================================================== */
 
-/*
- * relay_hr — Heart Rate Measurement (0x2A37)
- *
- * Byte 0 flags:
- *   bit 0 = 0 → BPM in byte 1 (uint8)
- *   bit 0 = 1 → BPM in bytes 1-2 (uint16 LE)
- *
- * Raw bytes forwarded unchanged so the downstream device sees the full
- * payload (energy expended, RR intervals, etc.).
- */
 static void relay_hr(const uint8_t *data, uint16_t len)
 {
     if (len < 2)
         return;
 
-    /* Forward to downstream subscriber */
     if (atomic_load(&s_srv_connected) && s_srv_hr.chr_val != 0)
     {
         esp_ble_gatts_send_indicate(s_gatts_if, s_srv_conn_id,
@@ -1093,27 +1117,19 @@ static void relay_hr(const uint8_t *data, uint16_t len)
                                     len, (uint8_t *)data, false);
     }
 
-    /* Decode BPM and call application */
-    uint16_t bpm = (data[0] & 0x01) ? (data[1] | ((uint16_t)data[2] << 8)) : data[1];
+    uint16_t bpm = (data[0] & 0x01)
+                       ? (data[1] | ((uint16_t)data[2] << 8))
+                       : data[1];
     BLUETOOTH_OnHeartRate(bpm);
     ESP_LOGD(TAG, "HR relay: %u bpm", bpm);
 }
 
-/*
- * relay_power — Cycling Power Measurement (0x2A63)
- *
- * Bytes 0-1: flags
- * Bytes 2-3: instantaneous power (int16 LE, watts)
- * Bytes 4+:  optional fields (wheel/crank revolutions …)
- *
- * Raw bytes forwarded unchanged.
- */
 static void relay_power(const uint8_t *data, uint16_t len)
 {
+
     if (len < 4)
         return;
 
-    /* Forward to downstream subscriber */
     if (atomic_load(&s_srv_connected) && s_srv_power.chr_val != 0)
     {
         esp_ble_gatts_send_indicate(s_gatts_if, s_srv_conn_id,
@@ -1121,8 +1137,7 @@ static void relay_power(const uint8_t *data, uint16_t len)
                                     len, (uint8_t *)data, false);
     }
 
-    /* Decode watts and call application */
-    int16_t watts = (int16_t)(data[2] | ((uint16_t)data[3] << 8));
+    int16_t watts = (int16_t)((uint16_t)data[2] | ((uint16_t)data[3] << 8));
+
     BLUETOOTH_OnPower(watts);
-    ESP_LOGD(TAG, "Power relay: %d W", watts);
 }

@@ -32,20 +32,24 @@
 #define O2_TASK_STACK_SIZE 8192
 #define O2_TASK_PRIORITY 2
 #define O2_TASK_PERIOD_MS 2000
+#define DEFAULT_O2_VALUE 20.95f
 
 #define CO2_TASK_STACK_SIZE 8192
 #define CO2_TASK_PRIORITY 1
 #define CO2_TASK_PERIOD_MS 3000
 #define SCD30_MEASUREMENT_INTERVAL_S 2
+#define DEFAULT_CO2_VALUE 432.0f
+#define DEFAULT_HUMIDITY_VALUE 0.0f
 
 #define FLOW_TASK_STACK_SIZE 8192
-
 #define FLOW_TASK_PRIORITY 10
 #define FLOW_TASK_PERIOD_MS 10
 
 #define PRESSURE_TASK_STACK_SIZE 8192
 #define PRESSURE_TASK_PRIORITY 5
 #define PRESSURE_TASK_PERIOD_MS 5000
+#define DEFAULT_PRESSURE_VALUE 101325.0f
+#define DEFAULT_TEMPERATURE_VALUE 25.0f
 
 /* I2C configuration (shared bus for all sensors) */
 #define I2C_BUS_NUM I2C_NUM_0
@@ -68,24 +72,6 @@
 
 /* Air density at Standard Temperature and Pressure Desaturated */
 #define RHO_STPD 1.292f
-
-#define CONCAT(A, B) A##B
-#define CONCAT_EXPAND(A, B) CONCAT(A, B)
-
-#define PLOT_DATA(enable, id, value, timestamp) CONCAT_EXPAND(PLOT_DATA_, enable)(id, value, timestamp)
-
-#if PLOT_ENABLE
-#define PLOT_DATA_true(id, value, timestamp) PLOT_SendData(id, value, timestamp)
-#else
-#define PLOT_DATA_true(id, value, timestamp) \
-    while (0)                                \
-    {                                        \
-    }
-#endif
-#define PLOT_DATA_false(id, value, timestamp) \
-    while (0)                                 \
-    {                                         \
-    }
 
 #define MAX_VALUE_FILTER_SIZE 30
 
@@ -270,7 +256,6 @@ static void O2Task(void *pvParameters)
 {
     const char *o2TaskTag = "[O2 Task]";
     float o2;
-    int64_t timestamp;
     float o2CalValue;
 
     ESP_LOGI(o2TaskTag, "Task started");
@@ -281,11 +266,9 @@ static void O2Task(void *pvParameters)
     {
         ESP_LOGE(o2TaskTag, "ME2-O2 initialization failed, suspending task");
 
-        // Default O2 value
-        timestamp = esp_timer_get_time();
-        o2 = 20.95f;
+        o2 = DEFAULT_O2_VALUE;
         xQueueOverwrite(g_o2Queue, (void *)&o2);
-        PLOT_DATA(PLOT_O2, O2_PLOT_ID, o2, timestamp);
+        PLOT_DATA(O2_PLOT_ID, o2);
 
         vTaskSuspend(o2TaskHandle);
 
@@ -307,12 +290,10 @@ static void O2Task(void *pvParameters)
                 ME2O2_Calibrate(o2CalValue);
             }
 
-            timestamp = esp_timer_get_time();
-
-            if (ME2O2_ReadOxygen(&o2)) // Start continuous measurement
+            if (ME2O2_ReadOxygen(&o2))
             {
                 xQueueOverwrite(g_o2Queue, (void *)&o2);
-                PLOT_DATA(PLOT_O2, O2_PLOT_ID, o2, timestamp);
+                PLOT_DATA(O2_PLOT_ID, o2);
             }
 
             vTaskDelay(pdMS_TO_TICKS(O2_TASK_PERIOD_MS));
@@ -327,7 +308,6 @@ static void CO2Task(void *pvParameters)
     float temperature;
     float humidity;
     bool dataReady;
-    int64_t timestamp;
 
     ESP_LOGI(co2TaskTag, "Task started");
 
@@ -337,17 +317,13 @@ static void CO2Task(void *pvParameters)
     {
         ESP_LOGE(co2TaskTag, "SCD30 initialization failed, suspending task");
 
-        timestamp = esp_timer_get_time();
-
-        // Default CO2 value
-        co2 = 432.0f;
+        co2 = DEFAULT_CO2_VALUE;
         xQueueOverwrite(g_co2Queue, (void *)&co2);
-        PLOT_DATA(PLOT_CO2, CO2_PLOT_ID, co2, timestamp);
+        PLOT_DATA(CO2_PLOT_ID, (double)co2);
 
-        // Default humidity value
-        humidity = 50.0f;
+        humidity = DEFAULT_HUMIDITY_VALUE;
         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
-        PLOT_DATA(PLOT_HUMIDITY, HUMIDITY_PLOT_ID, humidity, timestamp);
+        PLOT_DATA(HUMIDITY_PLOT_ID, (double)humidity);
 
         vTaskSuspend(co2TaskHandle);
 
@@ -380,15 +356,13 @@ static void CO2Task(void *pvParameters)
                 }
                 else
                 {
-                    timestamp = esp_timer_get_time();
-
                     if (SCD30_GetMeasures(&co2, &temperature, &humidity))
                     {
                         xQueueOverwrite(g_co2Queue, (void *)&co2);
-                        PLOT_DATA(PLOT_CO2, CO2_PLOT_ID, co2, timestamp);
+                        PLOT_DATA(CO2_PLOT_ID, (double)co2);
 
                         xQueueOverwrite(g_humidityQueue, (void *)&humidity);
-                        PLOT_DATA(PLOT_HUMIDITY, HUMIDITY_PLOT_ID, humidity, timestamp);
+                        PLOT_DATA(HUMIDITY_PLOT_ID, (double)humidity);
                     }
                 }
             }
@@ -405,7 +379,6 @@ static void PressureTask(void *pvParameters)
     float temperature;
     float altitude;
     BMP388_Status_u bmp388Status;
-    int64_t timestamp;
 
     ESP_LOGI(pressureTaskTag, "Task started");
 
@@ -415,22 +388,20 @@ static void PressureTask(void *pvParameters)
     {
         ESP_LOGE(pressureTaskTag, "BMP280 initialization failed, suspending task");
 
-        timestamp = esp_timer_get_time();
-
         // Default temperature
-        temperature = 25.0f;
+        temperature = DEFAULT_TEMPERATURE_VALUE;
         xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-        PLOT_DATA(PLOT_TEMPERATURE, TEMPERATURE_PLOT_ID, temperature, timestamp);
+        PLOT_DATA(TEMPERATURE_PLOT_ID, (double)temperature);
 
         // Default pressure
-        pressure = 101325.0f;
+        pressure = DEFAULT_PRESSURE_VALUE;
         xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-        PLOT_DATA(PLOT_PRESSURE, PRESSURE_PLOT_ID, pressure, timestamp);
+        PLOT_DATA(PRESSURE_PLOT_ID, (double)pressure);
 
         // Default altitude
         altitude = ComputeAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
         xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
-        PLOT_DATA(PLOT_ALTITUDE, ALTITUDE_PLOT_ID, altitude, timestamp);
+        PLOT_DATA(ALTITUDE_PLOT_ID, (double)altitude);
 
         vTaskSuspend(pressureTaskHandle);
 
@@ -453,19 +424,17 @@ static void PressureTask(void *pvParameters)
 
             if ((0 != bmp388Status.drdyPress) && (0 != bmp388Status.drdyTemp))
             {
-                timestamp = esp_timer_get_time();
-
                 BMP388_ReadTemperatureAndPressure(&temperature, &pressure);
 
                 xQueueOverwrite(g_temperatureQueue, (void *)&temperature);
-                PLOT_DATA(PLOT_TEMPERATURE, TEMPERATURE_PLOT_ID, temperature, timestamp);
+                PLOT_DATA(TEMPERATURE_PLOT_ID, (double)temperature);
 
                 xQueueOverwrite(g_pressureQueue, (void *)&pressure);
-                PLOT_DATA(PLOT_PRESSURE, PRESSURE_PLOT_ID, pressure, timestamp);
+                PLOT_DATA(PRESSURE_PLOT_ID, (double)pressure);
 
                 altitude = ComputeAltitude(g_settings.altitudeReference, g_settings.pressureReference, g_settings.temperatureReference, pressure);
                 xQueueOverwrite(g_altitudeQueue, (void *)&altitude);
-                PLOT_DATA(PLOT_ALTITUDE, ALTITUDE_PLOT_ID, altitude, timestamp);
+                PLOT_DATA(ALTITUDE_PLOT_ID, (double)altitude);
             }
 
             vTaskDelay(pdMS_TO_TICKS(PRESSURE_TASK_PERIOD_MS));
@@ -548,21 +517,21 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
     {
         totalExhaledVolume = 0.0f;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-        PLOT_DATA(PLOT_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume, timestamp);
+        PLOT_DATA(TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume);
 
         cycleExhaledVolume = 0.0f;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-        PLOT_DATA(PLOT_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume, timestamp);
+        PLOT_DATA(CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume);
     }
 
     if (xSemaphoreTake(g_resetVo2MaxSemaphore, (TickType_t)0))
     {
         vO2Max = 0.0f;
         xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-        PLOT_DATA(PLOT_VO2MAX, VO2MAX_PLOT_ID, vO2Max, timestamp);
+        PLOT_DATA(VO2MAX_PLOT_ID, vO2Max);
     }
 
-    PLOT_DATA(PLOT_DIFFERENTIAL_PRESSURE, DIFFERENTIAL_PRESSURE_PLOT_ID, diffPressure, timestamp);
+    PLOT_DATA(DIFFERENTIAL_PRESSURE_PLOT_ID, diffPressure);
 
     // Bernoulli equation Q=k⋅sqrt(ΔP)
     if (diffPressure < 0.0f)
@@ -575,7 +544,7 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
     }
 
     xQueueOverwrite(g_flowQueue, (void *)&flow);
-    PLOT_DATA(PLOT_FLOW, FLOW_PLOT_ID, flow, timestamp);
+    PLOT_DATA(FLOW_PLOT_ID, flow);
     previousFlow = flow;
 
     volume = (double)deltaT * (flow + previousFlow) / 120000000.0f; // Integrate flow → volume (Trapezoidal rule)
@@ -588,23 +557,23 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
             exhale = true;
 
             xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-            PLOT_DATA(PLOT_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume, timestamp);
+            PLOT_DATA(TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume);
 
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-            PLOT_DATA(PLOT_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume, timestamp);
+            PLOT_DATA(CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume);
 
             cycleExhaledVolume = 0.0f;
             xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-            PLOT_DATA(PLOT_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume, timestamp);
+            PLOT_DATA(CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume);
         }
 
         cycleExhaledVolume += volume;
         xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-        PLOT_DATA(PLOT_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume, timestamp);
+        PLOT_DATA(CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume);
 
         totalExhaledVolume += volume;
         xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-        PLOT_DATA(PLOT_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume, timestamp);
+        PLOT_DATA(TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume);
     }
     else if ((DIFFERENTIAL_PRESSURE_THRESHOLD - DIFFERENTIAL_PRESSURE_THRESHOLD_HYSTERESIS) > diffPressure)
     {
@@ -621,19 +590,19 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
             {
                 cycleExhaledVolume += volume;
                 xQueueOverwrite(g_cycleExhaledVolumeQueue, (void *)&cycleExhaledVolume);
-                PLOT_DATA(PLOT_CYCLE_EXHALED_VOLUME, CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume, timestamp);
+                PLOT_DATA(CYCLE_EXHALED_VOLUME_PLOT_ID, cycleExhaledVolume);
 
                 totalExhaledVolume += volume;
                 xQueueOverwrite(g_totalExhaledVolumeQueue, (void *)&totalExhaledVolume);
-                PLOT_DATA(PLOT_TOTAL_EXHALED_VOLUME, TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume, timestamp);
+                PLOT_DATA(TOTAL_EXHALED_VOLUME_PLOT_ID, totalExhaledVolume);
 
                 respiratoryRate = 60000000.0f / (double)breathDuration; // Respiratory rate in breath/min
                 xQueueOverwrite(g_respiratoryRateQueue, (void *)&respiratoryRate);
-                PLOT_DATA(PLOT_RESPIRATORY_RATE, RESPIRATORY_RATE_PLOT_ID, respiratoryRate, timestamp);
+                PLOT_DATA(RESPIRATORY_RATE_PLOT_ID, respiratoryRate);
 
                 expiratoryFlow = respiratoryRate * cycleExhaledVolume;
                 xQueueOverwrite(g_expiratoryFlowQueue, (void *)&expiratoryFlow);
-                PLOT_DATA(PLOT_EXPIRATORY_FLOW, EXPIRATORY_FLOW_PLOT_ID, expiratoryFlow, timestamp);
+                PLOT_DATA(EXPIRATORY_FLOW_PLOT_ID, expiratoryFlow);
 
                 if (pdPASS == xQueuePeek(g_temperatureQueue, (void *)&temperature, (TickType_t)0))
                 {
@@ -642,7 +611,7 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
                         if (pdPASS == xQueuePeek(g_humidityQueue, (void *)&humidity, (TickType_t)0))
                         {
                             rho = ComputeAirDensity(temperature, pressure, humidity);
-                            PLOT_DATA(PLOT_RHO, RHO_PLOT_ID, rho, timestamp);
+                            PLOT_DATA(RHO_PLOT_ID, rho);
 
                             vO2Compute = (pdPASS == xQueuePeek(g_o2Queue, (void *)&o2, (TickType_t)0));
 
@@ -653,7 +622,7 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
                                 vO2Filtered = ComputeFilteredValue(&vO2Filter);
 
                                 xQueueOverwrite(g_vO2Queue, (void *)&vO2Filtered);
-                                PLOT_DATA(PLOT_VO2, VO2_PLOT_ID, vO2Filtered, timestamp);
+                                PLOT_DATA(VO2_PLOT_ID, vO2Filtered);
                                 BLUETOOTH_SendVO2(vO2Filtered);
 
                                 if (vO2Filtered > vO2Max) // Compute VO2max
@@ -662,7 +631,7 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
                                 }
 
                                 xQueueOverwrite(g_vO2MaxQueue, (void *)&vO2Max);
-                                PLOT_DATA(PLOT_VO2MAX, VO2MAX_PLOT_ID, vO2Max, timestamp);
+                                PLOT_DATA(VO2MAX_PLOT_ID, vO2Max);
                                 BLUETOOTH_SendVO2Max(vO2Max);
                             }
 
@@ -675,7 +644,7 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
                                 vCo2Filtered = ComputeFilteredValue(&vCo2Filter);
 
                                 xQueueOverwrite(g_vCo2Queue, (void *)&vCo2Filtered);
-                                PLOT_DATA(PLOT_VCO2, VCO2_PLOT_ID, vCo2Filtered, timestamp);
+                                PLOT_DATA(VCO2_PLOT_ID, vCo2Filtered);
                                 BLUETOOTH_SendVCO2(vCo2Filtered);
                             }
 
@@ -683,7 +652,7 @@ static void FlowVolumeAndVo2Computation(double diffPressure)
                             {
                                 respiratoryQuotient = vCo2 / vO2;
                                 xQueueOverwrite(g_respiratoryQuotientQueue, (void *)&respiratoryQuotient);
-                                PLOT_DATA(PLOT_RESPIRATORY_QUOTIENT, RESPIRATORY_QUOTIENT_PLOT_ID, respiratoryQuotient, timestamp);
+                                PLOT_DATA(RESPIRATORY_QUOTIENT_PLOT_ID, respiratoryQuotient);
                                 BLUETOOTH_SendRQ(respiratoryQuotient);
                             }
                         }

@@ -1092,8 +1092,8 @@ static void Vo2MaxScreenAction(void)
     double previousRespiratoryQuotient = -1.0f;
     uint16_t heartRate;
     uint16_t previousHeartRate = 0;
-    uint16_t power;
-    uint16_t previousPower = 0;
+    int16_t power;
+    int16_t previousPower = 0;
 
     char string[8];
 
@@ -1178,9 +1178,9 @@ static void Vo2MaxScreenAction(void)
         {
             if (power != previousPower)
             {
-                LCD_ClearString(70, 110, 3, LCD_COLOR_WHITE, LCD_FONT_24);
-                snprintf(string, sizeof(string), "%3d", heartRate);
-                LCD_DrawString(70, 110, string, LCD_COLOR_BLACK, LCD_FONT_24);
+                LCD_ClearString(82, 110, 3, LCD_COLOR_WHITE, LCD_FONT_24);
+                snprintf(string, sizeof(string), "%3d", power);
+                LCD_DrawString(82, 110, string, LCD_COLOR_BLACK, LCD_FONT_24);
                 previousPower = power;
             }
         }
